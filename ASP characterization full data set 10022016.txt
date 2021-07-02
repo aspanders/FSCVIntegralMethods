@@ -1,0 +1,17 @@
+Experiment 10022016
+
+
+Researchers	Anders Asp 	asp.anders@mayo.edu
+		
+Purpose characterize concentration response for electroactive species combinations using flowcell. This data will be 
+used to train lujan lab machine learning algorithms.
+
+Observations:
+
+A 7 micron diameter carbon fiber electrode was allowed to stabilize before data collection. The length of the electrode was 110 microns. The pH of acsf was 7.4. See attached excel spreadsheet for list of annotations and sample times. 
+Flow rate was set to 2.25mL/min and the flowcell was set for an 8s sample impulse. Three repetitions of each sample were taken with 30s in between to allow for return to baseline.
+Although a I was not able to achieve steady state concentrations with this preparation, there was no broad oxidative current on the cathodic sweep and the rise-times were stable.
+Throughout the test I sampled acsf to ensure that the observed signal was not caused by some difference when switching between acsf sources. I periodically exchanged the syringe as 
+it ran out of buffer and replaced it with fresh acsf. All samples were diluted in acsf from 2.5mM to specified concentration immediately prior to insertion into flowcell. All stock solutions
+were kept in dark. The acsf was stored adjacent to the flowcell to minimize any temperature differential between solutions. Insulative material was placed between the syringe and the pump to 
+minimize any heating of the acsf by the pump motor. Foil was wrapped around the pump to reduce electical noise caused by the motor.
