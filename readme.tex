@@ -1,0 +1,104 @@
+\documentclass{article}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+\begin{flushleft}
+{\large\bf  FSCV data analysis software}\hfill \begin{minipage}{0.25\textwidth}Author: Leonardo Esp\'\i n\\
+espin.leonardo@mayo.edu\end{minipage}\\
+\today
+\end{flushleft}
+Documentation of the set of Matlab functions written by Leonardo Esp\'\i n for analyzing cyclic-voltammogram data recorded with harmoni. This document assumes that the reader has a basic familiarity with Matlab and James Trevathan's Matlab WincsWare class.
+
+The starting point for using any of the data analysis code is a wincsware object, which is defined in Matlab as:
+
+\noindent\verb|>>object=WincsWare('example file.hdat');|
+
+\noindent where ``example file.hdat'' is a harmoni recording. 
+
+\begin{itemize}
+\item Functions for computing background subtracted voltammograms:
+
+% \item \verb|ChargeAnalysis.m| is a function . It reads a harmoni file (.hdat) and returns a wincsware object which has several fields and associated methods. Basic usage is
+
+% \verb|>>object=WincsWare('example file.hdat');|
+% \item The main fields of a wincsware object are:
+  \begin{itemize}
+  \item \verb|dynamicSubtract.m| is for simple, manual calculation of background subtracted voltammograms. An example of usage is 
+  
+  \verb|>>[voltammogram, vtime]=dynamicSubtract(object,cursorA,cursorB,varargin);|
+  
+  where \textsf{object} is our wincsware object, \textsf{cursorA} is a matlab cursor object which points the time coordinates of the voltammogram of interest, and \textsf{cursorB} points the time coordinates of the background current. The optional argument tells the function if time indices are passed in the cursor objects, instead of times. 
+  
+  The function returns the background subtracted voltammogram as a column vector, and its corresponding time. The number of voltammograms to be used for averaging can be modified inside the function. 
+  
+  \item \verb|automaticSubtract.m| automatically calculates background subtracted voltammograms. This function uses signal analysis techniques for automation purposes, and it is intended for general use. An example of usage is 
+  
+  \verb|>>[cv,cvdata]=automaticSubtract(object,cursor,volt);|
+  
+  where \textsf{cursor} is a matlab cursor object indicating where the background current stabilization period ends, and \textsf{volt} indicates a voltage value for selecting a voltage trace where current spikes are going to be identified (for dopamine \textsf{volt} would be close to 0.6 V).
+  
+  The function returns a matrix containing background subtracted voltammograms as columns \verb|cv(m x n)|, and a second matrix \verb|cvdata(2 x n)| which contains the times corresponding for each voltammogram (first row), and time difference between the background and the maximum current spike (in second row of cvdata). 
+  
+  This function plots an FSCV trace superimposed with the locations of extracted current peaks and backgrounds to help visualizing and detecting outliers. This function calls
+  \begin{itemize}	
+  \item \textsf{subtractionIndices.m}
+  \end{itemize}
+  \item \verb|dbsSubtract.m| automatically calculates background subtracted voltammograms, but it is intended to be used with DBS data. This function obtains the stimulation times from the object, which are used as points of selection for background currents. An example of usage is 
+  
+  \verb|>>[cv,cvdata]=dbsSubtract(object,volt);|
+  
+  where \textsf{object} is our wincsware object, and \textsf{volt} indicates a voltage value for selecting a voltage trace. 
+  
+  The function output is the same as \textsf{automaticSubtract}, however, the second row of cvdata now stores the time delay between stimulations and maximum current spikes, resulting for each individual stimulation. 
+  
+  This function plots the second row of cvdata to help detect outliers (cause by stimulation artifacts or by stimulation misfires).
+  
+  \item \verb|singleAutoSubtract.m| is a modification of \verb|automaticSubtract.m| which uses a fixed background current for all background subtractions. This function calls
+  \begin{itemize}	
+  \item \textsf{subtractionIndices.m}
+  \end{itemize}
+  
+  \item \verb|singleDbsSubtract.m| is a modification of \verb|dbsSubtract.m| which uses a fixed background current for all background subtractions.
+
+  \end{itemize}
+  \item Charge analysis functions
+  \begin{itemize}
+    \item \verb|dbsChargeAnalysis.m| An example of usage is 
+  
+  \verb|>>[charge,bdryPairs]=dbsChargeAnalysis(cv,cvdata,object.sensingVoltage,label);|
+  
+  This function calls
+  \begin{itemize}	
+  \item \verb|select_limits.m|
+  \item \verb|differential_analysis.m|
+  \item \verb|limitsWithCond.m|
+  \end{itemize}
+  \item \verb|ChargeAnalysis.m| This function is the same as \verb|dbsChargeAnalysis.m|, but has a couple of plotting commands commented out. This function calls
+  	\begin{itemize}	
+  	\item \verb|select_limits.m|
+  	\item \verb|differential_analysis.m|
+	\item \verb|limitsWithCond.m|
+	\end{itemize}
+
+  \end{itemize}
+  \item Basic calculation functions called by other functions
+  \begin{itemize}
+  \item \verb|subtractionIndices.m| finds the time indices of current peaks and background currents in a time trace vector. This function is called by \textsf{automaticSubtract.m} and \textsf{singleAutoSubtract.m}
+  \item \verb|select_limits.m| This function finds the zeros in the columns of a \verb|m x n| data matrix, which surround and are closer to a center value, that varies for each column. 
+  \item \verb|limitsWithCond.m| does something similar to  \verb|select_limits.m|, but it allows for a condition on the zeros, that has to be satisfied
+   \item \verb|differential_analysis.m| takes care of smoothing voltammograms for the calculation of higher order derivatives
+  \end{itemize}
+  \item Other
+  \begin{itemize}
+  \item\verb|artifactRemoval.m| is used for the removal for stimulation artifacts from background subtracted voltammograms. An example of usage is 
+  
+  \verb|>>cv_modified=artifactRemoval(cv,ave,var);|
+  
+   \item\verb|stimParameters.m| is used for obtaining the stimulation parameters used in a DBS harmoni recording. An example of usage is 
+  
+  \verb|>>data=stimParameters(object,duration);|
+  
+    \item \verb|legend_matrix.m| creates a text cell array to be used as a legend for voltammogram-matrix plots
+  \end{itemize}
+\end{itemize}
+\end{document}
+
