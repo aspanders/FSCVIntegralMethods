@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeadSnap — UI Preview</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  min-height: 100vh;
+  padding: 48px 20px 60px;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+h1 {
+  text-align: center;
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  margin-bottom: 6px;
+}
+.sub { text-align: center; color: rgba(255,255,255,0.4); font-size: 13px; margin-bottom: 48px; letter-spacing: 0.5px; }
+.phones { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; }
+.pw { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.cap {
+  color: rgba(255,255,255,0.5);
+  font-size: 11px; letter-spacing: 1.8px;
+  text-transform: uppercase;
+  background: rgba(255,255,255,0.07);
+  padding: 4px 12px; border-radius: 10px;
+}
+
+/* ── iPhone shell ── */
+.phone {
+  width: 375px; height: 812px;
+  background: #1c1c1e;
+  border-radius: 54px;
+  padding: 10px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.09),
+    0 50px 130px rgba(0,0,0,0.85),
+    0 16px 40px rgba(0,0,0,0.4);
+}
+.screen {
+  width: 100%; height: 100%;
+  border-radius: 46px;
+  overflow: hidden;
+  background: #F2F2F7;
+  display: flex; flex-direction: column;
+  position: relative;
+}
+
+/* ── Status bar ── */
+.sb {
+  height: 50px;
+  position: relative;
+  display: flex; align-items: flex-end;
+  padding: 0 24px 10px;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.island {
+  position: absolute; left: 50%; top: 10px;
+  transform: translateX(-50%);
+  width: 120px; height: 34px;
+  background: #1c1c1e; border-radius: 18px;
+}
+.time { font-size: 15px; font-weight: 600; color: #000; }
+.sbr { font-size: 12px; color: #000; opacity: 0.8; }
+
+/* ── Nav bar ── */
+.nav {
+  height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  background: rgba(242,242,247,0.94);
+  border-bottom: 0.5px solid rgba(0,0,0,0.12);
+  flex-shrink: 0;
+}
+.nav-t { font-size: 17px; font-weight: 600; color: #000; }
+.nb { position: absolute; color: #8B5CF6; cursor: pointer; font-size: 15px; }
+.nb.l { left: 16px; display: flex; gap: 4px; }
+.nb.r { right: 16px; display: flex; gap: 16px; font-size: 20px; }
+
+/* ── Search bar ── */
+.search {
+  margin: 8px 16px 0;
+  height: 36px; border-radius: 10px;
+  background: rgba(118,118,128,0.12);
+  display: flex; align-items: center; justify-content: center;
+  color: #8E8E93; font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Category chips ── */
+.chips { display: flex; gap: 8px; padding: 10px 16px; overflow: hidden; flex-shrink: 0; }
+.chip { padding: 5px 14px; border-radius: 16px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.chip.on { background: #8B5CF6; color: #fff; }
+.chip.off { background: rgba(118,118,128,0.12); color: #1c1c1e; }
+
+/* ── Pattern grid ── */
+.pgrid {
+  flex: 1; padding: 10px 16px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  align-content: start; overflow: hidden;
+}
+.pcard { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.pcard canvas { display: block; width: 100%; aspect-ratio: 1; }
+.pi { padding: 8px 10px 10px; }
+.pt { font-size: 13px; font-weight: 600; color: #000; }
+.ps { font-size: 11px; color: #8E8E93; margin-top: 2px; }
+
+/* ── Tab bar ── */
+.tabbar {
+  height: 83px;
+  background: rgba(249,249,249,0.96);
+  border-top: 0.5px solid rgba(0,0,0,0.12);
+  display: flex; align-items: flex-start; padding-top: 8px;
+  flex-shrink: 0;
+}
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+.ti { font-size: 25px; line-height: 1.1; }
+.tl { font-size: 10px; }
+.tab.on .ti, .tab.on .tl { color: #8B5CF6; }
+.tab.off .ti, .tab.off .tl { color: #8E8E93; }
+
+/* ── Divider ── */
+.div { height: 0.5px; background: rgba(0,0,0,0.1); flex-shrink: 0; }
+
+/* ── Editor ── */
+.ed-area {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 12px; gap: 10px; background: #F2F2F7;
+}
+.zm {
+  display: flex; align-items: center; gap: 18px;
+  color: #8E8E93; font-size: 13px;
+}
+.zmb {
+  width: 32px; height: 32px; border-radius: 16px;
+  background: rgba(118,118,128,0.12);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; color: #8B5CF6; cursor: pointer; font-weight: 300;
+}
+.palette {
+  height: 68px;
+  background: rgba(249,249,249,0.96);
+  border-top: 0.5px solid rgba(0,0,0,0.12);
+  display: flex; align-items: center; padding: 0 14px; gap: 12px;
+  overflow: hidden; flex-shrink: 0;
+}
+.sw {
+  border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.sw.big { width: 42px; height: 42px; border: 3px solid #000; }
+.sw.sm  { width: 32px; height: 32px; border: 1px solid rgba(0,0,0,0.15); }
+.sw-check { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #000; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 700; flex-shrink: 0; }
+
+/* ── Create ── */
+.create-hero {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 36px 0 28px; flex-shrink: 0;
+}
+.c-ico { font-size: 54px; line-height: 1; }
+.c-h { font-size: 22px; font-weight: 700; color: #000; }
+.c-s { font-size: 15px; color: #8E8E93; }
+.opts { display: flex; flex-direction: column; gap: 14px; padding: 0 20px; }
+.orow {
+  background: #fff; border-radius: 14px; padding: 16px;
+  display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer;
+}
+.oiw {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.ot { flex: 1; }
+.ot1 { font-size: 16px; font-weight: 600; color: #000; }
+.ot2 { font-size: 13px; color: #8E8E93; margin-top: 2px; }
+.och { color: #C7C7CC; font-size: 13px; }
+
+/* ── AI Studio form ── */
+.form { flex: 1; overflow: hidden; padding-bottom: 12px; }
+.fsec { margin: 14px 0 0; }
+.fhdr {
+  font-size: 13px; font-weight: 500; color: #6D6D72;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 0 20px 6px;
+}
+.fgrp {
+  background: #fff; border-radius: 12px; margin: 0 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden;
+}
+.frow {
+  padding: 13px 16px;
+  display: flex; align-items: center;
+  border-bottom: 0.5px solid rgba(0,0,0,0.08);
+  font-size: 15px; color: #000; gap: 8px;
+}
+.frow:last-child { border-bottom: none; }
+.frow .lbl { color: #8E8E93; flex: 1; }
+.frow .val { color: #000; font-size: 15px; }
+.frow .arrow { color: #C7C7CC; font-size: 12px; }
+.prompt-field {
+  width: 100%; padding: 13px 16px;
+  font-size: 15px; color: #8E8E93; min-height: 64px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.08);
+}
+.genbtn {
+  margin: 14px 16px 0;
+  height: 50px; border-radius: 14px;
+  background: #8B5CF6;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 600;
+  box-shadow: 0 4px 18px rgba(139,92,246,0.45); cursor: pointer;
+  flex-shrink: 0;
+}
+.res-card {
+  background: #fff; border-radius: 12px;
+  margin: 14px 16px 0; overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+}
+.res-canvas { display: block; width: 100%; aspect-ratio: 1.5; }
+.res-info {
+  padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.res-name { font-size: 16px; font-weight: 600; color: #000; }
+.res-meta { font-size: 12px; color: #8E8E93; margin-top: 2px; }
+.res-diff { font-size: 13px; color: #8E8E93; }
+.savebtn {
+  margin: 0 16px 14px;
+  height: 44px; border-radius: 10px;
+  background: rgba(139,92,246,0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: #8B5CF6; font-size: 15px; font-weight: 500; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h1>🪡 BeadSnap</h1>
+<p class="sub">iOS App · Static UI Preview · Open in any browser</p>
+
+<div class="phones">
+
+<!-- ═══════════════════════════ SCREEN 1: LIBRARY ═══════════════════════════ -->
+<div class="pw">
+  <div class="cap">Library</div>
+  <div class="phone"><div class="screen">
+    <div class="sb">
+      <div class="island"></div>
+      <span class="time">9:41</span>
+      <span class="sbr">▌▌▌ 100%</span>
+    </div>
+    <div class="nav">
+      <span class="nav-t">Library</span>
+    </div>
+    <div class="search">🔍&nbsp; Search patterns</div>
+    <div class="chips">
+      <span class="chip on">All</span>
+      <span class="chip off">🐾 Animals</span>
+      <span class="chip off">🔮 Fantasy</span>
+      <span class="chip off">🌿 Nature</span>
+    </div>
+    <div class="div"></div>
+    <div class="pgrid">
+      <div class="pcard"><canvas id="c-heart" width="160" height="160"></canvas>
+        <div class="pi"><div class="pt">Heart</div><div class="ps">🟢 62 beads</div></div></div>
+      <div class="pcard"><canvas id="c-star" width="160" height="160"></canvas>
+        <div class="pi"><div class="pt">Star</div><div class="ps">🟢 37 beads</div></div></div>
+      <div class="pcard"><canvas id="c-smiley" width="160" height="160"></canvas>
+        <div class="pi"><div class="pt">Smiley Face</div><div class="ps">🟡 92 beads</div></div></div>
+      <div class="pcard"><canvas id="c-cat" width="160" height="160"></canvas>
+        <div class="pi"><div class="pt">Cat</div><div class="ps">🟡 108 beads</div></div></div>
+      <div class="pcard"><canvas id="c-mushroom" width="160" height="160"></canvas>
+        <div class="pi"><div class="pt">Mushroom</div><div class="ps">🟡 88 beads</div></div></div>
+      <div class="pcard"><canvas id="c-rocket" width="160" height="160"></canvas>
+        <div class="pi"><div class="pt">Rocket</div><div class="ps">🟡 96 beads</div></div></div>
+    </div>
+    <div class="tabbar">
+      <div class="tab on"><span class="ti">▦</span><span class="tl">Library</span></div>
+      <div class="tab off"><span class="ti">⊕</span><span class="tl">Create</span></div>
+      <div class="tab off"><span class="ti">♡</span><span class="tl">My Patterns</span></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════ SCREEN 2: EDITOR ═══════════════════════════ -->
+<div class="pw">
+  <div class="cap">Editor</div>
+  <div class="phone"><div class="screen">
+    <div class="sb">
+      <div class="island"></div>
+      <span class="time">9:41</span>
+      <span class="sbr">▌▌▌ 100%</span>
+    </div>
+    <div class="nav">
+      <span class="nav-t">Heart</span>
+      <span class="nb l">🗑</span>
+      <span class="nb r">↩&nbsp; 💾</span>
+    </div>
+    <div class="ed-area">
+      <div class="zm">
+        <div class="zmb">−</div>
+        <span>22px</span>
+        <div class="zmb">+</div>
+      </div>
+      <canvas id="c-editor" width="348" height="261"
+        style="border-radius:6px;box-shadow:0 4px 20px rgba(0,0,0,0.12);"></canvas>
+    </div>
+    <div class="palette">
+      <div class="sw-check" style="background:#CC1122;">✓</div>
+      <div class="sw sm" style="background:#8B0000;"></div>
+      <div class="sw sm" style="background:#FF69B4;"></div>
+      <div class="sw sm" style="background:#FFFFFF;border-color:rgba(0,0,0,0.2);"></div>
+      <div style="flex:1"></div>
+      <div style="font-size:13px;color:#8E8E93;">4 colors</div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════ SCREEN 3: CREATE ═══════════════════════════ -->
+<div class="pw">
+  <div class="cap">Create</div>
+  <div class="phone"><div class="screen">
+    <div class="sb">
+      <div class="island"></div>
+      <span class="time">9:41</span>
+      <span class="sbr">▌▌▌ 100%</span>
+    </div>
+    <div class="nav"><span class="nav-t">Create</span></div>
+    <div class="create-hero">
+      <div class="c-ico">✨</div>
+      <div class="c-h">What will you make?</div>
+      <div class="c-s">Pick a starting point below</div>
+    </div>
+    <div class="opts">
+      <div class="orow">
+        <div class="oiw" style="background:rgba(139,92,246,0.12);">▦</div>
+        <div class="ot">
+          <div class="ot1">Blank Canvas</div>
+          <div class="ot2">Start from scratch on a fresh grid</div>
+        </div>
+        <div class="och">›</div>
+      </div>
+      <div class="orow">
+        <div class="oiw" style="background:rgba(0,122,255,0.12);">📷</div>
+        <div class="ot">
+          <div class="ot1">From Photo</div>
+          <div class="ot2">Turn a picture into a bead pattern</div>
+        </div>
+        <div class="och">›</div>
+      </div>
+      <div class="orow">
+        <div class="oiw" style="background:rgba(88,86,214,0.12);">✨</div>
+        <div class="ot">
+          <div class="ot1">AI Studio</div>
+          <div class="ot2">Generate a pattern with Claude AI</div>
+        </div>
+        <div class="och">›</div>
+      </div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="tabbar">
+      <div class="tab off"><span class="ti">▦</span><span class="tl">Library</span></div>
+      <div class="tab on"><span class="ti">⊕</span><span class="tl">Create</span></div>
+      <div class="tab off"><span class="ti">♡</span><span class="tl">My Patterns</span></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ═══════════════════════════ SCREEN 4: AI STUDIO ═══════════════════════════ -->
+<div class="pw">
+  <div class="cap">AI Studio</div>
+  <div class="phone"><div class="screen">
+    <div class="sb">
+      <div class="island"></div>
+      <span class="time">9:41</span>
+      <span class="sbr">▌▌▌ 100%</span>
+    </div>
+    <div class="nav">
+      <span class="nav-t">AI Studio</span>
+      <span class="nb r" style="font-size:17px;">Done</span>
+    </div>
+    <div class="form">
+      <div class="fsec">
+        <div class="fhdr">Describe your pattern</div>
+        <div class="fgrp">
+          <div class="prompt-field">a cute orange cat sitting in a flower field</div>
+          <div style="padding:10px 16px;">
+            <div style="height:44px;border-radius:10px;background:#8B5CF6;
+              display:flex;align-items:center;justify-content:center;
+              color:#fff;font-size:15px;font-weight:600;
+              box-shadow:0 3px 12px rgba(139,92,246,0.4);">✨ Generate</div>
+          </div>
+        </div>
+      </div>
+      <div class="fsec">
+        <div class="fhdr">Options</div>
+        <div class="fgrp">
+          <div class="frow">
+            <span class="lbl">Category</span>
+            <span class="val">🐾 Animals</span>
+            <span class="arrow">›</span>
+          </div>
+          <div class="frow">
+            <span class="lbl">Grid Size</span>
+            <span class="val">32×32</span>
+            <span class="arrow">›</span>
+          </div>
+        </div>
+      </div>
+      <div class="fsec">
+        <div class="fhdr">Result</div>
+        <div class="res-card">
+          <canvas id="c-ai" width="343" height="229" class="res-canvas"></canvas>
+          <div class="res-info">
+            <div>
+              <div class="res-name">Orange Cat</div>
+              <div class="res-meta">32×32 · 478 beads</div>
+            </div>
+            <div class="res-diff">🟡 Medium</div>
+          </div>
+        </div>
+        <div class="savebtn">💾 Save &amp; Edit</div>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+</div><!-- /.phones -->
+
+<script>
+// ── Pattern rendering ──
+
+function drawCells(id, rows, colorMap, circles) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cols = Math.max(...rows.map(r => r.length));
+  const numRows = rows.length;
+  const cw = W / cols, ch = H / numRows;
+
+  ctx.fillStyle = '#E8E8EC';
+  ctx.fillRect(0, 0, W, H);
+
+  for (let y = 0; y < numRows; y++) {
+    for (let x = 0; x < rows[y].length; x++) {
+      const c = rows[y][x];
+      const color = colorMap[c];
+      const cx = x * cw + cw / 2;
+      const cy = y * ch + ch / 2;
+      const r  = Math.min(cw, ch) * (circles ? 0.44 : 0.5);
+
+      if (circles) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = color || '#DADADF';
+        ctx.fill();
+        ctx.strokeStyle = color ? 'rgba(0,0,0,0.14)' : 'rgba(0,0,0,0.06)';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      } else if (color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x * cw + 0.5, y * ch + 0.5, cw - 0.5, ch - 0.5);
+      }
+    }
+  }
+}
+
+// ── Library thumbnails ──
+
+drawCells('c-heart', [
+  "............",
+  ".RRRR..RRRR.",
+  "RRRRRRRRRRRR",
+  "RRRRRRRRRRRR",
+  ".RRRRRRRRRR.",
+  "..RRRRRRRR..",
+  "...RRRRRR...",
+  "....RRRR....",
+  ".....RR.....",
+], {R:'#CC1122'}, false);
+
+drawCells('c-star', [
+  ".....Y.....",
+  ".....Y.....",
+  "...YYYYY...",
+  "YYYYYYYYYYY",
+  ".YYYYYYYYY.",
+  "..YYYYYYY..",
+  "...YYYYY...",
+  "....YYY....",
+  "....YYY....",
+  ".....Y.....",
+], {Y:'#F5D000'}, false);
+
+drawCells('c-smiley', [
+  "....YYYY....",
+  "..YYYYYYYY..",
+  ".YYYYYYYYYY.",
+  "YYYYYYYYYYYY",
+  "YYYYKYYYKYYY",
+  "YYYYYYYYYYYY",
+  "YYYYYYYYYYYY",
+  "YK.......KYY",
+  "YYK.....KYYY",
+  ".YYYYYYYYYY.",
+  "..YYYYYYYY..",
+  "....YYYY....",
+], {Y:'#F5D000', K:'#000000'}, false);
+
+drawCells('c-cat', [
+  "..GG....GG..",
+  ".GGGG..GGGG.",
+  "GGGGGGGGGGGG",
+  "GGGGGGGGGGGG",
+  "GGWGGGGGWGGG",
+  "GGKGGGGGKGGG",
+  "GGGGGGGGGGGG",
+  "GGGPPPPPGGGG",
+  ".GGGGGGGGGG.",
+  ".GGGGGGGGGG.",
+  "..GGGGGGGG..",
+  "..GGG..GGG..",
+], {G:'#808080', W:'#FFFFFF', K:'#000000', P:'#FF69B4'}, false);
+
+drawCells('c-mushroom', [
+  "....RRRR....",
+  "..RRRRRRRR..",
+  ".RRRWRRWRRR.",
+  "RRRRRRRRRRRR",
+  "RRRWRRRRRWRR",
+  "RRRRRRRRRRRR",
+  ".RRRRRRRRRR.",
+  "..WWWWWWWW..",
+  "..WWWWWWWW..",
+  "...WWWWWW...",
+  "....WWWW....",
+  ".....WW.....",
+], {R:'#CC1122', W:'#FFFFFF'}, false);
+
+drawCells('c-rocket', [
+  "....RR....",
+  "...RRRR...",
+  "..RRRRRR..",
+  "..RWWWWR..",
+  ".RWWWWWWR.",
+  ".RWWSWWR..",
+  ".RWSSSWR..",
+  ".RWWSWWR..",
+  ".RWWWWWWR.",
+  "RRRWWWRRR.",
+  "RRRRRRRRR.",
+  "RRRRRRRRR.",
+  ".RRRRRRRR.",
+  "..OYYYOY..",
+  "..OYYYOY..",
+  "...OOOOO..",
+], {R:'#CC1122', W:'#FFFFFF', S:'#5BC8F5', O:'#FF8C00', Y:'#F5D000'}, false);
+
+// ── Editor view — heart with bead circles ──
+
+drawCells('c-editor', [
+  "............",
+  ".RRRR..RRRR.",
+  "RRRRRRRRRRRR",
+  "RRRRRRRRRRRR",
+  ".RRRRRRRRRR.",
+  "..RRRRRRRR..",
+  "...RRRRRR...",
+  "....RRRR....",
+  ".....RR.....",
+], {R:'#CC1122'}, true);  // circles = true
+
+// ── AI Studio result — orange cat ──
+
+drawCells('c-ai', [
+  "......OOOOOOOOOOOOOOOO......",
+  "....OOOOOOOOOOOOOOOOOOOO....",
+  "..OOOOOOOOOOOOOOOOOOOOOOOO..",
+  ".OOOOOOOOOOOOOOOOOOOOOOOOOO.",
+  "OOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+  "OOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+  "OOOOWOOOOOOOOOOOOOOWOOOOOOO.",
+  "OOOOWOOOOOOOOOOOOOOWOOOOOOO.",
+  "OOOOOKOOOOOOOOOOOOKOOOOOOOO.",
+  "OOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+  "OOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+  "OOOOOOPPPPPPPPPPOOOOOOOOOOO.",
+  "OOOOOOPPPPPPPPPPOOOOOOOOOOO.",
+  "OOOOOOOOOOOOOOOOOOOOOOOOOOOO",
+  ".OOOOOOOOOOOOOOOOOOOOOOOOOO.",
+  "..OOOOOOOOOOOOOOOOOOOOOOOO..",
+  "....OOOOOOOOOOOOOOOOOOOO....",
+  "......OOOOOOOOOOOOOOOO......",
+], {O:'#FF8C00', W:'#FFFFFF', K:'#000000', P:'#FF69B4'}, false);
+
+</script>
+</body>
+</html>
