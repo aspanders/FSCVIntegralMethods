@@ -1,31 +1,22 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab: Tab = .create
-
-    enum Tab {
-        case create, draw, gallery
-    }
-
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView()
+        TabView {
+            LibraryView()
                 .tabItem {
-                    Label("Create", systemImage: "camera.fill")
+                    Label("Library", systemImage: "square.grid.2x2.fill")
                 }
-                .tag(Tab.create)
 
-            DrawView()
+            CreateView()
                 .tabItem {
-                    Label("Draw", systemImage: "pencil.and.outline")
+                    Label("Create", systemImage: "plus.circle.fill")
                 }
-                .tag(Tab.draw)
 
-            GalleryView()
+            SavedPatternsView()
                 .tabItem {
-                    Label("Gallery", systemImage: "photo.stack.fill")
+                    Label("My Patterns", systemImage: "heart.fill")
                 }
-                .tag(Tab.gallery)
         }
         .tint(.purple)
     }
