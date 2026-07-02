@@ -1,8 +1,12 @@
 import SwiftUI
 
-struct BeadCellView: View {
+struct BeadCellView: View, Equatable {
     let color: Color?
     let size: CGFloat
+
+    static func == (lhs: BeadCellView, rhs: BeadCellView) -> Bool {
+        lhs.color == rhs.color && lhs.size == rhs.size
+    }
 
     var body: some View {
         Circle()

@@ -23,7 +23,8 @@ final class DrawViewModel: ObservableObject {
         isEraser = false
     }
 
-    var undoStack: [[DrawStroke]] = []
+    private(set) var undoStack: [[DrawStroke]] = []
+    private let maxUndoDepth = 50
 
     func beginDraw(at point: CGPoint) {
         let color = isEraser ? Color.white : selectedColor
@@ -37,6 +38,7 @@ final class DrawViewModel: ObservableObject {
     func endDraw() {
         guard let stroke = currentStroke else { return }
         undoStack.append(strokes)
+        if undoStack.count > maxUndoDepth { undoStack.removeFirst() }
         strokes.append(stroke)
         currentStroke = nil
     }
@@ -49,6 +51,7 @@ final class DrawViewModel: ObservableObject {
 
     func clearAll() {
         undoStack.append(strokes)
+        if undoStack.count > maxUndoDepth { undoStack.removeFirst() }
         strokes = []
     }
 

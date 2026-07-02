@@ -81,6 +81,8 @@ struct LibraryView: View {
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(cat.map { $0.displayName } ?? "All categories")
     }
 
     // MARK: - Empty state

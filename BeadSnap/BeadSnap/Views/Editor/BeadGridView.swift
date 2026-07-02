@@ -57,6 +57,7 @@ struct BeadGridView: View {
                         color: viewModel.color(at: x, y: y)?.swiftUIColor,
                         size: cellSize
                     )
+                    .equatable()
                     .frame(width: cellSize, height: cellSize)
                 }
             }
