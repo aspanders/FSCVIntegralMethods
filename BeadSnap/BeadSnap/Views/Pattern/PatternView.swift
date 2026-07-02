@@ -56,14 +56,14 @@ struct PatternView: View {
             }
         }
         .navigationDestination(isPresented: $showEditor) {
-            PatternEditorView(vm: vm)
+            LegacyPatternEditorView(vm: vm)
         }
         .sheet(isPresented: $showInventory) {
             InventorySheet(vm: vm)
         }
         .sheet(isPresented: $showShareSheet) {
             if let img = shareImage {
-                ShareSheet(activityItems: [img])
+                ShareSheet(items: [img])
             }
         }
     }
@@ -301,12 +301,4 @@ struct InventorySheet: View {
     }
 }
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
-}
+// ShareSheet is defined in Views/Editor/PatternEditorView.swift

@@ -1,5 +1,4 @@
 import SwiftUI
-import Network
 
 struct AIStudioView: View {
     @StateObject private var viewModel = StudioViewModel()

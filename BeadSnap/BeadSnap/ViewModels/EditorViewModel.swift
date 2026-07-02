@@ -127,6 +127,13 @@ final class EditorViewModel: ObservableObject {
 
     private var autosaveTask: Task<Void, Never>?
 
+    func saveImmediately() {
+        autosaveTask?.cancel()
+        guard pattern.createdBy == .user else { return }
+        guard store.userPatterns.contains(where: { $0.id == pattern.id }) else { return }
+        store.save(pattern)
+    }
+
     private func autosave() {
         guard pattern.createdBy == .user else { return }
         autosaveTask?.cancel()

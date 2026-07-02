@@ -58,6 +58,7 @@ struct PatternEditorView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showSaveSuccess)
+        .onDisappear { viewModel.saveImmediately() }
         .overlay(alignment: .center) {
             if showPaintHint {
                 paintHintOverlay
@@ -265,12 +266,15 @@ struct PatternEditorView: View {
         Total: \(viewModel.totalBeads) beads
         """
         let vc = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow }?
-            .rootViewController?
-            .present(vc, animated: true)
+        // iPad requires a sourceView/sourceRect for the popover anchor
+        if let popover = vc.popoverPresentationController {
+            let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+            popover.sourceView = scene?.windows.first
+            popover.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        scene?.windows.first?.rootViewController?.present(vc, animated: true)
     }
 }
 
