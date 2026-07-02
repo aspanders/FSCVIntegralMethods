@@ -8,42 +8,68 @@ final class StudioViewModel: ObservableObject {
     @Published var isGenerating = false
     @Published var generatedPattern: FusePattern?
     @Published var errorMessage: String?
+    @Published private(set) var hasAPIKey: Bool
 
     private let service = AIPatternService.shared
+    private var generationTask: Task<Void, Never>?
+    private var isSaving = false
 
-    var hasAPIKey: Bool { service.hasAPIKey }
+    init() {
+        hasAPIKey = AIPatternService.shared.hasAPIKey
+    }
 
-    func generate() async {
+    func refreshAPIKeyStatus() {
+        hasAPIKey = service.hasAPIKey
+    }
+
+    func generate() {
         let trimmed = prompt.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         isGenerating = true
         errorMessage = nil
-        defer { isGenerating = false }
-        do {
-            generatedPattern = try await service.generate(
-                prompt: trimmed,
-                category: selectedCategory,
-                gridSize: selectedGridSize
-            )
-        } catch {
-            errorMessage = error.localizedDescription
+        generationTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isGenerating = false }
+            do {
+                self.generatedPattern = try await self.service.generate(
+                    prompt: trimmed,
+                    category: self.selectedCategory,
+                    gridSize: self.selectedGridSize
+                )
+            } catch is CancellationError {
+                // user cancelled
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
         }
     }
 
-    func iterate(instruction: String) async {
+    func cancelGeneration() {
+        generationTask?.cancel()
+        isGenerating = false
+    }
+
+    func iterate(instruction: String) {
         guard let pattern = generatedPattern else { return }
         isGenerating = true
         errorMessage = nil
-        defer { isGenerating = false }
-        do {
-            generatedPattern = try await service.iterate(pattern: pattern, instruction: instruction)
-        } catch {
-            errorMessage = error.localizedDescription
+        generationTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.isGenerating = false }
+            do {
+                self.generatedPattern = try await self.service.iterate(pattern: pattern, instruction: instruction)
+            } catch is CancellationError {
+                // user cancelled
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
         }
     }
 
     func saveGenerated() -> FusePattern? {
-        guard var pattern = generatedPattern else { return nil }
+        guard !isSaving, var pattern = generatedPattern else { return nil }
+        isSaving = true
+        defer { isSaving = false }
         pattern.id = UUID().uuidString
         pattern.createdBy = .user
         PatternStore.shared.save(pattern)

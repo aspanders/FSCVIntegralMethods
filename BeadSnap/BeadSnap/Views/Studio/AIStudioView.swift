@@ -1,10 +1,14 @@
 import SwiftUI
+import Network
 
 struct AIStudioView: View {
     @StateObject private var viewModel = StudioViewModel()
     @State private var showAPIKeySheet = false
     @State private var apiKeyInput = ""
-    @State private var savedPattern: FusePattern?
+    @State private var iterateInstruction = ""
+    @State private var showIterateSheet = false
+    var onPatternSaved: ((FusePattern) -> Void)?
+
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -30,14 +34,17 @@ struct AIStudioView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") {
+                        viewModel.cancelGeneration()
+                        dismiss()
+                    }
                 }
             }
             .sheet(isPresented: $showAPIKeySheet) {
                 apiKeySheet
             }
-            .navigationDestination(item: $savedPattern) { p in
-                PatternEditorView(pattern: p)
+            .sheet(isPresented: $showIterateSheet) {
+                iterateSheet
             }
         }
     }
@@ -69,25 +76,30 @@ struct AIStudioView: View {
             .lineLimit(2...5)
             .autocorrectionDisabled()
 
-            Button {
-                Task { await viewModel.generate() }
-            } label: {
+            if viewModel.isGenerating {
                 HStack {
                     Spacer()
-                    if viewModel.isGenerating {
-                        ProgressView().tint(.purple)
-                    } else {
-                        Label("Generate", systemImage: "wand.and.stars")
-                            .foregroundStyle(.purple)
-                    }
+                    ProgressView().tint(.purple)
+                    Text("Generating…").font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
+                    Button("Cancel") { viewModel.cancelGeneration() }
+                        .foregroundStyle(.red)
                 }
+            } else {
+                Button {
+                    viewModel.generate()
+                } label: {
+                    HStack {
+                        Spacer()
+                        Label("Generate", systemImage: "wand.and.stars").foregroundStyle(.purple)
+                        Spacer()
+                    }
+                }
+                .disabled(
+                    viewModel.prompt.trimmingCharacters(in: .whitespaces).isEmpty
+                    || !viewModel.hasAPIKey
+                )
             }
-            .disabled(
-                viewModel.prompt.trimmingCharacters(in: .whitespaces).isEmpty
-                || viewModel.isGenerating
-                || !viewModel.hasAPIKey
-            )
         }
     }
 
@@ -102,7 +114,7 @@ struct AIStudioView: View {
                 }
             }
             Picker("Grid Size", selection: $viewModel.selectedGridSize) {
-                ForEach([GridSize.small, .medium, .large, .xlarge], id: \.width) { gs in
+                ForEach([GridSize.small, .medium, .large], id: \.width) { gs in
                     Text(gs.displayName).tag(gs)
                 }
             }
@@ -134,12 +146,61 @@ struct AIStudioView: View {
             }
 
             Button {
-                savedPattern = viewModel.saveGenerated()
+                showIterateSheet = true
+            } label: {
+                Label("Refine with AI", systemImage: "arrow.triangle.2.circlepath")
+                    .foregroundStyle(.indigo)
+            }
+            .disabled(viewModel.isGenerating)
+
+            Button {
+                if let saved = viewModel.saveGenerated() {
+                    dismiss()
+                    onPatternSaved?(saved)
+                }
             } label: {
                 Label("Save & Edit", systemImage: "square.and.arrow.down")
                     .foregroundStyle(.purple)
             }
+            .disabled(viewModel.isGenerating)
         }
+    }
+
+    // MARK: - Iterate sheet
+
+    private var iterateSheet: some View {
+        NavigationStack {
+            Form {
+                Section("What would you like to change?") {
+                    TextField(
+                        "e.g. make it more colorful, add a hat",
+                        text: $iterateInstruction,
+                        axis: .vertical
+                    )
+                    .lineLimit(2...4)
+                    .autocorrectionDisabled()
+                }
+            }
+            .navigationTitle("Refine Pattern")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showIterateSheet = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Apply") {
+                        let inst = iterateInstruction.trimmingCharacters(in: .whitespaces)
+                        guard !inst.isEmpty else { return }
+                        showIterateSheet = false
+                        viewModel.iterate(instruction: inst)
+                        iterateInstruction = ""
+                    }
+                    .bold()
+                    .disabled(iterateInstruction.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     // MARK: - API key sheet
@@ -154,7 +215,7 @@ struct AIStudioView: View {
                 } header: {
                     Text("Claude API Key")
                 } footer: {
-                    Text("Get a free key at console.anthropic.com. The key is stored only on your device.")
+                    Text("Get a free key at console.anthropic.com. Stored securely in the iOS Keychain.")
                 }
             }
             .navigationTitle("Set Up AI")
@@ -166,8 +227,10 @@ struct AIStudioView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         AIPatternService.shared.apiKey = apiKeyInput.trimmingCharacters(in: .whitespaces)
+                        viewModel.refreshAPIKeyStatus()
                         showAPIKeySheet = false
                     }
+                    .bold()
                     .disabled(apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }

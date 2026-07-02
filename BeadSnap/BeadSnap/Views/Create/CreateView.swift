@@ -32,7 +32,17 @@ struct CreateView: View {
                 blankSheet
             }
             .sheet(isPresented: $showAIStudio) {
-                AIStudioView()
+                AIStudioView { saved in
+                    importedPattern = saved
+                }
+            }
+            .alert("Conversion Error", isPresented: Binding(
+                get: { importVM.errorMessage != nil },
+                set: { if !$0 { importVM.errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { importVM.errorMessage = nil }
+            } message: {
+                Text(importVM.errorMessage ?? "")
             }
             .overlay {
                 if importVM.isConverting {
