@@ -11,6 +11,7 @@ final class ImportViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let converter = ImageConverter.shared
+    private var isSaving = false
 
     func convert() async {
         guard let item = selectedItem else { return }
@@ -34,8 +35,16 @@ final class ImportViewModel: ObservableObject {
     }
 
     func saveConverted(title: String) -> FusePattern? {
-        guard var pattern = convertedPattern else { return nil }
-        pattern.title = title.trimmingCharacters(in: .whitespaces).isEmpty ? "Imported Photo" : title
+        guard !isSaving, var pattern = convertedPattern else { return nil }
+        isSaving = true
+        defer { isSaving = false }
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            let stamp = Int(Date().timeIntervalSince1970) % 100_000
+            pattern.title = "Photo Import #\(stamp)"
+        } else {
+            pattern.title = trimmed
+        }
         pattern.id = UUID().uuidString
         PatternStore.shared.save(pattern)
         return pattern

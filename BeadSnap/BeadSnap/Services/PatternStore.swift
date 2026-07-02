@@ -78,6 +78,15 @@ final class PatternStore: ObservableObject {
 
     func clearLastError() { lastError = nil }
 
+    func duplicate(_ pattern: FusePattern) {
+        var copy = pattern
+        copy.id = UUID().uuidString
+        copy.title = "\(pattern.title) Copy"
+        copy.createdBy = .user
+        copy.version = 1
+        save(copy)
+    }
+
     func patterns(for category: PatternCategory) -> [FusePattern] {
         allPatterns.filter { $0.category == category }
     }

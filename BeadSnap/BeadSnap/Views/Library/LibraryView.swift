@@ -32,6 +32,22 @@ struct LibraryView: View {
             .navigationDestination(for: FusePattern.self) { pattern in
                 PatternEditorView(pattern: pattern)
             }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        ForEach(LibrarySortOrder.allCases) { order in
+                            Button {
+                                viewModel.sortOrder = order
+                            } label: {
+                                Label(order.displayName, systemImage: order.systemImage)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("Sort patterns")
+                }
+            }
         }
     }
 

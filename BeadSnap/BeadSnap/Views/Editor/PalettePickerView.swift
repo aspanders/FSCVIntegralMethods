@@ -4,14 +4,23 @@ struct PalettePickerView: View {
     @ObservedObject var viewModel: EditorViewModel
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(viewModel.pattern.palette) { color in
-                    colorSwatch(color)
+        VStack(spacing: 4) {
+            // Selected color name label
+            Text(viewModel.selectedColor.name)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(height: 14)
+                .animation(.none, value: viewModel.selectedColor.id)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(viewModel.pattern.palette) { color in
+                        colorSwatch(color)
+                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
         }
         .background(.ultraThinMaterial)
     }
@@ -24,28 +33,23 @@ struct PalettePickerView: View {
             ZStack {
                 Circle()
                     .fill(color.swiftUIColor)
-                    .frame(
-                        width: isSelected ? 42 : 32,
-                        height: isSelected ? 42 : 32
-                    )
+                    .frame(width: 36, height: 36)
                 Circle()
                     .strokeBorder(
                         isSelected ? Color.primary : Color.black.opacity(0.18),
                         lineWidth: isSelected ? 3 : 1
                     )
-                    .frame(
-                        width: isSelected ? 42 : 32,
-                        height: isSelected ? 42 : 32
-                    )
+                    .frame(width: 36, height: 36)
                 if isSelected {
                     Image(systemName: "checkmark")
                         .font(.caption2.bold())
                         .foregroundStyle(color.swiftUIColor.isDark ? .white : .black)
                 }
             }
-            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(color.name)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

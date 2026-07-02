@@ -7,7 +7,8 @@ enum SeedPatterns {
         cat, dog, fish, bee, butterfly, bird,
         flower, sun, mushroom, tree, rainbow,
         rocket, car,
-        pumpkin, christmasTree, snowflake
+        pumpkin, christmasTree, snowflake,
+        dragon, unicorn, crystalBall, wizardHat
     ]
 
     // MARK: - ASCII helper
@@ -159,20 +160,20 @@ enum SeedPatterns {
                      ("white","White","#FFFFFF"), ("pink","Pink","#FF69B4"),
                      ("light_gray","Light Gray","#C8C8C8")),
         cells: cells([
-            "..AA....AA..",
-            ".AAAA..AAAA.",
-            ".AAAAAAAAAAA.",
+            "..AA....AA....",
+            ".AAAA..AAAA...",
+            ".AAAAAAAAAAA..",
             "AAAAAAAAAAAAAA",
             "AAAAAAAAAAAAAA",
-            "AAWAA..AAWAAA",
-            "AA.AKAKAK.AAA",
-            "AAAKAAAKAKAAA",
-            "AAAPPPPPAAAAA",
-            ".AAAAAAAAAA..",
-            ".AAAAAAAAAA..",
-            "..AAAAAAAA...",
-            "..AAA..AAA...",
-            "..AA....AA...",
+            "AAWAA..AAWAAA.",
+            "AA.AKAKAK.AAA.",
+            "AAAKAAAKAKAAA.",
+            "AAAPPPPPAAAAA.",
+            ".AAAAAAAAAA...",
+            ".AAAAAAAAAA...",
+            "..AAAAAAAA....",
+            "..AAA..AAA....",
+            "..AA....AA....",
         ], ["A": "gray", "K": "black", "W": "white", "P": "pink"]),
         difficulty: .medium, tags: ["cat","animal","pet","kitten"],
         sourcePrompt: nil, version: 1
@@ -212,16 +213,16 @@ enum SeedPatterns {
                      ("light_blue","Light Blue","#87CEEB"), ("white","White","#FFFFFF"),
                      ("black","Black","#000000")),
         cells: cells([
-            "SS..........",
-            "SSSS........",
-            ".SSSSSSSSS..",
-            "BBBBBBBBBBBSS",
-            "BBBBBBBBBBBBB",
-            "BBBBBBBBBBBBB",
-            "BBBBBBBBBBBSS",
-            ".SSSSSSSSS..",
-            "SSSS........",
-            "SS..........",
+            "SS............",
+            "SSSS..........",
+            ".SSSSSSSSS....",
+            "BBBBBBBBBBBSS.",
+            "BBBBBBBBBBBBBB",
+            "BBBBBBBBBBBBBB",
+            "BBBBBBBBBBBSS.",
+            ".SSSSSSSSS....",
+            "SSSS..........",
+            "SS............",
         ], ["S": "sky_blue", "B": "blue"]),
         difficulty: .easy, tags: ["fish","animal","sea","ocean"],
         sourcePrompt: nil, version: 1
@@ -534,6 +535,111 @@ enum SeedPatterns {
             "...NNNNNNN...",
         ], ["G": "green", "Y": "yellow", "R": "red", "N": "brown"]),
         difficulty: .medium, tags: ["christmas","tree","holiday","winter"],
+        sourcePrompt: nil, version: 1
+    )
+
+    // MARK: - Fantasy
+
+    static let dragon = FusePattern(
+        id: "seed-dragon", title: "Dragon",
+        category: .fantasy, createdBy: .system,
+        grid: GridSize(width: 12, height: 14),
+        palette: pal(("green","Green","#2E8B57"), ("dark_green","Dark Green","#006400"),
+                     ("red","Red","#CC1122"), ("white","White","#FFFFFF"),
+                     ("black","Black","#000000"), ("yellow","Yellow","#F5D000")),
+        cells: cells([
+            ".....GG.....",
+            "....GGGG....",
+            "...GGGGGG...",
+            "..GGRGRGG...",
+            ".GGWGGGGWGG.",
+            ".GGGGGGGGGGG",
+            "GGGGKGGGKGGG",
+            "GGGGGGGGGGGG",
+            ".GGGGGGGGGG.",
+            "..GGGGGGGG..",
+            "...GGGG..GG.",
+            "....GG....GG",
+            "....GG......",
+            "....GG......",
+        ], ["G": "green", "D": "dark_green", "R": "red", "W": "white", "K": "black", "Y": "yellow"]),
+        difficulty: .hard, tags: ["dragon","fantasy","beast","legend","magic"],
+        sourcePrompt: nil, version: 1
+    )
+
+    static let unicorn = FusePattern(
+        id: "seed-unicorn", title: "Unicorn",
+        category: .fantasy, createdBy: .system,
+        grid: GridSize(width: 12, height: 14),
+        palette: pal(("white","White","#FFFFFF"), ("yellow","Yellow","#F5D000"),
+                     ("pink","Pink","#FF69B4"), ("black","Black","#000000"),
+                     ("light_pink","Light Pink","#FFB6C1")),
+        cells: cells([
+            ".....Y......",
+            "....YYY.....",
+            "...PPMPP....",
+            "..PPPPPPP...",
+            ".PPPPPPPPP..",
+            "PPKPPPPKPPP.",
+            "MMMPPPPPPPM.",
+            "..PPPPPPP...",
+            "..PPPPPPP...",
+            ".PP.....PP..",
+            "PP.......PP.",
+            "PP.......PP.",
+            ".PP.....PP..",
+            "..PP...PP...",
+        ], ["P": "white", "Y": "yellow", "K": "black", "M": "pink"]),
+        difficulty: .medium, tags: ["unicorn","fantasy","magic","horse","rainbow"],
+        sourcePrompt: nil, version: 1
+    )
+
+    static let crystalBall = FusePattern(
+        id: "seed-crystal-ball", title: "Crystal Ball",
+        category: .fantasy, createdBy: .system,
+        grid: GridSize(width: 12, height: 12),
+        palette: pal(("sky_blue","Sky Blue","#5BC8F5"), ("blue","Blue","#1553B0"),
+                     ("white","White","#FFFFFF"), ("gray","Gray","#808080"),
+                     ("light_blue","Light Blue","#87CEEB")),
+        cells: cells([
+            "....BBBB....",
+            "..BBBBBBBB..",
+            ".BBBBWWBBBB.",
+            "BBBBBWWBBBBB",
+            "BBBBBBBBBBBB",
+            "BBBBBBBBBBBB",
+            ".BBBBBBBBBB.",
+            "..BBBBBBBB..",
+            "...BBBBBB...",
+            "....GGGG....",
+            "...GGGGGG...",
+            "..GGGGGGGG..",
+        ], ["B": "sky_blue", "W": "white", "G": "gray"]),
+        difficulty: .easy, tags: ["crystal","ball","magic","fantasy","fortune"],
+        sourcePrompt: nil, version: 1
+    )
+
+    static let wizardHat = FusePattern(
+        id: "seed-wizard-hat", title: "Wizard Hat",
+        category: .fantasy, createdBy: .system,
+        grid: GridSize(width: 10, height: 12),
+        palette: pal(("purple","Purple","#800080"), ("yellow","Yellow","#F5D000"),
+                     ("white","White","#FFFFFF"), ("dark_purple","Dark Purple","#4B0082")),
+        cells: cells([
+            "....PP....",
+            "...PPPP...",
+            "..PPPPPP..",
+            ".PPYPPPPP.",
+            "PPPPPPPPPP",
+            "PPYPPPPPPP",
+            "PPPPPPPPPP",
+            "PPPPYPPPPP",
+            "PPPPPPPPPP",
+            "WWWWWWWWWW",
+            "WWWWWWWWWW",
+            ".WWWWWWWW.",
+        ], ["P": "purple", "Y": "yellow", "W": "white"]),
+        difficulty: .easy, tags: ["wizard","hat","magic","fantasy","spell"],
         sourcePrompt: nil, version: 1
     )
 
