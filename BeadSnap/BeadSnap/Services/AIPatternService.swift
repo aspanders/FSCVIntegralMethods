@@ -3,6 +3,7 @@ import Foundation
 enum AIError: LocalizedError {
     case noAPIKey
     case networkError(Error)
+    case httpError(Int)
     case noContent
     case invalidJSON(String)
     case schemaViolation(String)
@@ -11,6 +12,13 @@ enum AIError: LocalizedError {
         switch self {
         case .noAPIKey:              return "No API key set. Tap 'Set Up AI' to add your Claude API key."
         case .networkError(let e):   return "Network error: \(e.localizedDescription)"
+        case .httpError(let code):
+            switch code {
+            case 401: return "Invalid API key. Tap 'Set Up AI' to update it."
+            case 400: return "Bad request. Check your API key."
+            case 429: return "Rate limit reached. Please wait a moment and try again."
+            default:  return "Server error (\(code)). Please try again."
+            }
         case .noContent:             return "AI returned no content. Please try again."
         case .invalidJSON(let s):    return "AI returned invalid JSON: \(s)"
         case .schemaViolation(let s): return "Pattern validation failed: \(s)"
@@ -23,11 +31,19 @@ final class AIPatternService {
     private init() {}
 
     private let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
-    private let model = "claude-haiku-4-5-20251001"
+    private let model = "claude-haiku-4-5"
+
+    private let apiKeyAccount = "claude_api_key"
 
     var apiKey: String {
-        get { UserDefaults.standard.string(forKey: "claude_api_key") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "claude_api_key") }
+        get { Keychain.load(for: apiKeyAccount) ?? "" }
+        set {
+            if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+                Keychain.delete(for: apiKeyAccount)
+            } else {
+                Keychain.save(newValue, for: apiKeyAccount)
+            }
+        }
     }
     var hasAPIKey: Bool { !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -106,8 +122,13 @@ final class AIPatternService {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let data: Data
-        do { (data, _) = try await URLSession.shared.data(for: req) }
+        let urlResponse: URLResponse
+        do { (data, urlResponse) = try await URLSession.shared.data(for: req) }
         catch { throw AIError.networkError(error) }
+
+        if let http = urlResponse as? HTTPURLResponse, http.statusCode != 200 {
+            throw AIError.httpError(http.statusCode)
+        }
 
         struct Response: Decodable {
             struct Content: Decodable { let text: String }
@@ -123,8 +144,9 @@ final class AIPatternService {
         do { pattern = try JSONDecoder().decode(FusePattern.self, from: jsonData) }
         catch { throw AIError.invalidJSON(error.localizedDescription) }
 
-        try validate(pattern)
-        return pattern
+        var mutable = pattern
+        try validate(&mutable)
+        return mutable
     }
 
     private func extractJSON(from text: String) throws -> Data {
@@ -142,7 +164,7 @@ final class AIPatternService {
         return data
     }
 
-    private func validate(_ p: FusePattern) throws {
+    private func validate(_ p: inout FusePattern) throws {
         guard p.grid.width >= 8, p.grid.width <= 64,
               p.grid.height >= 8, p.grid.height <= 64 else {
             throw AIError.schemaViolation("Grid \(p.grid.width)×\(p.grid.height) out of 8–64 range")
@@ -160,5 +182,11 @@ final class AIPatternService {
                 throw AIError.schemaViolation("Cell (\(cell.x),\(cell.y)) out of bounds")
             }
         }
+        // Deduplicate cells — last writer wins; prevents EditorViewModel crash
+        var seen = Set<String>()
+        p.cells = p.cells.reversed().filter { cell in
+            let key = "\(cell.x),\(cell.y)"
+            return seen.insert(key).inserted
+        }.reversed()
     }
 }

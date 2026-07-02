@@ -96,15 +96,26 @@ final class EditorViewModel: ObservableObject {
         pattern = p
     }
 
+    private var autosaveTask: Task<Void, Never>?
+
     private func autosave() {
         guard pattern.createdBy == .user else { return }
-        store.save(pattern)
+        autosaveTask?.cancel()
+        let snapshot = pattern
+        autosaveTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            self.store.save(snapshot)
+        }
     }
 
     private static func buildMap(from cells: [Cell]) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: cells.compactMap { cell -> (String, String)? in
-            guard let id = cell.colorId else { return nil }
-            return ("\(cell.x),\(cell.y)", id)
-        })
+        var map: [String: String] = [:]
+        for cell in cells {
+            guard let id = cell.colorId else { continue }
+            map["\(cell.x),\(cell.y)"] = id
+        }
+        return map
     }
 }

@@ -7,11 +7,11 @@ final class PatternStore: ObservableObject {
 
     @Published private(set) var systemPatterns: [FusePattern] = []
     @Published private(set) var userPatterns: [FusePattern] = []
+    @Published private(set) var lastError: String?
 
     var allPatterns: [FusePattern] { systemPatterns + userPatterns }
 
     private let userDir: URL
-    private let decoder = JSONDecoder()
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -23,26 +23,36 @@ final class PatternStore: ObservableObject {
         userDir = docs.appendingPathComponent("patterns", isDirectory: true)
         try? FileManager.default.createDirectory(at: userDir, withIntermediateDirectories: true)
         systemPatterns = SeedPatterns.all.sorted { $0.title < $1.title }
-        loadUserPatterns()
+        Task { await loadUserPatterns() }
     }
 
-    private func loadUserPatterns() {
-        let urls = (try? FileManager.default.contentsOfDirectory(
-            at: userDir, includingPropertiesForKeys: nil
-        )) ?? []
-        userPatterns = urls
-            .filter { $0.pathExtension == "json" }
-            .compactMap { url -> FusePattern? in
-                guard let data = try? Data(contentsOf: url) else { return nil }
-                return try? decoder.decode(FusePattern.self, from: data)
-            }
-            .sorted { $0.title.lowercased() < $1.title.lowercased() }
+    private func loadUserPatterns() async {
+        let dir = userDir
+        let loaded: [FusePattern] = await Task.detached(priority: .userInitiated) {
+            let urls = (try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: nil
+            )) ?? []
+            return urls
+                .filter { $0.pathExtension == "json" }
+                .compactMap { url -> FusePattern? in
+                    guard let data = try? Data(contentsOf: url) else { return nil }
+                    return try? JSONDecoder().decode(FusePattern.self, from: data)
+                }
+                .sorted { $0.title.lowercased() < $1.title.lowercased() }
+        }.value
+        userPatterns = loaded
     }
 
     func save(_ pattern: FusePattern) {
+        guard pattern.createdBy != .system else { return }
         let url = userDir.appendingPathComponent("\(pattern.id).json")
-        if let data = try? encoder.encode(pattern) {
-            try? data.write(to: url, options: .atomic)
+        do {
+            let data = try encoder.encode(pattern)
+            try data.write(to: url, options: .atomic)
+            lastError = nil
+        } catch {
+            lastError = "Failed to save "\(pattern.title)": \(error.localizedDescription)"
+            return
         }
         if let idx = userPatterns.firstIndex(where: { $0.id == pattern.id }) {
             userPatterns[idx] = pattern
@@ -53,12 +63,20 @@ final class PatternStore: ObservableObject {
     }
 
     func delete(_ pattern: FusePattern) {
-        guard pattern.createdBy == .user else { return }
-        try? FileManager.default.removeItem(
-            at: userDir.appendingPathComponent("\(pattern.id).json")
-        )
+        guard pattern.createdBy != .system else { return }
+        do {
+            try FileManager.default.removeItem(
+                at: userDir.appendingPathComponent("\(pattern.id).json")
+            )
+            lastError = nil
+        } catch {
+            lastError = "Failed to delete "\(pattern.title)": \(error.localizedDescription)"
+            return
+        }
         userPatterns.removeAll { $0.id == pattern.id }
     }
+
+    func clearLastError() { lastError = nil }
 
     func patterns(for category: PatternCategory) -> [FusePattern] {
         allPatterns.filter { $0.category == category }

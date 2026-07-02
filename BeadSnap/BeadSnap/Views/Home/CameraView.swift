@@ -27,6 +27,11 @@ struct CameraView: UIViewControllerRepresentable {
             if let image = info[.originalImage] as? UIImage {
                 onCapture(image.fixedOrientation())
             }
+            picker.dismiss(animated: true)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
         }
     }
 }

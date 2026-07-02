@@ -27,7 +27,7 @@ final class PersistenceService: ObservableObject {
 
     private func save() {
         guard let data = try? JSONEncoder().encode(projects) else { return }
-        try? data.write(to: projectsURL)
+        try? data.write(to: projectsURL, options: .atomic)
     }
 
     func saveProject(_ project: Project) {

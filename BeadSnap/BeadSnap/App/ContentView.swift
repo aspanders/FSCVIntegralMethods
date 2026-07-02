@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @ObservedObject private var store = PatternStore.shared
+
     var body: some View {
         TabView {
             LibraryView()
@@ -19,5 +21,13 @@ struct ContentView: View {
                 }
         }
         .tint(.purple)
+        .alert("Save Error", isPresented: Binding(
+            get: { store.lastError != nil },
+            set: { if !$0 { store.clearLastError() } }
+        )) {
+            Button("OK", role: .cancel) { store.clearLastError() }
+        } message: {
+            Text(store.lastError ?? "")
+        }
     }
 }

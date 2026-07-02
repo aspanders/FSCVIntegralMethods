@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PatternEditorView: View {
+struct LegacyPatternEditorView: View {
     @ObservedObject var vm: PatternViewModel
     @State private var isErasing = false
 

@@ -61,5 +61,7 @@
 	<false/>
 	<key>LSApplicationQueriesSchemes</key>
 	<array/>
+	<key>BeadSnapPrivacyPolicyURL</key>
+	<string>https://beadsnap.app/privacy</string>
 </dict>
 </plist>

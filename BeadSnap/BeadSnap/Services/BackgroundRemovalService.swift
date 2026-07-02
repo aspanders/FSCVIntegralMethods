@@ -174,18 +174,20 @@ private func thresholdMask(from pixelBuffer: CVPixelBuffer, threshold: Float) ->
         }
     }
 
-    let provider = CGDataProvider(data: Data(bytes) as CFData)!
-    let cgImage = CGImage(
-        width: width, height: height,
-        bitsPerComponent: 8, bitsPerPixel: 8,
-        bytesPerRow: width,
-        space: CGColorSpaceCreateDeviceGray(),
-        bitmapInfo: [],
-        provider: provider,
-        decode: nil,
-        shouldInterpolate: false,
-        intent: .defaultIntent
-    )!
+    guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+          let cgImage = CGImage(
+              width: width, height: height,
+              bitsPerComponent: 8, bitsPerPixel: 8,
+              bytesPerRow: width,
+              space: CGColorSpaceCreateDeviceGray(),
+              bitmapInfo: [],
+              provider: provider,
+              decode: nil,
+              shouldInterpolate: false,
+              intent: .defaultIntent
+          ) else {
+        return UIImage()
+    }
     return UIImage(cgImage: cgImage)
 }
 
