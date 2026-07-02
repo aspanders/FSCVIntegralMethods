@@ -4,6 +4,7 @@ struct DrawView: View {
     @StateObject private var vm = DrawViewModel()
     @State private var navigateToPattern = false
     @State private var drawnImage: UIImage?
+    @State private var showRasterizeError = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,11 @@ struct DrawView: View {
                 if let img = drawnImage {
                     PatternView(image: img, originalImage: img)
                 }
+            }
+            .alert("Conversion Failed", isPresented: $showRasterizeError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Could not render your drawing. Please try again.")
             }
         }
     }
@@ -204,7 +210,10 @@ struct DrawView: View {
     }
 
     private func convertToPattern() {
-        guard let img = vm.rasterize(size: vm.canvasSize) else { return }
+        guard let img = vm.rasterize(size: vm.canvasSize) else {
+            showRasterizeError = true
+            return
+        }
 
         let persistence = PersistenceService.shared
         let filename = persistence.uniqueImageFilename(ext: "png")

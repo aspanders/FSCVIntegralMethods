@@ -48,7 +48,7 @@ struct HomeView: View {
                 selection: $vm.photosPickerItem,
                 matching: .images
             )
-            .onChange(of: vm.photosPickerItem) { item in
+            .onChange(of: vm.photosPickerItem) { _, item in
                 Task { await vm.handlePickedPhoto(item) }
             }
             .navigationDestination(isPresented: $vm.isShowingBackgroundRemoval) {

@@ -7,6 +7,7 @@ enum AIError: LocalizedError {
     case noContent
     case invalidJSON(String)
     case schemaViolation(String)
+    case tooComplex
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +23,7 @@ enum AIError: LocalizedError {
         case .noContent:             return "AI returned no content. Please try again."
         case .invalidJSON(let s):    return "AI returned invalid JSON: \(s)"
         case .schemaViolation(let s): return "Pattern validation failed: \(s)"
+        case .tooComplex: return "Pattern is too large for AI refinement. Use a smaller grid or fill fewer cells."
         }
     }
 }
@@ -90,17 +92,22 @@ final class AIPatternService {
 
     func iterate(pattern: FusePattern, instruction: String) async throws -> FusePattern {
         guard hasAPIKey else { throw AIError.noAPIKey }
-        let json = (try? String(data: JSONEncoder().encode(pattern), encoding: .utf8)) ?? "{}"
+        guard pattern.cells.count <= 400 else { throw AIError.tooComplex }
+        let paletteDesc = pattern.palette
+            .map { "\($0.id): \($0.name) (\($0.hex))" }
+            .joined(separator: ", ")
+        let cellsDesc = pattern.cells
+            .map { "(\($0.x),\($0.y))=\($0.colorId ?? "?")" }
+            .joined(separator: " ")
         let msg = """
         Modify this fuse bead pattern per this instruction: \(instruction)
-        Preserve schema and structure unless grid resize is explicitly requested.
-        Return only the full updated JSON object.
-
-        Existing pattern:
-        \(json)
+        Grid: \(pattern.grid.width)×\(pattern.grid.height). Title: \(pattern.title). Category: \(pattern.category.rawValue).
+        Palette: \(paletteDesc)
+        Filled cells as (x,y)=colorId: \(cellsDesc)
+        Return only the full updated JSON object matching the schema.
         """
         var updated = try await callAPI(userMessage: msg)
-        updated.id = pattern.id  // keep same ID for in-place update
+        updated.id = pattern.id
         return updated
     }
 
