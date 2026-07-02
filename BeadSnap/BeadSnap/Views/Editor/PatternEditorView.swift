@@ -10,6 +10,8 @@ struct PatternEditorView: View {
     @State private var showColorCounts = false
     @State private var showSaveSuccess = false
     @State private var showExport = false
+    @AppStorage("hasSeenPaintHint") private var hasSeenPaintHint = false
+    @State private var showPaintHint = false
 
     init(pattern: FusePattern) {
         _viewModel = StateObject(wrappedValue: EditorViewModel(pattern: pattern))
@@ -56,6 +58,39 @@ struct PatternEditorView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: showSaveSuccess)
+        .overlay(alignment: .center) {
+            if showPaintHint {
+                paintHintOverlay
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showPaintHint)
+        .onAppear {
+            if !hasSeenPaintHint {
+                showPaintHint = true
+                hasSeenPaintHint = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                    withAnimation { showPaintHint = false }
+                }
+            }
+        }
+    }
+
+    private var paintHintOverlay: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "hand.point.up.fill")
+                .font(.largeTitle)
+                .foregroundStyle(.white)
+            Text("Tap a bead to paint it")
+                .font(.headline)
+                .foregroundStyle(.white)
+            Text("Drag to fill a row • Pinch to zoom")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(24)
+        .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 20))
+        .onTapGesture { withAnimation { showPaintHint = false } }
     }
 
     // MARK: - Banners

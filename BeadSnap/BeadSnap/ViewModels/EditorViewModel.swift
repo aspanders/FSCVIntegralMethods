@@ -135,6 +135,8 @@ final class EditorViewModel: ObservableObject {
             guard let self else { return }
             try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
+            // Skip if the pattern has been deleted since this task was queued
+            guard self.store.userPatterns.contains(where: { $0.id == snapshot.id }) else { return }
             self.store.save(snapshot)
         }
     }

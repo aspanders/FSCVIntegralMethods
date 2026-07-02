@@ -9,6 +9,7 @@ struct CreateView: View {
     @State private var newPattern: FusePattern?
     @State private var blankTitle = "My Design"
     @State private var blankGridSize: GridSize = .large
+    @State private var showPhotoSettings = false
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,9 @@ struct CreateView: View {
             }
             .sheet(isPresented: $showBlankSheet) {
                 blankSheet
+            }
+            .sheet(isPresented: $showPhotoSettings) {
+                photoSettingsSheet
             }
             .sheet(isPresented: $showAIStudio) {
                 AIStudioView { saved in
@@ -93,13 +97,8 @@ struct CreateView: View {
                     subtitle: "Turn a picture into a bead pattern"
                 )
             }
-            .onChange(of: importVM.selectedItem) { _, _ in
-                Task {
-                    await importVM.convert()
-                    if let p = importVM.convertedPattern {
-                        importedPattern = p
-                    }
-                }
+            .onChange(of: importVM.selectedItem) { _, item in
+                if item != nil { showPhotoSettings = true }
             }
 
             optionRow(
@@ -234,5 +233,56 @@ struct CreateView: View {
         case (32, 32): return "Standard fuse bead board size"
         default:       return "Large canvas for detailed art"
         }
+    }
+
+    // MARK: - Photo settings sheet
+
+    private var photoSettingsSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Grid Size") {
+                    ForEach([GridSize.small, .medium, .large, .xlarge], id: \.width) { gs in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(gs.displayName).font(.body)
+                                Text(gridSizeHint(gs)).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if importVM.selectedGridSize == gs {
+                                Image(systemName: "checkmark").foregroundStyle(.purple)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture { importVM.selectedGridSize = gs }
+                    }
+                }
+                Section("Bead Colors") {
+                    Stepper("Max colors: \(importVM.maxColors)", value: $importVM.maxColors, in: 4...24)
+                        .monospacedDigit()
+                }
+            }
+            .navigationTitle("Photo to Beads")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        importVM.selectedItem = nil
+                        showPhotoSettings = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Convert") {
+                        showPhotoSettings = false
+                        Task {
+                            await importVM.convert()
+                            if let p = importVM.convertedPattern {
+                                importedPattern = p
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
