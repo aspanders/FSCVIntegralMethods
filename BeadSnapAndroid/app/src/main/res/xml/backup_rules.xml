@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude API key from cloud backup -->
+    <exclude domain="sharedpref" path="beadsnap_secure_prefs.xml" />
+</full-backup-content>
