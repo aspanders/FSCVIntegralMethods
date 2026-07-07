@@ -6,15 +6,24 @@ struct AIStudioView: View {
     @State private var apiKeyInput = ""
     @State private var iterateInstruction = ""
     @State private var showIterateSheet = false
-    var onPatternSaved: ((FusePattern) -> Void)?
-
-    @Environment(\.dismiss) private var dismiss
+    @State private var editingPattern: FusePattern?
 
     var body: some View {
         NavigationStack {
             Form {
                 if !viewModel.hasAPIKey {
                     apiKeyBanner
+                } else {
+                    Section {
+                        Button {
+                            apiKeyInput = ""
+                            showAPIKeySheet = true
+                        } label: {
+                            Label("Change API Key", systemImage: "key")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 promptSection
                 settingsSection
@@ -31,13 +40,8 @@ struct AIStudioView: View {
             }
             .navigationTitle("AI Studio")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
-                        viewModel.cancelGeneration()
-                        dismiss()
-                    }
-                }
+            .navigationDestination(item: $editingPattern) { p in
+                PatternEditorView(pattern: p)
             }
             .sheet(isPresented: $showAPIKeySheet) {
                 apiKeySheet
@@ -154,8 +158,7 @@ struct AIStudioView: View {
 
             Button {
                 if let saved = viewModel.saveGenerated() {
-                    dismiss()
-                    onPatternSaved?(saved)
+                    editingPattern = saved
                 }
             } label: {
                 Label("Save & Edit", systemImage: "square.and.arrow.down")
@@ -225,12 +228,11 @@ struct AIStudioView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        AIPatternService.shared.apiKey = apiKeyInput.trimmingCharacters(in: .whitespaces)
-                        viewModel.refreshAPIKeyStatus()
+                        viewModel.saveAPIKey(apiKeyInput)
                         showAPIKeySheet = false
                     }
                     .bold()
-                    .disabled(apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }

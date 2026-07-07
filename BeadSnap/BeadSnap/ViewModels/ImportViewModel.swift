@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 @MainActor
 final class ImportViewModel: ObservableObject {
@@ -10,43 +11,51 @@ final class ImportViewModel: ObservableObject {
     @Published var convertedPattern: FusePattern?
     @Published var errorMessage: String?
 
-    private let converter = ImageConverter.shared
-    private var isSaving = false
-
     func convert() async {
         guard let item = selectedItem else { return }
         isConverting = true
         errorMessage = nil
         defer { isConverting = false }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data) else {
+            guard let data = try await item.loadTransferable(type: Data.self) else {
                 errorMessage = "Could not load image."
                 return
             }
-            convertedPattern = converter.convert(
-                image: image,
-                gridSize: selectedGridSize,
-                maxColors: maxColors
+            convertedPattern = try await Self.convertOffMain(
+                data: data, gridSize: selectedGridSize, maxColors: maxColors
             )
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    func saveConverted(title: String) -> FusePattern? {
-        guard !isSaving, var pattern = convertedPattern else { return nil }
-        isSaving = true
-        defer { isSaving = false }
-        let trimmed = title.trimmingCharacters(in: .whitespaces)
-        if trimmed.isEmpty {
-            let stamp = Int(Date().timeIntervalSince1970) % 100_000
-            pattern.title = "Photo Import #\(stamp)"
-        } else {
-            pattern.title = trimmed
+    /// Convert a camera-captured image through the same pipeline.
+    func convert(image: UIImage) async {
+        isConverting = true
+        errorMessage = nil
+        defer { isConverting = false }
+        do {
+            let gridSize = selectedGridSize
+            let colors = maxColors
+            convertedPattern = try await Task.detached(priority: .userInitiated) {
+                try ImageConverter.shared.convert(image: image, gridSize: gridSize, maxColors: colors)
+            }.value
+        } catch {
+            errorMessage = error.localizedDescription
         }
-        pattern.id = UUID().uuidString
-        PatternStore.shared.save(pattern)
-        return pattern
+    }
+
+    // Decode + quantize off the main thread so the converting overlay stays live
+    private static func convertOffMain(
+        data: Data, gridSize: GridSize, maxColors: Int
+    ) async throws -> FusePattern {
+        try await Task.detached(priority: .userInitiated) {
+            guard let image = UIImage(data: data) else {
+                throw ConversionError.unreadableImage
+            }
+            return try ImageConverter.shared.convert(
+                image: image, gridSize: gridSize, maxColors: maxColors
+            )
+        }.value
     }
 }

@@ -1,5 +1,15 @@
 import UIKit
 
+enum ConversionError: LocalizedError {
+    case unreadableImage
+
+    var errorDescription: String? {
+        switch self {
+        case .unreadableImage: return "Could not read that image. Try a different photo."
+        }
+    }
+}
+
 final class ImageConverter {
     static let shared = ImageConverter()
     private init() {}
@@ -8,10 +18,12 @@ final class ImageConverter {
         image: UIImage,
         gridSize: GridSize,
         maxColors: Int = 12
-    ) -> FusePattern {
+    ) throws -> FusePattern {
         let cols = gridSize.width
         let rows = gridSize.height
-        let pixels = samplePixels(from: image, cols: cols, rows: rows)
+        guard let pixels = samplePixels(from: image, cols: cols, rows: rows) else {
+            throw ConversionError.unreadableImage
+        }
         let (palette, assignments) = quantizeBeadSafe(
             pixels: pixels, cols: cols, rows: rows, maxColors: min(maxColors, 16)
         )
@@ -40,17 +52,50 @@ final class ImageConverter {
         )
     }
 
+    // MARK: - Shared Pattern Renderer
+
+    /// Renders a pattern to an image — thumbnails, previews, and PNG export all
+    /// use this so output matches Android's ImageConverter.renderToBitmap.
+    static func renderToImage(pattern: FusePattern, cellSize: CGFloat = 16) -> UIImage {
+        let w = CGFloat(pattern.grid.width) * cellSize
+        let h = CGFloat(pattern.grid.height) * cellSize
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: format)
+        let colorById = Dictionary(uniqueKeysWithValues: pattern.palette.map { ($0.id, $0) })
+        let inset = cellSize * 0.06
+        return renderer.image { _ in
+            UIColor.white.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: w, height: h))
+            for cell in pattern.cells {
+                guard let id = cell.colorId, let c = colorById[id] else { continue }
+                let rect = CGRect(
+                    x: CGFloat(cell.x) * cellSize + inset,
+                    y: CGFloat(cell.y) * cellSize + inset,
+                    width: cellSize - 2 * inset,
+                    height: cellSize - 2 * inset
+                )
+                c.uiColor.setFill()
+                UIBezierPath(ovalIn: rect).fill()
+                let stroke = UIBezierPath(ovalIn: rect)
+                UIColor.black.withAlphaComponent(0.15).setStroke()
+                stroke.lineWidth = 0.5
+                stroke.stroke()
+            }
+        }
+    }
+
     // MARK: - Pixel Sampling
 
-    private func samplePixels(from image: UIImage, cols: Int, rows: Int) -> [[[CGFloat]]] {
-        guard let cgImage = image.cgImage else { return [] }
+    private func samplePixels(from image: UIImage, cols: Int, rows: Int) -> [[[CGFloat]]]? {
+        guard let cgImage = image.cgImage else { return nil }
         var rawData = [UInt8](repeating: 0, count: cols * rows * 4)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(
             data: &rawData, width: cols, height: rows,
             bitsPerComponent: 8, bytesPerRow: cols * 4, space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return [] }
+        ) else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: cols, height: rows))
         var pixels = Array(repeating: Array(repeating: [CGFloat](repeating: 0, count: 4), count: cols), count: rows)
         for y in 0..<rows {
@@ -60,6 +105,7 @@ final class ImageConverter {
                 if a < 0.15 {
                     pixels[y][x] = [-1, -1, -1, -1]
                 } else {
+                    // buffer is premultiplied — divide by alpha to recover straight color
                     let scale = a > 0 ? 1 / (255 * a) : 0
                     pixels[y][x] = [
                         min(CGFloat(rawData[i])   * scale, 1),
@@ -80,12 +126,13 @@ final class ImageConverter {
         cols: Int, rows: Int,
         maxColors: Int
     ) -> ([PaletteColor], [[String?]]) {
-        let full = PaletteColor.beadSafe
+        let full = PaletteColor.full
         let fullLAB = full.map { c -> (Double, Double, Double) in
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
             return rgbToLAB(r: Double(r), g: Double(g), b: Double(b))
         }
+        let paletteIndex = Dictionary(uniqueKeysWithValues: full.enumerated().map { ($1.id, $0) })
 
         var assignments = Array(repeating: Array<String?>(repeating: nil, count: cols), count: rows)
         var counts: [String: Int] = [:]
@@ -106,8 +153,16 @@ final class ImageConverter {
             }
         }
 
-        // Limit palette to maxColors most-used
-        let topIDs = Set(counts.sorted { $0.value > $1.value }.prefix(maxColors).map(\.key))
+        // Limit palette to maxColors most-used; break count ties by palette order
+        // so the same photo always yields the same palette.
+        let topIDs = Set(
+            counts.sorted {
+                $0.value != $1.value
+                    ? $0.value > $1.value
+                    : (paletteIndex[$0.key] ?? 0) < (paletteIndex[$1.key] ?? 0)
+            }
+            .prefix(maxColors).map(\.key)
+        )
 
         if counts.count > maxColors {
             let topPalette = full.filter { topIDs.contains($0.id) }
@@ -139,12 +194,7 @@ final class ImageConverter {
     // MARK: - CIE LAB
 
     private func rgbToLAB(r: Double, g: Double, b: Double) -> (Double, Double, Double) {
-        func lin(_ c: Double) -> Double { c > 0.04045 ? pow((c+0.055)/1.055, 2.4) : c/12.92 }
-        let (rl, gl, bl) = (lin(r), lin(g), lin(b))
-        let x = (rl*0.4124564 + gl*0.3575761 + bl*0.1804375) / 0.95047
-        let y = (rl*0.2126729 + gl*0.7151522 + bl*0.0721750) / 1.00000
-        let z = (rl*0.0193339 + gl*0.1191920 + bl*0.9503041) / 1.08883
-        func f(_ t: Double) -> Double { t > 0.008856 ? pow(t, 1.0/3.0) : 7.787*t+16.0/116.0 }
-        return (116*f(y)-16, 500*(f(x)-f(y)), 200*(f(y)-f(z)))
+        let lab = BeadColor.rgbToLAB(r: r, g: g, b: b)
+        return (lab.l, lab.a, lab.b)
     }
 }

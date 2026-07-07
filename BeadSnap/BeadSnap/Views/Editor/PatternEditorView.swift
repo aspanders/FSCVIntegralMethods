@@ -162,15 +162,13 @@ struct PatternEditorView: View {
             .disabled(!viewModel.canUndo)
             .accessibilityLabel("Undo")
 
-            if viewModel.pattern.createdBy != .user {
-                Button {
-                    saveTitle = viewModel.pattern.title
-                    showSaveSheet = true
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
-                }
-                .accessibilityLabel("Save as copy")
+            Button {
+                saveTitle = viewModel.pattern.title
+                showSaveSheet = true
+            } label: {
+                Image(systemName: "square.and.arrow.down")
             }
+            .accessibilityLabel(viewModel.pattern.createdBy == .user ? "Save as" : "Save as copy")
         }
     }
 
@@ -262,7 +260,9 @@ struct PatternEditorView: View {
         let lines = viewModel.colorCounts.map { "• \($0.color.name): \($0.count)" }
         let text = """
         Bead Shopping List — \(viewModel.pattern.title)
+
         \(lines.joined(separator: "\n"))
+
         Total: \(viewModel.totalBeads) beads
         """
         let vc = UIActivityViewController(activityItems: [text], applicationActivities: nil)

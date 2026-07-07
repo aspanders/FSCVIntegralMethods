@@ -4,7 +4,7 @@ object SeedPatterns {
 
     val all: List<FusePattern> by lazy {
         listOf(heart, star, smiley, diamond, cupcake, cat, dog, fish, bee,
-               butterfly, flower, sun, mushroom, tree, rainbow, rocket, car,
+               butterfly, bird, flower, sun, mushroom, tree, rainbow, rocket, car,
                pumpkin, christmasTree, snowflake, dragon, unicorn, crystalBall, wizardHat)
     }
 
@@ -269,6 +269,29 @@ object SeedPatterns {
         ), version = 1, sourcePrompt = null
     )
 
+    private val bird = FusePattern(
+        id = "seed-bird", title = "Bird",
+        category = PatternCategory.animals, createdBy = CreatorType.system,
+        grid = GridSize(12, 10), difficulty = Difficulty.easy,
+        palette = pal(Triple("sky_blue","Sky Blue","#5BC8F5"), Triple("orange","Orange","#FF8C00")),
+        tags = listOf("bird","animal","fly","wings"),
+        cells = cells(
+            listOf(
+                "....SSS.....",
+                "...SSSSS....",
+                "..SSSSSSS...",
+                ".SSSSSSSSSS.",
+                "SSSSSSSSSSSS",
+                "SSSSSSSSSOSS",
+                ".SSSSSSSSOSS",
+                "..SSSSSSSSS.",
+                "....SSSS....",
+                ".....SS....."
+            ),
+            mapOf('S' to "sky_blue", 'O' to "orange")
+        ), version = 1, sourcePrompt = null
+    )
+
     // ─── Nature ──────────────────────────────────────────────────────────────
 
     private val flower = FusePattern(
@@ -450,8 +473,7 @@ object SeedPatterns {
                 "RRRRRRRRRRRRRRRR",
                 "RRRRRRRRRRRRRRR.",
                 "..RR.BBBB..RR...",
-                "...GBBBBBBG.....",
-                "................"
+                "...GBBBBBBG....."
             ).map { it.take(16).padEnd(16, '.') },
             mapOf('R' to "red", 'S' to "sky_blue", 'B' to "black", 'G' to "light_gray")
         ), version = 1, sourcePrompt = null

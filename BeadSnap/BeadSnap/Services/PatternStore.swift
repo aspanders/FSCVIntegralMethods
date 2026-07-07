@@ -51,27 +51,28 @@ final class PatternStore: ObservableObject {
             try data.write(to: url, options: .atomic)
             lastError = nil
         } catch {
-            lastError = "Failed to save "\(pattern.title)": \(error.localizedDescription)"
+            lastError = "Failed to save \"\(pattern.title)\": \(error.localizedDescription)"
             return
         }
         if let idx = userPatterns.firstIndex(where: { $0.id == pattern.id }) {
             userPatterns[idx] = pattern
         } else {
             userPatterns.append(pattern)
-            userPatterns.sort { $0.title.lowercased() < $1.title.lowercased() }
         }
+        userPatterns.sort { $0.title.lowercased() < $1.title.lowercased() }
     }
 
     func delete(_ pattern: FusePattern) {
         guard pattern.createdBy != .system else { return }
-        do {
-            try FileManager.default.removeItem(
-                at: userDir.appendingPathComponent("\(pattern.id).json")
-            )
-            lastError = nil
-        } catch {
-            lastError = "Failed to delete "\(pattern.title)": \(error.localizedDescription)"
-            return
+        let url = userDir.appendingPathComponent("\(pattern.id).json")
+        if FileManager.default.fileExists(atPath: url.path) {
+            do {
+                try FileManager.default.removeItem(at: url)
+                lastError = nil
+            } catch {
+                lastError = "Failed to delete \"\(pattern.title)\": \(error.localizedDescription)"
+                return
+            }
         }
         userPatterns.removeAll { $0.id == pattern.id }
     }
@@ -89,15 +90,5 @@ final class PatternStore: ObservableObject {
 
     func patterns(for category: PatternCategory) -> [FusePattern] {
         allPatterns.filter { $0.category == category }
-    }
-
-    func search(_ query: String) -> [FusePattern] {
-        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return allPatterns }
-        return allPatterns.filter {
-            $0.title.lowercased().contains(q) ||
-            $0.tags.contains { $0.lowercased().contains(q) } ||
-            $0.category.rawValue.contains(q)
-        }
     }
 }

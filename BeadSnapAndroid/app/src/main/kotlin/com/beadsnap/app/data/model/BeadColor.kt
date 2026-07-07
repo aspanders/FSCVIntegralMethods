@@ -97,7 +97,11 @@ data class BeadColor(val id: String, val name: String, val hex: String) {
 
         val paletteById: Map<String, BeadColor> by lazy { palette.associateBy { it.id } }
 
-        // Subset used as a default starting palette
-        val defaultPalette: List<BeadColor> get() = palette.take(8)
+        // Starter palette for a new blank canvas: the classic 8 every kit has.
+        // Must match PaletteColor.defaultPalette on iOS.
+        val defaultPalette: List<BeadColor> by lazy {
+            listOf("white", "black", "red", "blue", "green", "yellow", "orange", "brown")
+                .mapNotNull { paletteById[it] }
+        }
     }
 }

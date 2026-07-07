@@ -10,10 +10,6 @@
 		B1000200000000000000001 /* BeadSnapApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000001 /* BeadSnapApp.swift */; };
 		B1000200000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000002 /* ContentView.swift */; };
 		B1000200000000000000008 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000008 /* CameraView.swift */; };
-		B1000200000000000000009 /* BackgroundRemovalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000009 /* BackgroundRemovalView.swift */; };
-		B1000200000000000000016 /* BackgroundRemovalViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000016 /* BackgroundRemovalViewModel.swift */; };
-		B1000200000000000000019 /* BackgroundRemovalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000019 /* BackgroundRemovalService.swift */; };
-		B1000200000000000000024 /* KidFriendlyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000024 /* KidFriendlyButton.swift */; };
 		B1000200000000000000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000030 /* Assets.xcassets */; };
 		B1000200000000000000031 /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000031 /* Info.plist */; };
 		B1000200000000000000040 /* FusePattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000040 /* FusePattern.swift */; };
@@ -28,23 +24,20 @@
 		B1000200000000000000049 /* SeedPatterns.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000049 /* SeedPatterns.swift */; };
 		B1000200000000000000050 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000050 /* LibraryView.swift */; };
 		B1000200000000000000051 /* PatternCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000051 /* PatternCard.swift */; };
-		B1000200000000000000052 /* PatternEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000052 /* PatternEditorView.swift */; };
 		B1000200000000000000053 /* BeadGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000053 /* BeadGridView.swift */; };
 		B1000200000000000000054 /* PalettePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000054 /* PalettePickerView.swift */; };
 		B1000200000000000000055 /* CreateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000055 /* CreateView.swift */; };
-		B1000200000000000000056 /* SavedPatternsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000056 /* SavedPatternsView.swift */; };
 		B1000200000000000000057 /* AIStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000057 /* AIStudioView.swift */; };
 		B1000200000000000000058 /* BeadCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000058 /* BeadCellView.swift */; };
+		B1000200000000000000060 /* PatternEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000060 /* PatternEditorView.swift */; };
+		B1000200000000000000061 /* BeadColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000061 /* BeadColor.swift */; };
+		B1000200000000000000062 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000062 /* Keychain.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B1000100000000000000001 /* BeadSnapApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeadSnapApp.swift; sourceTree = "<group>"; };
 		B1000100000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B1000100000000000000008 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
-		B1000100000000000000009 /* BackgroundRemovalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRemovalView.swift; sourceTree = "<group>"; };
-		B1000100000000000000016 /* BackgroundRemovalViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRemovalViewModel.swift; sourceTree = "<group>"; };
-		B1000100000000000000019 /* BackgroundRemovalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRemovalService.swift; sourceTree = "<group>"; };
-		B1000100000000000000024 /* KidFriendlyButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KidFriendlyButton.swift; sourceTree = "<group>"; };
 		B1000100000000000000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000100000000000000031 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B1000100000000000000040 /* FusePattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FusePattern.swift; sourceTree = "<group>"; };
@@ -59,13 +52,14 @@
 		B1000100000000000000049 /* SeedPatterns.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedPatterns.swift; sourceTree = "<group>"; };
 		B1000100000000000000050 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		B1000100000000000000051 /* PatternCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternCard.swift; sourceTree = "<group>"; };
-		B1000100000000000000052 /* PatternEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternEditorView.swift; sourceTree = "<group>"; };
 		B1000100000000000000053 /* BeadGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeadGridView.swift; sourceTree = "<group>"; };
 		B1000100000000000000054 /* PalettePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalettePickerView.swift; sourceTree = "<group>"; };
 		B1000100000000000000055 /* CreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateView.swift; sourceTree = "<group>"; };
-		B1000100000000000000056 /* SavedPatternsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedPatternsView.swift; sourceTree = "<group>"; };
 		B1000100000000000000057 /* AIStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStudioView.swift; sourceTree = "<group>"; };
 		B1000100000000000000058 /* BeadCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeadCellView.swift; sourceTree = "<group>"; };
+		B1000100000000000000060 /* PatternEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternEditorView.swift; sourceTree = "<group>"; };
+		B1000100000000000000061 /* BeadColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeadColor.swift; sourceTree = "<group>"; };
+		B1000100000000000000062 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		B1000100000000000000099 /* BeadSnap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BeadSnap.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -108,6 +102,7 @@
 			children = (
 				B1000100000000000000040 /* FusePattern.swift */,
 				B1000100000000000000041 /* BeadPalette.swift */,
+				B1000100000000000000061 /* BeadColor.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -124,11 +119,9 @@
 			isa = PBXGroup;
 			children = (
 				B1000400000000000000031 /* Home */,
-				B1000400000000000000032 /* BackgroundRemoval */,
 				B1000400000000000000037 /* Library */,
 				B1000400000000000000038 /* Editor */,
 				B1000400000000000000039 /* Create */,
-				B1000400000000000000040 /* Saved */,
 				B1000400000000000000041 /* Studio */,
 				B1000400000000000000036 /* Components */,
 			);
@@ -143,18 +136,9 @@
 			path = Home;
 			sourceTree = "<group>";
 		};
-		B1000400000000000000032 /* BackgroundRemoval */ = {
-			isa = PBXGroup;
-			children = (
-				B1000100000000000000009 /* BackgroundRemovalView.swift */,
-			);
-			path = BackgroundRemoval;
-			sourceTree = "<group>";
-		};
 		B1000400000000000000036 /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				B1000100000000000000024 /* KidFriendlyButton.swift */,
 				B1000100000000000000058 /* BeadCellView.swift */,
 			);
 			path = Components;
@@ -172,9 +156,9 @@
 		B1000400000000000000038 /* Editor */ = {
 			isa = PBXGroup;
 			children = (
-				B1000100000000000000052 /* PatternEditorView.swift */,
 				B1000100000000000000053 /* BeadGridView.swift */,
 				B1000100000000000000054 /* PalettePickerView.swift */,
+				B1000100000000000000060 /* PatternEditorView.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -185,14 +169,6 @@
 				B1000100000000000000055 /* CreateView.swift */,
 			);
 			path = Create;
-			sourceTree = "<group>";
-		};
-		B1000400000000000000040 /* Saved */ = {
-			isa = PBXGroup;
-			children = (
-				B1000100000000000000056 /* SavedPatternsView.swift */,
-			);
-			path = Saved;
 			sourceTree = "<group>";
 		};
 		B1000400000000000000041 /* Studio */ = {
@@ -210,7 +186,6 @@
 				B1000100000000000000046 /* EditorViewModel.swift */,
 				B1000100000000000000047 /* StudioViewModel.swift */,
 				B1000100000000000000048 /* ImportViewModel.swift */,
-				B1000100000000000000016 /* BackgroundRemovalViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -221,7 +196,7 @@
 				B1000100000000000000042 /* PatternStore.swift */,
 				B1000100000000000000043 /* ImageConverter.swift */,
 				B1000100000000000000044 /* AIPatternService.swift */,
-				B1000100000000000000019 /* BackgroundRemovalService.swift */,
+				B1000100000000000000062 /* Keychain.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -324,10 +299,9 @@
 				B1000200000000000000001 /* BeadSnapApp.swift in Sources */,
 				B1000200000000000000002 /* ContentView.swift in Sources */,
 				B1000200000000000000008 /* CameraView.swift in Sources */,
-				B1000200000000000000009 /* BackgroundRemovalView.swift in Sources */,
-				B1000200000000000000016 /* BackgroundRemovalViewModel.swift in Sources */,
-				B1000200000000000000019 /* BackgroundRemovalService.swift in Sources */,
-				B1000200000000000000024 /* KidFriendlyButton.swift in Sources */,
+				B1000200000000000000060 /* PatternEditorView.swift in Sources */,
+				B1000200000000000000061 /* BeadColor.swift in Sources */,
+				B1000200000000000000062 /* Keychain.swift in Sources */,
 				B1000200000000000000040 /* FusePattern.swift in Sources */,
 				B1000200000000000000041 /* BeadPalette.swift in Sources */,
 				B1000200000000000000042 /* PatternStore.swift in Sources */,
@@ -340,11 +314,9 @@
 				B1000200000000000000049 /* SeedPatterns.swift in Sources */,
 				B1000200000000000000050 /* LibraryView.swift in Sources */,
 				B1000200000000000000051 /* PatternCard.swift in Sources */,
-				B1000200000000000000052 /* PatternEditorView.swift in Sources */,
 				B1000200000000000000053 /* BeadGridView.swift in Sources */,
 				B1000200000000000000054 /* PalettePickerView.swift in Sources */,
 				B1000200000000000000055 /* CreateView.swift in Sources */,
-				B1000200000000000000056 /* SavedPatternsView.swift in Sources */,
 				B1000200000000000000057 /* AIStudioView.swift in Sources */,
 				B1000200000000000000058 /* BeadCellView.swift in Sources */,
 			);

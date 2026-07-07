@@ -60,7 +60,12 @@ class PatternStore private constructor(context: Context) {
         try {
             val tmp = File(userDir, "${pattern.id}.json.tmp")
             tmp.writeText(json.encodeToString(pattern))
-            tmp.renameTo(file)   // atomic on most Android filesystems
+            // atomic on most Android filesystems; renameTo reports failure via its result
+            if (!tmp.renameTo(file)) {
+                tmp.delete()
+                _lastError.value = "Failed to save \"${pattern.title}\": could not commit file"
+                return
+            }
             _lastError.value = null
         } catch (e: Exception) {
             _lastError.value = "Failed to save \"${pattern.title}\": ${e.message}"
@@ -75,7 +80,12 @@ class PatternStore private constructor(context: Context) {
     fun delete(pattern: FusePattern) {
         if (pattern.createdBy == CreatorType.system) return
         try {
-            File(userDir, "${pattern.id}.json").delete()
+            val file = File(userDir, "${pattern.id}.json")
+            // tolerate a missing file; surface a real deletion failure
+            if (file.exists() && !file.delete()) {
+                _lastError.value = "Failed to delete \"${pattern.title}\": could not remove file"
+                return
+            }
             _lastError.value = null
         } catch (e: Exception) {
             _lastError.value = "Failed to delete \"${pattern.title}\": ${e.message}"

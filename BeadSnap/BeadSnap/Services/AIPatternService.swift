@@ -37,17 +37,26 @@ final class AIPatternService {
 
     private let apiKeyAccount = "claude_api_key"
 
+    // Bounded timeouts matching Android's OkHttp config (30s connect / 60s read)
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 90
+        return URLSession(configuration: config)
+    }()
+
     var apiKey: String {
         get { Keychain.load(for: apiKeyAccount) ?? "" }
         set {
-            if newValue.trimmingCharacters(in: .whitespaces).isEmpty {
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
                 Keychain.delete(for: apiKeyAccount)
             } else {
-                Keychain.save(newValue, for: apiKeyAccount)
+                Keychain.save(trimmed, for: apiKeyAccount)
             }
         }
     }
-    var hasAPIKey: Bool { !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var hasAPIKey: Bool { !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     // MARK: - System Prompt
 
@@ -130,10 +139,16 @@ final class AIPatternService {
 
         let data: Data
         let urlResponse: URLResponse
-        do { (data, urlResponse) = try await URLSession.shared.data(for: req) }
-        catch { throw AIError.networkError(error) }
+        do { (data, urlResponse) = try await session.data(for: req) }
+        catch {
+            // Rethrow cancellation so callers can distinguish user cancel from failure
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
+            throw AIError.networkError(error)
+        }
 
-        if let http = urlResponse as? HTTPURLResponse, http.statusCode != 200 {
+        if let http = urlResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             throw AIError.httpError(http.statusCode)
         }
 
@@ -142,13 +157,16 @@ final class AIPatternService {
             let content: [Content]
         }
         guard let resp = try? JSONDecoder().decode(Response.self, from: data),
-              let text = resp.content.first?.text, !text.isEmpty else {
+              let text = resp.content.first?.text,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIError.noContent
         }
 
         let jsonData = try extractJSON(from: text)
         let pattern: FusePattern
-        do { pattern = try JSONDecoder().decode(FusePattern.self, from: jsonData) }
+        let decoder = JSONDecoder()
+        decoder.allowsJSON5 = true   // tolerate lenient model output like Android's isLenient
+        do { pattern = try decoder.decode(FusePattern.self, from: jsonData) }
         catch { throw AIError.invalidJSON(error.localizedDescription) }
 
         var mutable = pattern

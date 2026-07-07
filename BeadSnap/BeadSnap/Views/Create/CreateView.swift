@@ -1,12 +1,15 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 struct CreateView: View {
+    var onOpenAIStudio: () -> Void = {}
+
     @StateObject private var importVM = ImportViewModel()
     @State private var showBlankSheet = false
-    @State private var showAIStudio = false
-    @State private var importedPattern: FusePattern?
-    @State private var newPattern: FusePattern?
+    @State private var showCamera = false
+    @State private var capturedImage: UIImage?
+    @State private var editorPattern: FusePattern?
     @State private var blankTitle = "My Design"
     @State private var blankGridSize: GridSize = .large
     @State private var showPhotoSettings = false
@@ -23,10 +26,7 @@ struct CreateView: View {
                 Spacer()
             }
             .navigationTitle("Create")
-            .navigationDestination(item: $newPattern) { p in
-                PatternEditorView(pattern: p)
-            }
-            .navigationDestination(item: $importedPattern) { p in
+            .navigationDestination(item: $editorPattern) { p in
                 PatternEditorView(pattern: p)
             }
             .sheet(isPresented: $showBlankSheet) {
@@ -35,10 +35,12 @@ struct CreateView: View {
             .sheet(isPresented: $showPhotoSettings) {
                 photoSettingsSheet
             }
-            .sheet(isPresented: $showAIStudio) {
-                AIStudioView { saved in
-                    importedPattern = saved
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraView { image in
+                    capturedImage = image
+                    showPhotoSettings = true
                 }
+                .ignoresSafeArea()
             }
             .alert("Conversion Error", isPresented: Binding(
                 get: { importVM.errorMessage != nil },
@@ -54,6 +56,25 @@ struct CreateView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Open in editor (single entry point, mirrors Android onPatternReady)
+
+    private func openInEditor(_ pattern: FusePattern) {
+        var p = pattern
+        // Repeated imports get distinct names instead of piles of "Imported Photo"
+        if p.title == "Imported Photo" {
+            let existing = PatternStore.shared.userPatterns
+                .filter { $0.title.hasPrefix("Imported Photo") }
+                .count
+            if existing > 0 { p.title = "Imported Photo \(existing + 1)" }
+        }
+        // Persist immediately so the pattern exists in the library and editor
+        // autosaves have something to update — otherwise all edits are lost.
+        if p.createdBy == .user {
+            PatternStore.shared.save(p)
+        }
+        editorPattern = p
     }
 
     // MARK: - Header
@@ -98,7 +119,21 @@ struct CreateView: View {
                 )
             }
             .onChange(of: importVM.selectedItem) { _, item in
-                if item != nil { showPhotoSettings = true }
+                if item != nil {
+                    capturedImage = nil
+                    showPhotoSettings = true
+                }
+            }
+
+            if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                optionRow(
+                    icon: "camera.fill",
+                    iconColor: .teal,
+                    title: "Camera",
+                    subtitle: "Take a photo and convert it"
+                ) {
+                    showCamera = true
+                }
             }
 
             optionRow(
@@ -107,7 +142,7 @@ struct CreateView: View {
                 title: "AI Studio",
                 subtitle: "Generate a pattern with Claude AI"
             ) {
-                showAIStudio = true
+                onOpenAIStudio()
             }
         }
     }
@@ -166,6 +201,7 @@ struct CreateView: View {
             .padding(32)
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 18))
+            .accessibilityLabel("Converting photo")
         }
     }
 
@@ -205,20 +241,20 @@ struct CreateView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
                         let title = blankTitle.trimmingCharacters(in: .whitespaces)
-                        newPattern = FusePattern(
+                        showBlankSheet = false
+                        openInEditor(FusePattern(
                             id: UUID().uuidString,
                             title: title.isEmpty ? "My Design" : title,
                             category: .custom,
                             createdBy: .user,
                             grid: blankGridSize,
-                            palette: Array(PaletteColor.beadSafe.prefix(8)),
+                            palette: PaletteColor.defaultPalette,
                             cells: [],
                             difficulty: .easy,
                             tags: [],
                             sourcePrompt: nil,
                             version: 1
-                        )
-                        showBlankSheet = false
+                        ))
                     }
                 }
             }
@@ -267,6 +303,7 @@ struct CreateView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         importVM.selectedItem = nil
+                        capturedImage = nil
                         showPhotoSettings = false
                     }
                 }
@@ -274,9 +311,16 @@ struct CreateView: View {
                     Button("Convert") {
                         showPhotoSettings = false
                         Task {
-                            await importVM.convert()
+                            if let image = capturedImage {
+                                await importVM.convert(image: image)
+                                capturedImage = nil
+                            } else {
+                                await importVM.convert()
+                                importVM.selectedItem = nil
+                            }
                             if let p = importVM.convertedPattern {
-                                importedPattern = p
+                                openInEditor(p)
+                                importVM.convertedPattern = nil
                             }
                         }
                     }

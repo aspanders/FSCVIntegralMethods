@@ -2,6 +2,8 @@ import SwiftUI
 
 struct LibraryView: View {
     @StateObject private var viewModel = LibraryViewModel()
+    @ObservedObject private var store = PatternStore.shared
+    @State private var patternToDelete: FusePattern?
 
     private let columns = [GridItem(.adaptive(minimum: 130, maximum: 180), spacing: 14)]
 
@@ -21,6 +23,20 @@ struct LibraryView: View {
                                         .padding(4)
                                 }
                                 .buttonStyle(.plain)
+                                .contextMenu {
+                                    if pattern.createdBy != .system {
+                                        Button {
+                                            store.duplicate(pattern)
+                                        } label: {
+                                            Label("Duplicate", systemImage: "plus.square.on.square")
+                                        }
+                                        Button(role: .destructive) {
+                                            patternToDelete = pattern
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
+                                    }
+                                }
                             }
                         }
                         .padding(16)
@@ -35,11 +51,10 @@ struct LibraryView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
-                        ForEach(LibrarySortOrder.allCases) { order in
-                            Button {
-                                viewModel.sortOrder = order
-                            } label: {
+                        Picker("Sort", selection: $viewModel.sortOrder) {
+                            ForEach(LibrarySortOrder.allCases) { order in
                                 Label(order.displayName, systemImage: order.systemImage)
+                                    .tag(order)
                             }
                         }
                     } label: {
@@ -47,6 +62,22 @@ struct LibraryView: View {
                     }
                     .accessibilityLabel("Sort patterns")
                 }
+            }
+            .confirmationDialog(
+                "Delete \"\(patternToDelete?.title ?? "")\"?",
+                isPresented: Binding(
+                    get: { patternToDelete != nil },
+                    set: { if !$0 { patternToDelete = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let p = patternToDelete { store.delete(p) }
+                    patternToDelete = nil
+                }
+                Button("Cancel", role: .cancel) { patternToDelete = nil }
+            } message: {
+                Text("This can't be undone.")
             }
         }
     }
@@ -58,7 +89,7 @@ struct LibraryView: View {
             HStack(spacing: 8) {
                 chip(nil, label: "All")
                 ForEach(PatternCategory.allCases) { cat in
-                    chip(cat, label: "\(cat.emoji) \(cat.displayName)")
+                    chip(cat, label: "\(cat.emoji) \(cat.displayName) (\(viewModel.count(for: cat)))")
                 }
             }
             .padding(.horizontal, 16)
@@ -82,7 +113,7 @@ struct LibraryView: View {
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityLabel(cat.map { $0.displayName } ?? "All categories")
+        .accessibilityLabel(cat.map { "\($0.displayName), \(viewModel.count(for: $0)) patterns" } ?? "All categories")
     }
 
     // MARK: - Empty state

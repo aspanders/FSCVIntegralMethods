@@ -91,11 +91,11 @@ object ImageConverter {
                 if (a < 0.15f) {
                     result[y][x] = floatArrayOf(-1f, -1f, -1f, -1f)
                 } else {
-                    val scale = if (a > 0) 1f / (255f * a) else 0f
+                    // getPixel returns straight (un-premultiplied) ARGB — no alpha division
                     result[y][x] = floatArrayOf(
-                        minOf(Color.red(pixel) * scale, 1f),
-                        minOf(Color.green(pixel) * scale, 1f),
-                        minOf(Color.blue(pixel) * scale, 1f),
+                        Color.red(pixel) / 255f,
+                        Color.green(pixel) / 255f,
+                        Color.blue(pixel) / 255f,
                         a
                     )
                 }

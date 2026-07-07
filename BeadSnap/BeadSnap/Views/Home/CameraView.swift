@@ -49,55 +49,81 @@ extension UIImage {
 
 struct OnboardingView: View {
     @Environment(\.dismiss) var dismiss
+    @State private var page = 0
 
-    let steps: [(emoji: String, title: String, desc: String)] = [
-        ("📸", "Take a Photo", "Snap any object — a pet, toy, flower, or anything you love!"),
-        ("✂️", "Remove the Background", "Tap the magic button to cut out the background automatically."),
-        ("🔮", "Create Your Pattern", "Instantly see your photo turned into colorful fuse beads!"),
-        ("✏️", "Edit & Customize", "Tap any bead to change its color and make it your own."),
-        ("🖨️", "Print & Build", "Print your pattern and start placing beads on your board!"),
+    // Same four pages as the Android onboarding
+    private let pages: [(icon: String, title: String, body: String)] = [
+        ("square.grid.2x2.fill", "Design Bead Patterns",
+         "Create pixel-art patterns for Perler, Hama, and other fuse beads. Tap to place beads on the grid — it's that simple."),
+        ("photo.fill", "Convert Any Photo",
+         "Import a photo or snap one with your camera and BeadSnap automatically converts it into a color-quantized bead pattern."),
+        ("wand.and.stars", "AI-Powered Generation",
+         "Describe what you want and Claude AI will generate a unique bead pattern for you. Bring your ideas to life instantly."),
+        ("square.and.arrow.up", "Export & Share",
+         "Export your pattern as a PNG image and share with the community or use the shopping list to buy exactly the right beads."),
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 28) {
-                    Text("How BeadSnap Works")
-                        .font(.largeTitle.bold())
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 20)
-
-                    ForEach(Array(steps.enumerated()), id: \.offset) { idx, step in
-                        HStack(alignment: .top, spacing: 16) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.purple.opacity(0.1))
-                                    .frame(width: 56, height: 56)
-                                Text(step.emoji)
-                                    .font(.title)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(step.title)
-                                    .font(.headline)
-                                Text(step.desc)
-                                    .font(.body)
-                                    .foregroundColor(.secondary)
-                            }
+        VStack {
+            TabView(selection: $page) {
+                ForEach(Array(pages.enumerated()), id: \.offset) { idx, p in
+                    VStack(spacing: 0) {
+                        Spacer()
+                        ZStack {
+                            Circle()
+                                .fill(Color.purple.opacity(0.12))
+                                .frame(width: 96, height: 96)
+                            Image(systemName: p.icon)
+                                .font(.system(size: 42))
+                                .foregroundStyle(.purple)
                         }
-                        .padding(.horizontal, 24)
+                        Text(p.title)
+                            .font(.title.bold())
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 32)
+                        Text(p.body)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 16)
+                            .padding(.horizontal, 40)
+                        Spacer()
                     }
+                    .tag(idx)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
 
-                    KidButton(title: "Let's Go!", icon: "star.fill", color: .purple, size: .large) {
-                        dismiss()
+            HStack {
+                if page > 0 {
+                    Button("Back") { withAnimation { page -= 1 } }
+                } else {
+                    Button("Skip") { dismiss() }
+                }
+                Spacer()
+                if page < pages.count - 1 {
+                    Button {
+                        withAnimation { page += 1 }
+                    } label: {
+                        Label("Next", systemImage: "arrow.right")
+                            .labelStyle(.titleAndIcon)
                     }
-                    .padding(.bottom, 32)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                } else {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Label("Get Started", systemImage: "checkmark")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
         }
+        .interactiveDismissDisabled(false)
     }
 }

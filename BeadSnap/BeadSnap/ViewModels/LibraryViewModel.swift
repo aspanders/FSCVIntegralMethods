@@ -32,13 +32,28 @@ final class LibraryViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        store.$systemPatterns
-            .combineLatest(store.$userPatterns, $selectedCategory, $searchQuery)
-            .combineLatest($sortOrder)
+        // Debounce only keystrokes — chip taps, sort changes, and store updates
+        // re-filter immediately (matches Android's query-only debounce)
+        let debouncedQuery = $searchQuery
+            .removeDuplicates()
             .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
+
+        store.$systemPatterns
+            .combineLatest(store.$userPatterns, $selectedCategory, debouncedQuery)
+            .combineLatest($sortOrder)
             .sink { [weak self] combined, sort in
                 let (system, user, category, query) = combined
                 self?.filter(system: system, user: user, category: category, query: query, sort: sort)
+            }
+            .store(in: &cancellables)
+
+        store.$systemPatterns
+            .combineLatest(store.$userPatterns)
+            .sink { [weak self] system, user in
+                var counts: [PatternCategory: Int] = [:]
+                for p in system { counts[p.category, default: 0] += 1 }
+                for p in user { counts[p.category, default: 0] += 1 }
+                self?.categoryCounts = counts
             }
             .store(in: &cancellables)
     }
@@ -49,12 +64,6 @@ final class LibraryViewModel: ObservableObject {
         sort: LibrarySortOrder
     ) {
         let all = system + user
-
-        // Cache counts (single pass, no extra alloc per call)
-        var counts: [PatternCategory: Int] = [:]
-        for p in all { counts[p.category, default: 0] += 1 }
-        categoryCounts = counts
-
         var result = all
         if let cat = category { result = result.filter { $0.category == cat } }
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)

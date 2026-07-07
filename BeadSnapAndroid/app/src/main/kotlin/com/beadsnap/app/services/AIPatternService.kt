@@ -6,20 +6,26 @@ import com.beadsnap.app.data.model.CreatorType
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 sealed class AIError : Exception() {
     data object NoAPIKey : AIError() {
         override val message = "No API key set. Tap 'Set Up AI' to add your Claude API key."
     }
-    data class NetworkError(val cause: Exception) : AIError() {
+    data class NetworkError(override val cause: Exception) : AIError() {
         override val message = "Network error: ${cause.message}"
     }
     data class HttpError(val code: Int) : AIError() {
@@ -89,9 +95,8 @@ class AIPatternService private constructor() {
         - Pattern must be physically buildable as real fuse bead art.
     """.trimIndent()
 
-    // Run on IO dispatcher — this is a blocking OkHttp call
     @Throws(AIError::class)
-    fun generateBlocking(
+    suspend fun generate(
         prompt: String,
         category: PatternCategory? = null,
         gridSize: GridSize = GridSize.large
@@ -103,7 +108,7 @@ class AIPatternService private constructor() {
     }
 
     @Throws(AIError::class)
-    fun iterateBlocking(pattern: FusePattern, instruction: String): FusePattern {
+    suspend fun iterate(pattern: FusePattern, instruction: String): FusePattern {
         if (!hasAPIKey) throw AIError.NoAPIKey
         if (pattern.cells.size > 400) throw AIError.TooComplex
         val paletteDesc = pattern.palette.joinToString { "${it.id}: ${it.name} (${it.hex})" }
@@ -119,7 +124,33 @@ class AIPatternService private constructor() {
         return updated.copy(id = pattern.id)
     }
 
-    private fun callAPI(userMessage: String): FusePattern {
+    // Non-blocking: enqueues the call and cancels it if the coroutine is cancelled,
+    // so tapping Cancel aborts the network request instead of letting it run out.
+    private suspend fun callAPI(userMessage: String): FusePattern =
+        suspendCancellableCoroutine { cont ->
+            val call = client.newCall(buildRequest(userMessage))
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (call.isCanceled()) return
+                    cont.resumeWithException(AIError.NetworkError(e))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val result = try {
+                        Result.success(parseResponse(response))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    result.fold(
+                        onSuccess = { cont.resume(it) },
+                        onFailure = { cont.resumeWithException(it) }
+                    )
+                }
+            })
+        }
+
+    private fun buildRequest(userMessage: String): Request {
         val bodyJson = JSONObject().apply {
             put("model", "claude-haiku-4-5")
             put("max_tokens", 4096)
@@ -131,17 +162,16 @@ class AIPatternService private constructor() {
                 })
             })
         }
-        val request = Request.Builder()
+        return Request.Builder()
             .url("https://api.anthropic.com/v1/messages")
             .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
             .header("x-api-key", apiKey)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
             .build()
+    }
 
-        val response = try { client.newCall(request).execute() }
-        catch (e: IOException) { throw AIError.NetworkError(e) }
-
+    private fun parseResponse(response: Response): FusePattern {
         response.use { resp ->
             if (!resp.isSuccessful) throw AIError.HttpError(resp.code)
             val body = resp.body?.string() ?: throw AIError.NoContent

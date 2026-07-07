@@ -22,8 +22,15 @@ final class StudioViewModel: ObservableObject {
         hasAPIKey = service.hasAPIKey
     }
 
+    var apiKey: String { service.apiKey }
+
+    func saveAPIKey(_ key: String) {
+        service.apiKey = key
+        refreshAPIKeyStatus()
+    }
+
     func generate() {
-        let trimmed = prompt.trimmingCharacters(in: .whitespaces)
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         isGenerating = true
         errorMessage = nil
@@ -31,15 +38,16 @@ final class StudioViewModel: ObservableObject {
             guard let self else { return }
             defer { self.isGenerating = false }
             do {
-                self.generatedPattern = try await self.service.generate(
+                let pattern = try await self.service.generate(
                     prompt: trimmed,
                     category: self.selectedCategory,
                     gridSize: self.selectedGridSize
                 )
+                if !Task.isCancelled { self.generatedPattern = pattern }
             } catch is CancellationError {
                 // user cancelled
             } catch {
-                self.errorMessage = error.localizedDescription
+                if !Task.isCancelled { self.errorMessage = error.localizedDescription }
             }
         }
     }
@@ -57,11 +65,12 @@ final class StudioViewModel: ObservableObject {
             guard let self else { return }
             defer { self.isGenerating = false }
             do {
-                self.generatedPattern = try await self.service.iterate(pattern: pattern, instruction: instruction)
+                let updated = try await self.service.iterate(pattern: pattern, instruction: instruction)
+                if !Task.isCancelled { self.generatedPattern = updated }
             } catch is CancellationError {
                 // user cancelled
             } catch {
-                self.errorMessage = error.localizedDescription
+                if !Task.isCancelled { self.errorMessage = error.localizedDescription }
             }
         }
     }

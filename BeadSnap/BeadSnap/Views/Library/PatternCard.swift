@@ -20,7 +20,7 @@ struct PatternCard: View {
             HStack(spacing: 4) {
                 Text(pattern.difficulty.emoji)
                     .font(.caption2)
-                Text("\(pattern.totalBeads)")
+                Text("\(pattern.totalBeads) beads")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -63,25 +63,9 @@ struct PatternThumbnail: View {
 
     private static func renderAsync(pattern: FusePattern) async -> UIImage {
         let p = pattern
+        // Same shared renderer as previews and export, so thumbnails match Android
         return await Task.detached(priority: .userInitiated) {
-            let size = CGSize(width: 200, height: 200)
-            let renderer = UIGraphicsImageRenderer(size: size)
-            return renderer.image { _ in
-                UIColor.secondarySystemBackground.setFill()
-                UIRectFill(CGRect(origin: .zero, size: size))
-                let colF = CGFloat(p.grid.width)
-                let rowF = CGFloat(p.grid.height)
-                let cw = size.width / colF
-                let ch = size.height / rowF
-                let lookup = Dictionary(uniqueKeysWithValues: p.palette.map { ($0.id, UIColor(hex: $0.hex)) })
-                for cell in p.cells {
-                    guard let id = cell.colorId, let color = lookup[id] else { continue }
-                    let rect = CGRect(x: CGFloat(cell.x) * cw, y: CGFloat(cell.y) * ch,
-                                     width: cw, height: ch).insetBy(dx: 0.5, dy: 0.5)
-                    color.setFill()
-                    UIBezierPath(ovalIn: rect).fill()
-                }
-            }
+            ImageConverter.renderToImage(pattern: p, cellSize: 6)
         }.value
     }
 }

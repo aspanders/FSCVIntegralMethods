@@ -8,14 +8,13 @@ import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.AIPatternService
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class StudioViewModel(
@@ -41,7 +40,9 @@ class StudioViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    val hasAPIKey: Boolean get() = service.hasAPIKey
+    private val _hasAPIKey = MutableStateFlow(service.hasAPIKey)
+    val hasAPIKey: StateFlow<Boolean> = _hasAPIKey.asStateFlow()
+
     val apiKey: String get() = service.apiKey
 
     private var generationJob: Job? = null
@@ -57,22 +58,25 @@ class StudioViewModel(
         if (text.isBlank()) return
         _isGenerating.value = true
         _errorMessage.value = null
-        generationJob = viewModelScope.launch {
+        val job = viewModelScope.launch {
             try {
-                val pattern = withContext(Dispatchers.IO) {
-                    service.generateBlocking(text, _selectedCategory.value, _selectedGridSize.value)
-                }
+                val pattern = service.generate(text, _selectedCategory.value, _selectedGridSize.value)
                 if (isActive) _generatedPattern.value = pattern
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (isActive) _errorMessage.value = e.message
             } finally {
-                _isGenerating.value = false
+                // only the still-current job may clear the progress flag
+                if (generationJob === coroutineContext[Job]) _isGenerating.value = false
             }
         }
+        generationJob = job
     }
 
     fun cancelGeneration() {
         generationJob?.cancel()
+        generationJob = null
         _isGenerating.value = false
     }
 
@@ -80,22 +84,24 @@ class StudioViewModel(
         val pattern = _generatedPattern.value ?: return
         _isGenerating.value = true
         _errorMessage.value = null
-        generationJob = viewModelScope.launch {
+        val job = viewModelScope.launch {
             try {
-                val updated = withContext(Dispatchers.IO) {
-                    service.iterateBlocking(pattern, instruction)
-                }
+                val updated = service.iterate(pattern, instruction)
                 if (isActive) _generatedPattern.value = updated
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (isActive) _errorMessage.value = e.message
             } finally {
-                _isGenerating.value = false
+                if (generationJob === coroutineContext[Job]) _isGenerating.value = false
             }
         }
+        generationJob = job
     }
 
     fun saveAPIKey(key: String) {
         service.apiKey = key
+        _hasAPIKey.value = service.hasAPIKey
     }
 
     fun saveGenerated(): FusePattern? {

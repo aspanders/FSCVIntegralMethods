@@ -1,14 +1,18 @@
 package com.beadsnap.app.ui.screens.library
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.*
@@ -16,15 +20,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.beadsnap.app.data.model.CreatorType
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.PatternCategory
+import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.ImageConverter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +38,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
+    store: PatternStore,
     onPatternClick: (FusePattern) -> Unit
 ) {
     val patterns    by viewModel.patterns.collectAsState()
@@ -40,9 +46,21 @@ fun LibraryScreen(
     val query       by viewModel.searchQuery.collectAsState()
     val sort        by viewModel.sortOrder.collectAsState()
     val counts      by viewModel.categoryCounts.collectAsState()
+    val lastError   by store.lastError.collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
+    var patternToDelete by remember { mutableStateOf<FusePattern?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Surface store errors (failed save/delete) as a snackbar
+    LaunchedEffect(lastError) {
+        lastError?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            store.clearLastError()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Library", style = MaterialTheme.typography.titleLarge) },
@@ -56,7 +74,7 @@ fun LibraryScreen(
                                 text = { Text(order.displayName) },
                                 onClick = { viewModel.setSortOrder(order); showSortMenu = false },
                                 leadingIcon = {
-                                    if (sort == order) Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary)
+                                    if (sort == order) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
                                 }
                             )
                         }
@@ -92,6 +110,11 @@ fun LibraryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(
+                            Icons.Default.GridView, contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Text("No Patterns Found", style = MaterialTheme.typography.titleMedium)
                         Text("Try a different category or search term.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -107,12 +130,37 @@ fun LibraryScreen(
                     items(patterns, key = { it.id }) { pattern ->
                         PatternCard(
                             pattern = pattern,
-                            onClick = { onPatternClick(pattern) }
+                            onClick = { onPatternClick(pattern) },
+                            onDuplicate = if (pattern.createdBy != CreatorType.system) {
+                                { store.duplicate(pattern) }
+                            } else null,
+                            onDelete = if (pattern.createdBy != CreatorType.system) {
+                                { patternToDelete = pattern }
+                            } else null
                         )
                     }
                 }
             }
         }
+    }
+
+    patternToDelete?.let { pattern ->
+        AlertDialog(
+            onDismissRequest = { patternToDelete = null },
+            title = { Text("Delete \"${pattern.title}\"?") },
+            text = { Text("This can't be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    store.delete(pattern)
+                    patternToDelete = null
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { patternToDelete = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -136,20 +184,31 @@ private fun CategoryChipsRow(
             )
         }
         items(PatternCategory.entries.toTypedArray()) { cat ->
+            val count = categoryCounts[cat] ?: 0
             FilterChip(
                 selected = selectedCategory == cat,
                 onClick = { onCategorySelected(cat) },
-                label = { Text("${cat.emoji} ${cat.displayName}") },
-                modifier = Modifier.semantics { contentDescription = cat.displayName }
+                label = { Text("${cat.emoji} ${cat.displayName} ($count)") },
+                modifier = Modifier.semantics {
+                    contentDescription = "${cat.displayName}, $count patterns"
+                }
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PatternCard(pattern: FusePattern, onClick: () -> Unit) {
+private fun PatternCard(
+    pattern: FusePattern,
+    onClick: () -> Unit,
+    onDuplicate: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null
+) {
     val cacheKey = "${pattern.id}-v${pattern.version}"
     var thumbnail by remember(cacheKey) { mutableStateOf(ThumbnailCache.get(cacheKey)) }
+    var showMenu by remember { mutableStateOf(false) }
+    val canManage = onDuplicate != null || onDelete != null
 
     LaunchedEffect(cacheKey) {
         if (thumbnail == null) {
@@ -161,45 +220,69 @@ private fun PatternCard(pattern: FusePattern, onClick: () -> Unit) {
         }
     }
 
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics(mergeDescendants = true) {
-                contentDescription = "${pattern.title}, ${pattern.difficulty.displayName}, ${pattern.totalBeads} beads"
-            },
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                thumbnail?.let { bmp ->
-                    androidx.compose.foundation.Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+    Box {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = if (canManage) {
+                        { showMenu = true }
+                    } else null
+                )
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "${pattern.title}, ${pattern.difficulty.displayName}, ${pattern.totalBeads} beads"
+                },
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    thumbnail?.let { bmp ->
+                        androidx.compose.foundation.Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+                Text(
+                    text = pattern.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(pattern.difficulty.emoji, style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        "${pattern.totalBeads} beads",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            Text(
-                text = pattern.title,
-                style = MaterialTheme.typography.labelLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(pattern.difficulty.emoji, style = MaterialTheme.typography.labelSmall)
-                Text(
-                    "${pattern.totalBeads} beads",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        }
+
+        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+            onDuplicate?.let { action ->
+                DropdownMenuItem(
+                    text = { Text("Duplicate") },
+                    leadingIcon = { Icon(Icons.Default.ContentCopy, null) },
+                    onClick = { showMenu = false; action() }
+                )
+            }
+            onDelete?.let { action ->
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                    onClick = { showMenu = false; action() }
                 )
             }
         }

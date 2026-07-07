@@ -43,9 +43,9 @@ fun AIStudioScreen(
     val isGenerating     by viewModel.isGenerating.collectAsState()
     val generatedPattern by viewModel.generatedPattern.collectAsState()
     val errorMessage     by viewModel.errorMessage.collectAsState()
-    val hasKey           = viewModel.hasAPIKey
+    val hasKey           by viewModel.hasAPIKey.collectAsState()
 
-    var showKeySetup     by remember { mutableStateOf(!hasKey) }
+    var showKeySetup     by remember { mutableStateOf(!viewModel.hasAPIKey.value) }
     var showIterateSheet by remember { mutableStateOf(false) }
 
     Scaffold(

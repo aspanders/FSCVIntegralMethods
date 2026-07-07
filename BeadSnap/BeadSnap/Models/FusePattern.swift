@@ -15,6 +15,49 @@ struct FusePattern: Identifiable, Codable, Hashable {
     var sourcePrompt: String?
     var version: Int
 
+    init(
+        id: String,
+        title: String,
+        category: PatternCategory,
+        createdBy: CreatorType,
+        grid: GridSize,
+        palette: [PaletteColor],
+        cells: [Cell],
+        difficulty: Difficulty,
+        tags: [String],
+        sourcePrompt: String? = nil,
+        version: Int
+    ) {
+        self.id = id
+        self.title = title
+        self.category = category
+        self.createdBy = createdBy
+        self.grid = grid
+        self.palette = palette
+        self.cells = cells
+        self.difficulty = difficulty
+        self.tags = tags
+        self.sourcePrompt = sourcePrompt
+        self.version = version
+    }
+
+    // Tolerates missing fields with the same defaults as the Android model,
+    // so pattern JSON is interchangeable across platforms.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id           = try c.decode(String.self, forKey: .id)
+        title        = try c.decode(String.self, forKey: .title)
+        category     = try c.decodeIfPresent(PatternCategory.self, forKey: .category) ?? .custom
+        createdBy    = try c.decodeIfPresent(CreatorType.self, forKey: .createdBy) ?? .user
+        grid         = try c.decodeIfPresent(GridSize.self, forKey: .grid) ?? .large
+        palette      = try c.decodeIfPresent([PaletteColor].self, forKey: .palette) ?? []
+        cells        = try c.decodeIfPresent([Cell].self, forKey: .cells) ?? []
+        difficulty   = try c.decodeIfPresent(Difficulty.self, forKey: .difficulty) ?? .easy
+        tags         = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        sourcePrompt = try c.decodeIfPresent(String.self, forKey: .sourcePrompt)
+        version      = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+    }
+
     func color(at x: Int, y: Int) -> PaletteColor? {
         guard let id = cellColorId(at: x, y: y) else { return nil }
         return palette.first { $0.id == id }

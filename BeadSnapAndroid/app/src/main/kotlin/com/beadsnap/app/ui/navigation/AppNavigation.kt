@@ -146,6 +146,7 @@ private fun BeadSnapNavHost(
         composable(Destination.Library.route) {
             LibraryScreen(
                 viewModel      = libraryViewModel,
+                store          = store,
                 onPatternClick = { pattern ->
                     editorPattern = pattern
                     navController.navigate("editor")
@@ -157,9 +158,15 @@ private fun BeadSnapNavHost(
             CreateScreen(
                 store          = store,
                 onPatternReady = { pattern ->
-                    editorPattern = pattern
-                    if (pattern.createdBy == com.beadsnap.app.data.model.CreatorType.user) {
-                        store.save(pattern)
+                    var p = pattern
+                    // Repeated imports get distinct names instead of piles of "Imported Photo"
+                    if (p.title == "Imported Photo") {
+                        val existing = store.userPatterns.value.count { it.title.startsWith("Imported Photo") }
+                        if (existing > 0) p = p.copy(title = "Imported Photo ${existing + 1}")
+                    }
+                    editorPattern = p
+                    if (p.createdBy == com.beadsnap.app.data.model.CreatorType.user) {
+                        store.save(p)
                     }
                     navController.navigate("editor")
                 },

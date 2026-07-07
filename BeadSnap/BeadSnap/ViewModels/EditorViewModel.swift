@@ -13,7 +13,7 @@ final class EditorViewModel: ObservableObject {
 
     init(pattern: FusePattern) {
         self.pattern = pattern
-        self.selectedColor = pattern.palette.first ?? PaletteColor.beadSafe.first!
+        self.selectedColor = pattern.palette.first ?? PaletteColor.full.first!
         self.cellMap = Self.buildMap(from: pattern.cells)
     }
 
@@ -76,33 +76,8 @@ final class EditorViewModel: ObservableObject {
     var colorCounts: [(color: PaletteColor, count: Int)] { pattern.colorCounts }
     var totalBeads: Int { pattern.totalBeads }
 
-    func renderToImage(cellSize: CGFloat = 18) -> UIImage {
-        let w = CGFloat(pattern.grid.width) * cellSize
-        let h = CGFloat(pattern.grid.height) * cellSize
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h))
-        return renderer.image { _ in
-            UIColor.white.setFill()
-            UIRectFill(CGRect(x: 0, y: 0, width: w, height: h))
-            let inset = cellSize * 0.06
-            for row in 0..<pattern.grid.height {
-                for col in 0..<pattern.grid.width {
-                    let rect = CGRect(
-                        x: CGFloat(col) * cellSize + inset,
-                        y: CGFloat(row) * cellSize + inset,
-                        width: cellSize - 2 * inset,
-                        height: cellSize - 2 * inset
-                    )
-                    if let c = color(at: col, y: row) {
-                        c.uiColor.setFill()
-                        UIBezierPath(ovalIn: rect).fill()
-                        let stroke = UIBezierPath(ovalIn: rect)
-                        UIColor.black.withAlphaComponent(0.15).setStroke()
-                        stroke.lineWidth = 0.5
-                        stroke.stroke()
-                    }
-                }
-            }
-        }
+    func renderToImage(cellSize: CGFloat = 16) -> UIImage {
+        ImageConverter.renderToImage(pattern: pattern, cellSize: cellSize)
     }
 
     // MARK: - Private

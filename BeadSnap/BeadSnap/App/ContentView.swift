@@ -1,24 +1,32 @@
 import SwiftUI
 
+enum AppTab: Hashable {
+    case library, create, studio
+}
+
 struct ContentView: View {
     @ObservedObject private var store = PatternStore.shared
+    @State private var selectedTab: AppTab = .library
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             LibraryView()
                 .tabItem {
                     Label("Library", systemImage: "square.grid.2x2.fill")
                 }
+                .tag(AppTab.library)
 
-            CreateView()
+            CreateView(onOpenAIStudio: { selectedTab = .studio })
                 .tabItem {
                     Label("Create", systemImage: "plus.circle.fill")
                 }
+                .tag(AppTab.create)
 
-            SavedPatternsView()
+            AIStudioView()
                 .tabItem {
-                    Label("My Patterns", systemImage: "heart.fill")
+                    Label("Studio", systemImage: "wand.and.stars")
                 }
+                .tag(AppTab.studio)
         }
         .tint(.purple)
         .alert("Save Error", isPresented: Binding(
