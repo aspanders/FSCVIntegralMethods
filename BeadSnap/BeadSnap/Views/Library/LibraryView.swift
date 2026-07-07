@@ -4,6 +4,7 @@ struct LibraryView: View {
     @StateObject private var viewModel = LibraryViewModel()
     @ObservedObject private var store = PatternStore.shared
     @State private var patternToDelete: FusePattern?
+    @State private var showTipJar = false
 
     private let columns = [GridItem(.adaptive(minimum: 130, maximum: 180), spacing: 14)]
 
@@ -49,6 +50,12 @@ struct LibraryView: View {
                 PatternEditorView(pattern: pattern)
             }
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { showTipJar = true } label: {
+                        Image(systemName: "heart")
+                    }
+                    .accessibilityLabel("Tip jar")
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         Picker("Sort", selection: $viewModel.sortOrder) {
@@ -62,6 +69,9 @@ struct LibraryView: View {
                     }
                     .accessibilityLabel("Sort patterns")
                 }
+            }
+            .sheet(isPresented: $showTipJar) {
+                TipJarView()
             }
             .confirmationDialog(
                 "Delete \"\(patternToDelete?.title ?? "")\"?",

@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.AIPatternService
+import com.beadsnap.app.services.TipJarManager
 import com.beadsnap.app.ui.navigation.AppNavigation
 import com.beadsnap.app.ui.screens.onboarding.OnboardingScreen
 import com.beadsnap.app.ui.theme.BeadSnapTheme
@@ -25,6 +26,8 @@ class MainActivity : ComponentActivity() {
 
         val store      = PatternStore.getInstance(this)
         val aiService  = AIPatternService.shared
+        val tipJar     = TipJarManager.getInstance(this)
+        if (savedInstanceState == null) tipJar.recordUse()
 
         setContent {
             BeadSnapTheme {
@@ -45,7 +48,8 @@ class MainActivity : ComponentActivity() {
                     AppNavigation(
                         windowWidthSizeClass = windowSizeClass.widthSizeClass,
                         store                = store,
-                        aiService            = aiService
+                        aiService            = aiService,
+                        tipJar               = tipJar
                     )
                 }
             }

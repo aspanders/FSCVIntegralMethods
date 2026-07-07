@@ -6,7 +6,9 @@ enum AppTab: Hashable {
 
 struct ContentView: View {
     @ObservedObject private var store = PatternStore.shared
+    @ObservedObject private var tipJar = TipJarManager.shared
     @State private var selectedTab: AppTab = .library
+    @State private var showTipJar = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -29,6 +31,18 @@ struct ContentView: View {
                 .tag(AppTab.studio)
         }
         .tint(.purple)
+        .onAppear { tipJar.recordUse() }
+        .overlay(alignment: .bottom) {
+            if tipJar.shouldShowPrompt {
+                TipPromptBanner(onDonate: { showTipJar = true })
+                    .padding(.bottom, 60)   // clear the tab bar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.4), value: tipJar.shouldShowPrompt)
+        .sheet(isPresented: $showTipJar) {
+            TipJarView()
+        }
         .alert("Save Error", isPresented: Binding(
             get: { store.lastError != nil },
             set: { if !$0 { store.clearLastError() } }

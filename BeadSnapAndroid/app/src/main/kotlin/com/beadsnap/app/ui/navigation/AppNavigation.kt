@@ -1,7 +1,14 @@
 package com.beadsnap.app.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,15 +20,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.AIPatternService
+import com.beadsnap.app.services.TipJarManager
+import com.beadsnap.app.ui.tipjar.TipJarSheet
+import com.beadsnap.app.ui.tipjar.TipPromptBanner
 import com.beadsnap.app.ui.screens.create.CreateScreen
 import com.beadsnap.app.ui.screens.editor.EditorScreen
 import com.beadsnap.app.ui.screens.editor.EditorViewModel
@@ -29,8 +39,6 @@ import com.beadsnap.app.ui.screens.library.LibraryScreen
 import com.beadsnap.app.ui.screens.library.LibraryViewModel
 import com.beadsnap.app.ui.screens.studio.AIStudioScreen
 import com.beadsnap.app.ui.screens.studio.StudioViewModel
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 private sealed class Destination(
     val route: String,
@@ -52,7 +60,8 @@ private val topLevelDestinations = listOf(
 fun AppNavigation(
     windowWidthSizeClass: WindowWidthSizeClass,
     store: PatternStore,
-    aiService: AIPatternService
+    aiService: AIPatternService,
+    tipJar: TipJarManager
 ) {
     val navController = rememberNavController()
     val useRail = windowWidthSizeClass != WindowWidthSizeClass.Compact
@@ -61,42 +70,17 @@ fun AppNavigation(
 
     val isTopLevel = topLevelDestinations.any { currentRoute == it.route }
 
-    if (useRail) {
-        // Tablet: NavigationRail on the left
-        Row(modifier = Modifier.fillMaxSize()) {
-            if (isTopLevel) {
-                NavigationRail {
-                    topLevelDestinations.forEach { dest ->
-                        NavigationRailItem(
-                            selected = currentRoute == dest.route,
-                            onClick  = {
-                                navController.navigate(dest.route) {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState    = true
-                                }
-                            },
-                            icon  = { Icon(dest.icon, contentDescription = dest.label) },
-                            label = { Text(dest.label) }
-                        )
-                    }
-                }
-            }
-            BeadSnapNavHost(
-                navController = navController,
-                store         = store,
-                aiService     = aiService,
-                modifier      = Modifier.fillMaxSize()
-            )
-        }
-    } else {
-        // Phone: Bottom NavigationBar
-        Scaffold(
-            bottomBar = {
+    val showTipPrompt by tipJar.shouldShowPrompt.collectAsState()
+    var showTipJarSheet by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (useRail) {
+            // Tablet: NavigationRail on the left
+            Row(modifier = Modifier.fillMaxSize()) {
                 if (isTopLevel) {
-                    NavigationBar {
+                    NavigationRail {
                         topLevelDestinations.forEach { dest ->
-                            NavigationBarItem(
+                            NavigationRailItem(
                                 selected = currentRoute == dest.route,
                                 onClick  = {
                                     navController.navigate(dest.route) {
@@ -111,15 +95,66 @@ fun AppNavigation(
                         }
                     }
                 }
+                BeadSnapNavHost(
+                    navController = navController,
+                    store         = store,
+                    aiService     = aiService,
+                    onOpenTipJar  = { showTipJarSheet = true },
+                    modifier      = Modifier.fillMaxSize()
+                )
             }
-        ) { _ ->
-            BeadSnapNavHost(
-                navController = navController,
-                store         = store,
-                aiService     = aiService,
-                modifier      = Modifier.fillMaxSize()
+        } else {
+            // Phone: Bottom NavigationBar
+            Scaffold(
+                bottomBar = {
+                    if (isTopLevel) {
+                        NavigationBar {
+                            topLevelDestinations.forEach { dest ->
+                                NavigationBarItem(
+                                    selected = currentRoute == dest.route,
+                                    onClick  = {
+                                        navController.navigate(dest.route) {
+                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState    = true
+                                        }
+                                    },
+                                    icon  = { Icon(dest.icon, contentDescription = dest.label) },
+                                    label = { Text(dest.label) }
+                                )
+                            }
+                        }
+                    }
+                }
+            ) { _ ->
+                BeadSnapNavHost(
+                    navController = navController,
+                    store         = store,
+                    aiService     = aiService,
+                    onOpenTipJar  = { showTipJarSheet = true },
+                    modifier      = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        // Wikipedia-style tip prompt, shown once after the 10th app use
+        AnimatedVisibility(
+            visible = showTipPrompt,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 96.dp),
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+        ) {
+            TipPromptBanner(
+                tipJar = tipJar,
+                onDonate = { showTipJarSheet = true }
             )
         }
+    }
+
+    if (showTipJarSheet) {
+        TipJarSheet(tipJar = tipJar, onDismiss = { showTipJarSheet = false })
     }
 }
 
@@ -128,12 +163,12 @@ private fun BeadSnapNavHost(
     navController: NavHostController,
     store: PatternStore,
     aiService: AIPatternService,
+    onOpenTipJar: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Shared ViewModel instances (survive recomposition, scoped to NavHost lifetime)
     val libraryViewModel = remember { LibraryViewModel(store) }
     val studioViewModel  = remember { StudioViewModel(aiService, store) }
-    val json             = remember { Json { ignoreUnknownKeys = true; isLenient = true } }
 
     // EditorViewModel is keyed per-pattern; recreated on navigation
     var editorPattern by remember { mutableStateOf<FusePattern?>(null) }
@@ -150,7 +185,8 @@ private fun BeadSnapNavHost(
                 onPatternClick = { pattern ->
                     editorPattern = pattern
                     navController.navigate("editor")
-                }
+                },
+                onOpenTipJar   = onOpenTipJar
             )
         }
 

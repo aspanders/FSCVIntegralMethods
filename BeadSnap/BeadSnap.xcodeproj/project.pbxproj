@@ -32,6 +32,8 @@
 		B1000200000000000000060 /* PatternEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000060 /* PatternEditorView.swift */; };
 		B1000200000000000000061 /* BeadColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000061 /* BeadColor.swift */; };
 		B1000200000000000000062 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000062 /* Keychain.swift */; };
+		B1000200000000000000063 /* TipJarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000063 /* TipJarManager.swift */; };
+		B1000200000000000000064 /* TipJarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000064 /* TipJarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +62,8 @@
 		B1000100000000000000060 /* PatternEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PatternEditorView.swift; sourceTree = "<group>"; };
 		B1000100000000000000061 /* BeadColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeadColor.swift; sourceTree = "<group>"; };
 		B1000100000000000000062 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		B1000100000000000000063 /* TipJarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarManager.swift; sourceTree = "<group>"; };
+		B1000100000000000000064 /* TipJarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarView.swift; sourceTree = "<group>"; };
 		B1000100000000000000099 /* BeadSnap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BeadSnap.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -123,6 +127,7 @@
 				B1000400000000000000038 /* Editor */,
 				B1000400000000000000039 /* Create */,
 				B1000400000000000000041 /* Studio */,
+				B1000400000000000000042 /* TipJar */,
 				B1000400000000000000036 /* Components */,
 			);
 			path = Views;
@@ -179,6 +184,14 @@
 			path = Studio;
 			sourceTree = "<group>";
 		};
+		B1000400000000000000042 /* TipJar */ = {
+			isa = PBXGroup;
+			children = (
+				B1000100000000000000064 /* TipJarView.swift */,
+			);
+			path = TipJar;
+			sourceTree = "<group>";
+		};
 		B1000400000000000000050 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -197,6 +210,7 @@
 				B1000100000000000000043 /* ImageConverter.swift */,
 				B1000100000000000000044 /* AIPatternService.swift */,
 				B1000100000000000000062 /* Keychain.swift */,
+				B1000100000000000000063 /* TipJarManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -302,6 +316,8 @@
 				B1000200000000000000060 /* PatternEditorView.swift in Sources */,
 				B1000200000000000000061 /* BeadColor.swift in Sources */,
 				B1000200000000000000062 /* Keychain.swift in Sources */,
+				B1000200000000000000063 /* TipJarManager.swift in Sources */,
+				B1000200000000000000064 /* TipJarView.swift in Sources */,
 				B1000200000000000000040 /* FusePattern.swift in Sources */,
 				B1000200000000000000041 /* BeadPalette.swift in Sources */,
 				B1000200000000000000042 /* PatternStore.swift in Sources */,

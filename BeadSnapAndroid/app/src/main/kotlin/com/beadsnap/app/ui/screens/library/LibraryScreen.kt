@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
@@ -39,7 +40,8 @@ import kotlinx.coroutines.withContext
 fun LibraryScreen(
     viewModel: LibraryViewModel,
     store: PatternStore,
-    onPatternClick: (FusePattern) -> Unit
+    onPatternClick: (FusePattern) -> Unit,
+    onOpenTipJar: () -> Unit = {}
 ) {
     val patterns    by viewModel.patterns.collectAsState()
     val category    by viewModel.selectedCategory.collectAsState()
@@ -65,6 +67,9 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text("Library", style = MaterialTheme.typography.titleLarge) },
                 actions = {
+                    IconButton(onClick = onOpenTipJar) {
+                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Tip jar")
+                    }
                     IconButton(onClick = { showSortMenu = true }) {
                         Icon(Icons.Default.Sort, contentDescription = "Sort patterns")
                     }
