@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- No CAMERA permission: capture goes through ACTION_IMAGE_CAPTURE, which
+         needs none — and declaring it would make the un-requested grant a
+         SecurityException at launch time. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="com.android.vending.BILLING" />
 
     <!-- READ_MEDIA_IMAGES for Android 13+; READ_EXTERNAL_STORAGE for older -->

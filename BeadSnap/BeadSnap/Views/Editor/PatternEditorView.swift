@@ -154,7 +154,8 @@ struct PatternEditorView: View {
                 Image(systemName: isErasing ? "eraser.fill" : "pencil.tip")
                     .foregroundStyle(isErasing ? .red : .primary)
             }
-            .accessibilityLabel(isErasing ? "Drawing mode" : "Erasing mode")
+            .accessibilityLabel(isErasing ? "Eraser" : "Pencil")
+            .accessibilityHint(isErasing ? "Switches to drawing" : "Switches to erasing")
 
             Button { viewModel.undo() } label: {
                 Image(systemName: "arrow.uturn.backward")
@@ -266,15 +267,24 @@ struct PatternEditorView: View {
         Total: \(viewModel.totalBeads) beads
         """
         let vc = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        // This runs while the Bead Count sheet is presented, so we must present
+        // from the TOPMOST controller — presenting from the root silently fails.
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive } ??
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        guard let window = scene?.keyWindow ?? scene?.windows.first,
+              var top = window.rootViewController else { return }
+        while let presented = top.presentedViewController { top = presented }
         // iPad requires a sourceView/sourceRect for the popover anchor
         if let popover = vc.popoverPresentationController {
-            let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-            popover.sourceView = scene?.windows.first
-            popover.sourceRect = CGRect(x: UIScreen.main.bounds.midX, y: UIScreen.main.bounds.midY, width: 0, height: 0)
+            popover.sourceView = top.view
+            popover.sourceRect = CGRect(
+                x: top.view.bounds.midX, y: top.view.bounds.midY, width: 0, height: 0
+            )
             popover.permittedArrowDirections = []
         }
-        let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
-        scene?.windows.first?.rootViewController?.present(vc, animated: true)
+        top.present(vc, animated: true)
     }
 }
 

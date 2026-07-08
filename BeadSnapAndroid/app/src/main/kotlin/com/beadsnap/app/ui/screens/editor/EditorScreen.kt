@@ -39,12 +39,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.graphics.luminance
 import com.beadsnap.app.services.ImageConverter
 
 private const val MIN_CELL_PX = 18
@@ -67,27 +68,31 @@ fun EditorScreen(
 
     var cellSizePx  by remember { mutableIntStateOf(36) }
     var scrollMode  by remember { mutableStateOf(false) }
+    var isErasing   by remember { mutableStateOf(false) }
 
     var showSaveAs    by remember { mutableStateOf(false) }
     var showClearAll  by remember { mutableStateOf(false) }
     var showColorList by remember { mutableStateOf(false) }
     var isExporting   by remember { mutableStateOf(false) }
     var exportError   by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // First-paint hint
+    // First-paint hint — mark seen immediately so backing out early doesn't reshow it
     val prefs = remember { context.getSharedPreferences("beadsnap", Context.MODE_PRIVATE) }
     var showHint by remember {
-        mutableStateOf(!prefs.getBoolean("hasSeenPaintHint", false))
+        val seen = prefs.getBoolean("hasSeenPaintHint", false)
+        if (!seen) prefs.edit().putBoolean("hasSeenPaintHint", true).apply()
+        mutableStateOf(!seen)
     }
     LaunchedEffect(showHint) {
         if (showHint) {
             delay(3_000)
-            prefs.edit().putBoolean("hasSeenPaintHint", true).apply()
             showHint = false
         }
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -207,6 +212,22 @@ fun EditorScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 FilterChip(
+                    selected = isErasing,
+                    onClick = { isErasing = !isErasing },
+                    label = { Text("Erase") },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = if (isErasing) "Eraser on" else "Eraser off"
+                    }
+                )
+                Spacer(Modifier.width(8.dp))
+                FilterChip(
                     selected = scrollMode,
                     onClick = { scrollMode = !scrollMode },
                     label = { Text(if (scrollMode) "Scroll" else "Paint") },
@@ -233,13 +254,15 @@ fun EditorScreen(
                     cellMap     = cellMap,
                     colorLookup = colorLookup,
                     cellSizePx  = cellSizePx,
-                    scrollMode  = scrollMode
+                    scrollMode  = scrollMode,
+                    isErasing   = isErasing
                 )
                 if (showHint) {
                     Surface(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showHint = false },
                         color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.85f)
                     ) {
                         Text(
@@ -260,6 +283,14 @@ fun EditorScreen(
 
             HorizontalDivider()
 
+            // Selected color name (sighted users need it too, not just TalkBack)
+            Text(
+                text = selectedColor.name,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 6.dp)
+            )
+
             // Palette row
             PaletteRow(
                 palette       = pattern.palette,
@@ -275,6 +306,7 @@ fun EditorScreen(
             onConfirm = { title ->
                 viewModel.saveAs(title)
                 showSaveAs = false
+                scope.launch { snackbarHostState.showSnackbar("Pattern saved!") }
             },
             onDismiss = { showSaveAs = false }
         )
@@ -323,7 +355,8 @@ private fun BeadGridCanvas(
     cellMap: Map<String, String>,
     colorLookup: Map<String, Color>,
     cellSizePx: Int,
-    scrollMode: Boolean
+    scrollMode: Boolean,
+    isErasing: Boolean
 ) {
     val density    = LocalDensity.current
     val cols       = viewModel.gridWidth
@@ -334,55 +367,71 @@ private fun BeadGridCanvas(
     val gridColor  = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
     val emptyColor = MaterialTheme.colorScheme.surfaceVariant
 
+    // One pair of scroll states for BOTH modes: the offset persists when the
+    // user toggles to paint mode, so every cell of a large grid stays reachable.
     val hScroll = rememberScrollState()
     val vScroll = rememberScrollState()
 
-    if (scrollMode) {
-        // In scroll mode: Canvas is fixed size inside a scrollable box; no painting
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .horizontalScroll(hScroll)
-                .verticalScroll(vScroll)
-        ) {
-            Canvas(modifier = Modifier.size(totalW, totalH)) {
-                drawBeadGrid(cellMap, colorLookup, cols, rows, cellSizePx.toFloat(), emptyColor, gridColor)
-            }
-        }
-    } else {
-        // In paint mode: Canvas fills available space, gestures drive painting
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .horizontalScroll(hScroll, enabled = scrollMode)
+            .verticalScroll(vScroll, enabled = scrollMode)
+    ) {
         Canvas(
             modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(cellSizePx, cols, rows) {
+                .size(totalW, totalH)
+                .pointerInput(cellSizePx, cols, rows, scrollMode, isErasing) {
+                    if (scrollMode) return@pointerInput
                     awaitEachGesture {
+                        // Positions are in full-canvas coordinates, so painting
+                        // works at any scroll offset. Taps toggle; drags paint
+                        // set-only with a single undo entry per stroke.
+                        fun cellAt(pos: Offset): Pair<Int, Int>? {
+                            val x = (pos.x / cellSizePx).toInt()
+                            val y = (pos.y / cellSizePx).toInt()
+                            return if (x in 0 until cols && y in 0 until rows) x to y else null
+                        }
+                        fun apply(cell: Pair<Int, Int>) {
+                            if (isErasing) viewModel.strokeErase(cell.first, cell.second)
+                            else viewModel.strokePaint(cell.first, cell.second)
+                        }
+
                         val down = awaitFirstDown()
-                        fun cellAt(pos: Offset) = Pair(
-                            (pos.x / cellSizePx).toInt().coerceIn(0, cols - 1),
-                            (pos.y / cellSizePx).toInt().coerceIn(0, rows - 1)
-                        )
-                        val (x0, y0) = cellAt(down.position)
-                        viewModel.tapCell(x0, y0)
-                        // Drain subsequent pointer events (drag)
+                        val downCell = cellAt(down.position)
+                        var strokeActive = false
+                        var lastCell = downCell
+
                         var stillPressed = true
                         while (stillPressed) {
                             val event = awaitPointerEvent()
                             stillPressed = event.changes.any { it.pressed }
                             event.changes.forEach { change ->
-                                if (change.pressed) {
-                                    change.consume()
-                                    val (dx, dy) = cellAt(change.position)
-                                    viewModel.tapCell(dx, dy)
+                                if (!change.pressed) return@forEach
+                                change.consume()
+                                val cell = cellAt(change.position) ?: return@forEach
+                                if (!strokeActive) {
+                                    if (cell == downCell) return@forEach
+                                    viewModel.beginStroke()
+                                    strokeActive = true
+                                    downCell?.let { apply(it) }
+                                }
+                                if (cell != lastCell) {
+                                    lastCell = cell
+                                    apply(cell)
                                 }
                             }
+                        }
+
+                        // finger never left the starting cell → it's a tap
+                        if (!strokeActive && downCell != null) {
+                            if (isErasing) viewModel.clearCell(downCell.first, downCell.second)
+                            else viewModel.tapCell(downCell.first, downCell.second)
                         }
                     }
                 }
         ) {
-            val step = cellSizePx.toFloat()
-            val visibleCols = (size.width / step).toInt().coerceAtMost(cols)
-            val visibleRows = (size.height / step).toInt().coerceAtMost(rows)
-            drawBeadGrid(cellMap, colorLookup, visibleCols, visibleRows, step, emptyColor, gridColor)
+            drawBeadGrid(cellMap, colorLookup, cols, rows, cellSizePx.toFloat(), emptyColor, gridColor)
         }
     }
 }
@@ -452,7 +501,8 @@ private fun PaletteRow(
                     Icon(
                         Icons.Default.Check,
                         contentDescription = null,
-                        tint = Color.White,
+                        // black check on light beads, white on dark — always visible
+                        tint = if (color.composeColor.luminance() < 0.5f) Color.White else Color.Black,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -508,6 +558,7 @@ private fun BeadCountSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())   // long color lists must scroll
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
         ) {

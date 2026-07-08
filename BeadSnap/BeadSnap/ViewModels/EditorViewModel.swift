@@ -41,10 +41,41 @@ final class EditorViewModel: ObservableObject {
     }
 
     func clearCell(x: Int, y: Int) {
+        let k = key(x, y)
+        guard cellMap[k] != nil else { return }   // no-op erases must not eat undo history
         pushUndo()
-        cellMap.removeValue(forKey: key(x, y))
+        cellMap.removeValue(forKey: k)
         commitCells()
         autosave()
+    }
+
+    // MARK: - Stroke API (drag painting)
+    // A stroke is one undo entry; painting is set-only so dragging over
+    // already-painted cells never erases them (tap keeps toggle semantics).
+
+    func beginStroke() {
+        pushUndo()
+    }
+
+    func strokePaint(x: Int, y: Int) {
+        let k = key(x, y)
+        guard cellMap[k] != selectedColor.id else { return }
+        cellMap[k] = selectedColor.id
+        commitCells()
+        autosave()
+    }
+
+    func strokeErase(x: Int, y: Int) {
+        let k = key(x, y)
+        guard cellMap[k] != nil else { return }
+        cellMap.removeValue(forKey: k)
+        commitCells()
+        autosave()
+    }
+
+    /// Reverts an in-progress stroke (e.g. when a pinch begins mid-drag).
+    func cancelStroke() {
+        undo()
     }
 
     func clearAll() {

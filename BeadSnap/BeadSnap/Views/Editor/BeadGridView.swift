@@ -7,7 +7,12 @@ struct BeadGridView: View {
     @State private var cellSize: CGFloat = 22
     @State private var baseCellSize: CGFloat = 22
     @State private var isPaintMode = true
+
+    // Stroke state: a tap toggles, a drag paints set-only with one undo entry
+    @State private var strokeStartCell: (x: Int, y: Int)? = nil
+    @State private var strokeActive = false
     @State private var lastPaintedCell: (x: Int, y: Int)? = nil
+    @State private var isZooming = false
 
     private let minCell: CGFloat = 8
     private let maxCell: CGFloat = 44
@@ -21,9 +26,20 @@ struct BeadGridView: View {
             ScrollView([.horizontal, .vertical], showsIndicators: false) {
                 gridContent
                     .padding(8)
-                    .gesture(
+                    // simultaneous so pinch works even while the paint drag is live;
+                    // a pinch cancels any stroke the first finger started
+                    .simultaneousGesture(
                         MagnifyGesture()
                             .onChanged { val in
+                                if !isZooming {
+                                    isZooming = true
+                                    if strokeActive {
+                                        viewModel.cancelStroke()
+                                        strokeActive = false
+                                    }
+                                    strokeStartCell = nil
+                                    lastPaintedCell = nil
+                                }
                                 let clamped = (baseCellSize * val.magnification)
                                     .clamped(to: minCell...maxCell)
                                 cellSize = clamped
@@ -32,6 +48,7 @@ struct BeadGridView: View {
                                 baseCellSize = (baseCellSize * val.magnification)
                                     .clamped(to: minCell...maxCell)
                                 cellSize = baseCellSize
+                                isZooming = false
                             }
                     )
             }
@@ -72,20 +89,52 @@ struct BeadGridView: View {
                     .gesture(
                         DragGesture(minimumDistance: 0, coordinateSpace: .local)
                             .onChanged { value in
+                                guard !isZooming else { return }
                                 let x = Int(value.location.x / step)
                                 let y = Int(value.location.y / step)
                                 guard x >= 0, x < cols, y >= 0, y < rows else { return }
+
+                                // Nothing is painted until the finger leaves the
+                                // starting cell — a tap resolves in onEnded, and a
+                                // pinch that begins here never marks the canvas.
+                                if strokeStartCell == nil {
+                                    strokeStartCell = (x, y)
+                                    return
+                                }
+                                guard let start = strokeStartCell else { return }
+                                if !strokeActive {
+                                    guard x != start.x || y != start.y else { return }
+                                    viewModel.beginStroke()
+                                    strokeActive = true
+                                    applyStroke(x: start.x, y: start.y)
+                                }
                                 guard lastPaintedCell?.x != x || lastPaintedCell?.y != y else { return }
                                 lastPaintedCell = (x, y)
-                                if isErasing {
-                                    viewModel.clearCell(x: x, y: y)
-                                } else {
-                                    viewModel.tapCell(x: x, y: y)
-                                }
+                                applyStroke(x: x, y: y)
                             }
-                            .onEnded { _ in lastPaintedCell = nil }
+                            .onEnded { _ in
+                                if !isZooming, !strokeActive, let c = strokeStartCell {
+                                    // finger never left the cell → it's a tap
+                                    if isErasing {
+                                        viewModel.clearCell(x: c.x, y: c.y)
+                                    } else {
+                                        viewModel.tapCell(x: c.x, y: c.y)
+                                    }
+                                }
+                                strokeStartCell = nil
+                                strokeActive = false
+                                lastPaintedCell = nil
+                            }
                     )
             }
+        }
+    }
+
+    private func applyStroke(x: Int, y: Int) {
+        if isErasing {
+            viewModel.strokeErase(x: x, y: y)
+        } else {
+            viewModel.strokePaint(x: x, y: y)
         }
     }
 

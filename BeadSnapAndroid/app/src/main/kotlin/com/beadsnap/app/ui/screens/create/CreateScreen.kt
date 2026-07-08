@@ -6,7 +6,9 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -29,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +54,9 @@ fun CreateScreen(
     var photoGridSize  by remember { mutableStateOf(GridSize.large) }
     var photoMaxColors by remember { mutableIntStateOf(12) }
 
+    // Remembered across dialog opens, matching iOS
+    var blankGridSize by remember { mutableStateOf(GridSize.large) }
+
     // Photo picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -60,20 +67,26 @@ fun CreateScreen(
         }
     }
 
-    // Camera
+    // Camera — captures go to a private cache file (never the user's gallery)
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
+    var cameraImageFile by remember { mutableStateOf<java.io.File?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        val uri = cameraImageUri
-        if (success && uri != null) {
-            pendingImageUri = uri
+        if (success && cameraImageUri != null) {
+            pendingImageUri = cameraImageUri
             showPhotoSettings = true
-        } else if (uri != null) {
-            // user cancelled — remove the empty MediaStore entry we reserved
-            context.contentResolver.delete(uri, null, null)
+        } else {
+            cameraImageFile?.delete()
+            cameraImageFile = null
             cameraImageUri = null
         }
+    }
+
+    fun cleanUpCameraCapture() {
+        cameraImageFile?.delete()
+        cameraImageFile = null
+        cameraImageUri = null
     }
 
     Scaffold(
@@ -81,10 +94,16 @@ fun CreateScreen(
             TopAppBar(title = { Text("Create", style = MaterialTheme.typography.titleLarge) })
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize()
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = 520.dp)    // keep option cards scannable on tablets
                 .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -124,18 +143,31 @@ fun CreateScreen(
                     )
                 }
             )
-            Spacer(Modifier.height(14.dp))
-            OptionRow(
-                icon = Icons.Default.CameraAlt,
-                iconTint = MaterialTheme.colorScheme.tertiary,
-                title = "Camera",
-                subtitle = "Take a photo and convert it",
-                onClick = {
-                    val uri = createCameraUri(context)
-                    cameraImageUri = uri
-                    cameraLauncher.launch(uri)
-                }
-            )
+            // Hide the Camera option on devices without one (e.g. some tablets),
+            // where launching the capture intent would throw
+            if (context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY)) {
+                Spacer(Modifier.height(14.dp))
+                OptionRow(
+                    icon = Icons.Default.CameraAlt,
+                    iconTint = MaterialTheme.colorScheme.tertiary,
+                    title = "Camera",
+                    subtitle = "Take a photo and convert it",
+                    onClick = {
+                        try {
+                            val file = createCameraFile(context)
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                context, "${context.packageName}.fileprovider", file
+                            )
+                            cameraImageFile = file
+                            cameraImageUri = uri
+                            cameraLauncher.launch(uri)
+                        } catch (e: Exception) {
+                            cleanUpCameraCapture()
+                            conversionError = "Could not open the camera: ${e.message}"
+                        }
+                    }
+                )
+            }
             Spacer(Modifier.height(14.dp))
             OptionRow(
                 icon = Icons.Default.AutoFixHigh,
@@ -149,8 +181,16 @@ fun CreateScreen(
         }
 
         if (isConverting) {
+            // Scrim blocks all input while converting — without it the user can
+            // start a second flow underneath the spinner
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { /* consume */ },
                 contentAlignment = Alignment.Center
             ) {
                 Card(shape = RoundedCornerShape(18.dp)) {
@@ -170,10 +210,12 @@ fun CreateScreen(
     // Blank canvas dialog
     if (showBlankDialog) {
         BlankCanvasDialog(
+            initialGridSize = blankGridSize,
             onConfirm = { title, gridSize ->
+                blankGridSize = gridSize
                 val pattern = FusePattern(
                     id = UUID.randomUUID().toString(),
-                    title = title.ifBlank { "My Design" },
+                    title = title.trim().ifBlank { "My Design" },
                     category = PatternCategory.custom,
                     createdBy = CreatorType.user,
                     grid = gridSize,
@@ -217,12 +259,14 @@ fun CreateScreen(
                     } finally {
                         isConverting = false
                         pendingImageUri = null
+                        cleanUpCameraCapture()
                     }
                 }
             },
             onDismiss = {
                 showPhotoSettings = false
                 pendingImageUri = null
+                cleanUpCameraCapture()
             }
         )
     }
@@ -278,9 +322,13 @@ private fun OptionRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BlankCanvasDialog(onConfirm: (String, GridSize) -> Unit, onDismiss: () -> Unit) {
+private fun BlankCanvasDialog(
+    initialGridSize: GridSize,
+    onConfirm: (String, GridSize) -> Unit,
+    onDismiss: () -> Unit
+) {
     var title    by remember { mutableStateOf("My Design") }
-    var gridSize by remember { mutableStateOf(GridSize.large) }
+    var gridSize by remember { mutableStateOf(initialGridSize) }
     val sizes = listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
 
     AlertDialog(
@@ -355,7 +403,7 @@ private fun PhotoSettingsDialog(
                 }
                 HorizontalDivider()
                 Text("Max bead colors: $maxColors", style = MaterialTheme.typography.bodyMedium)
-                Slider(value = maxColors.toFloat(), onValueChange = { onMaxColorsChanged(it.toInt()) }, valueRange = 4f..24f, steps = 19)
+                Slider(value = maxColors.toFloat(), onValueChange = { onMaxColorsChanged(it.roundToInt()) }, valueRange = 4f..24f, steps = 19)
             }
         },
         confirmButton = { TextButton(onClick = onConvert) { Text("Convert") } },
@@ -370,11 +418,9 @@ private fun gridSizeHint(gs: GridSize) = when {
     else            -> "Large canvas for detailed art"
 }
 
-private fun createCameraUri(context: Context): Uri {
-    val values = ContentValues().apply {
-        put(MediaStore.Images.Media.DISPLAY_NAME, "beadsnap_camera_${System.currentTimeMillis()}.jpg")
-        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-    }
-    return context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-        ?: throw IllegalStateException("Could not create camera URI")
+// Private cache file for the capture — never touches the user's gallery,
+// and gets deleted once the conversion is done or abandoned.
+private fun createCameraFile(context: Context): java.io.File {
+    val dir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }
+    return java.io.File(dir, "capture_${System.currentTimeMillis()}.jpg")
 }

@@ -64,8 +64,34 @@ class EditorViewModel(
     }
 
     fun clearCell(x: Int, y: Int) {
+        val k = key(x, y)
+        if (k !in _cellMap.value) return   // no-op erases must not eat undo history
         pushUndo()
-        _cellMap.value = _cellMap.value - key(x, y)
+        _cellMap.value = _cellMap.value - k
+        commitCells()
+        scheduleAutosave()
+    }
+
+    // ─── Stroke API (drag painting) ───────────────────────────────────────────
+    // A stroke is one undo entry; painting is set-only so dragging over
+    // already-painted cells never erases them (tap keeps toggle semantics).
+
+    fun beginStroke() {
+        pushUndo()
+    }
+
+    fun strokePaint(x: Int, y: Int) {
+        val k = key(x, y)
+        if (_cellMap.value[k] == _selectedColor.value.id) return
+        _cellMap.value = _cellMap.value + (k to _selectedColor.value.id)
+        commitCells()
+        scheduleAutosave()
+    }
+
+    fun strokeErase(x: Int, y: Int) {
+        val k = key(x, y)
+        if (k !in _cellMap.value) return
+        _cellMap.value = _cellMap.value - k
         commitCells()
         scheduleAutosave()
     }

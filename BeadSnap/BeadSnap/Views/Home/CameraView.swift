@@ -3,6 +3,7 @@ import UIKit
 
 struct CameraView: UIViewControllerRepresentable {
     var onCapture: (UIImage) -> Void
+    var onCancel: () -> Void = {}
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
@@ -14,11 +15,17 @@ struct CameraView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture) }
+    func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture, onCancel: onCancel) }
 
+    // Dismissal is driven ONLY through the SwiftUI binding (via the callbacks) —
+    // calling picker.dismiss here would desync the presenting view's state.
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onCapture: (UIImage) -> Void
-        init(onCapture: @escaping (UIImage) -> Void) { self.onCapture = onCapture }
+        let onCancel: () -> Void
+        init(onCapture: @escaping (UIImage) -> Void, onCancel: @escaping () -> Void) {
+            self.onCapture = onCapture
+            self.onCancel = onCancel
+        }
 
         func imagePickerController(
             _ picker: UIImagePickerController,
@@ -26,12 +33,13 @@ struct CameraView: UIViewControllerRepresentable {
         ) {
             if let image = info[.originalImage] as? UIImage {
                 onCapture(image.fixedOrientation())
+            } else {
+                onCancel()
             }
-            picker.dismiss(animated: true)
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            picker.dismiss(animated: true)
+            onCancel()
         }
     }
 }

@@ -13,6 +13,7 @@ struct CreateView: View {
     @State private var blankTitle = "My Design"
     @State private var blankGridSize: GridSize = .large
     @State private var showPhotoSettings = false
+    @State private var didStartConvert = false
 
     var body: some View {
         NavigationStack {
@@ -22,6 +23,7 @@ struct CreateView: View {
                     .padding(.bottom, 40)
                 options
                     .padding(.horizontal, 28)
+                    .frame(maxWidth: 520)   // keep option cards scannable on iPad
                 Spacer()
                 Spacer()
             }
@@ -32,22 +34,38 @@ struct CreateView: View {
             .sheet(isPresented: $showBlankSheet) {
                 blankSheet
             }
-            .sheet(isPresented: $showPhotoSettings) {
+            .sheet(
+                isPresented: $showPhotoSettings,
+                onDismiss: {
+                    // Swipe-down must clean up too, or re-picking the same photo
+                    // is a dead end (the selection binding never changes)
+                    if !didStartConvert {
+                        importVM.selectedItem = nil
+                        capturedImage = nil
+                    }
+                    didStartConvert = false
+                }
+            ) {
                 photoSettingsSheet
             }
-            .fullScreenCover(isPresented: $showCamera) {
-                CameraView { image in
-                    capturedImage = image
-                    showCamera = false
+            .fullScreenCover(
+                isPresented: $showCamera,
+                onDismiss: {
+                    // Fires only after the cover is fully off-screen, so the
+                    // settings sheet can't race the dismissal animation
+                    if capturedImage != nil {
+                        showPhotoSettings = true
+                    }
                 }
+            ) {
+                CameraView(
+                    onCapture: { image in
+                        capturedImage = image
+                        showCamera = false
+                    },
+                    onCancel: { showCamera = false }
+                )
                 .ignoresSafeArea()
-            }
-            .onChange(of: showCamera) { _, isShowing in
-                // Present settings only after the camera cover is fully gone,
-                // otherwise the sheet presentation is dropped
-                if !isShowing && capturedImage != nil {
-                    showPhotoSettings = true
-                }
             }
             .alert("Conversion Error", isPresented: Binding(
                 get: { importVM.errorMessage != nil },
@@ -316,15 +334,19 @@ struct CreateView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Convert") {
+                        // capture inputs before dismissal so onDismiss cleanup
+                        // can't race the async conversion
+                        let image = capturedImage
+                        didStartConvert = true
                         showPhotoSettings = false
                         Task {
-                            if let image = capturedImage {
+                            if let image {
                                 await importVM.convert(image: image)
-                                capturedImage = nil
                             } else {
                                 await importVM.convert()
-                                importVM.selectedItem = nil
                             }
+                            capturedImage = nil
+                            importVM.selectedItem = nil
                             if let p = importVM.convertedPattern {
                                 openInEditor(p)
                                 importVM.convertedPattern = nil
