@@ -38,9 +38,16 @@ struct CreateView: View {
             .fullScreenCover(isPresented: $showCamera) {
                 CameraView { image in
                     capturedImage = image
-                    showPhotoSettings = true
+                    showCamera = false
                 }
                 .ignoresSafeArea()
+            }
+            .onChange(of: showCamera) { _, isShowing in
+                // Present settings only after the camera cover is fully gone,
+                // otherwise the sheet presentation is dropped
+                if !isShowing && capturedImage != nil {
+                    showPhotoSettings = true
+                }
             }
             .alert("Conversion Error", isPresented: Binding(
                 get: { importVM.errorMessage != nil },

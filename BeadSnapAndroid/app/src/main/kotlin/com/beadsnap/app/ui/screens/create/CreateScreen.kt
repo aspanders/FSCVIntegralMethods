@@ -65,9 +65,14 @@ fun CreateScreen(
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        if (success && cameraImageUri != null) {
-            pendingImageUri = cameraImageUri
+        val uri = cameraImageUri
+        if (success && uri != null) {
+            pendingImageUri = uri
             showPhotoSettings = true
+        } else if (uri != null) {
+            // user cancelled — remove the empty MediaStore entry we reserved
+            context.contentResolver.delete(uri, null, null)
+            cameraImageUri = null
         }
     }
 
