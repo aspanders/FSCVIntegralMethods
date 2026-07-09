@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.foundation.layout)
     implementation(libs.billing.ktx)
+    implementation(libs.mlkit.subject.segmentation)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

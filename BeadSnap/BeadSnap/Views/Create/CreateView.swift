@@ -14,6 +14,8 @@ struct CreateView: View {
     @State private var blankGridSize: GridSize = .large
     @State private var showPhotoSettings = false
     @State private var didStartConvert = false
+    @State private var removeBackground = false
+    @StateObject private var maskEditor = MaskEditor()
 
     var body: some View {
         NavigationStack {
@@ -44,6 +46,8 @@ struct CreateView: View {
                         capturedImage = nil
                     }
                     didStartConvert = false
+                    removeBackground = false
+                    maskEditor.reset()
                 }
             ) {
                 photoSettingsSheet
@@ -298,9 +302,44 @@ struct CreateView: View {
 
     // MARK: - Photo settings sheet
 
+    private func loadSettingsImage() async -> UIImage? {
+        if let captured = capturedImage { return captured }
+        guard let item = importVM.selectedItem,
+              let data = try? await item.loadTransferable(type: Data.self) else { return nil }
+        return UIImage(data: data)
+    }
+
     private var photoSettingsSheet: some View {
         NavigationStack {
             Form {
+                Section("Background") {
+                    Toggle("Remove background", isOn: $removeBackground)
+                        .onChange(of: removeBackground) { _, isOn in
+                            guard isOn, !maskEditor.hasImage else { return }
+                            Task {
+                                if let image = await loadSettingsImage() {
+                                    await maskEditor.load(image: image)
+                                }
+                            }
+                        }
+                    if removeBackground {
+                        if maskEditor.isProcessing {
+                            HStack(spacing: 12) {
+                                ProgressView()
+                                Text("Finding the subject…")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if maskEditor.previewImage != nil {
+                            MaskEditView(editor: maskEditor)
+                        }
+                        if maskEditor.autoUnavailable && !maskEditor.isProcessing {
+                            Text("Automatic selection isn't available — use Remove to paint over the background.")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
                 Section("Grid Size") {
                     ForEach([GridSize.small, .medium, .large, .xlarge], id: \.width) { gs in
                         HStack {
@@ -336,26 +375,90 @@ struct CreateView: View {
                     Button("Convert") {
                         // capture inputs before dismissal so onDismiss cleanup
                         // can't race the async conversion
+                        let masked = removeBackground ? maskEditor.maskedImage() : nil
                         let image = capturedImage
                         didStartConvert = true
                         showPhotoSettings = false
                         Task {
-                            if let image {
+                            if let masked {
+                                await importVM.convert(image: masked)
+                            } else if let image {
                                 await importVM.convert(image: image)
                             } else {
                                 await importVM.convert()
                             }
                             capturedImage = nil
                             importVM.selectedItem = nil
+                            removeBackground = false
+                            maskEditor.reset()
                             if let p = importVM.convertedPattern {
                                 openInEditor(p)
                                 importVM.convertedPattern = nil
                             }
                         }
                     }
+                    .disabled(removeBackground && maskEditor.isProcessing)
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - Background mask editor (faded preview + Remove / Add back brush)
+
+private struct MaskEditView: View {
+    @ObservedObject var editor: MaskEditor
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Picker("Brush", selection: $editor.brushAddsBack) {
+                Text("Remove").tag(false)
+                Text("Add back").tag(true)
+            }
+            .pickerStyle(.segmented)
+
+            if let preview = editor.previewImage {
+                GeometryReader { geo in
+                    let fit = fitRect(image: preview.size, in: geo.size)
+                    Image(uiImage: preview)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let nx = (value.location.x - fit.minX) / fit.width
+                                    let ny = (value.location.y - fit.minY) / fit.height
+                                    guard (0...1).contains(nx), (0...1).contains(ny) else { return }
+                                    editor.brush(atNormalized: CGPoint(x: nx, y: ny))
+                                }
+                        )
+                        .accessibilityLabel("Background removal preview. Faded areas will be removed. Drag to adjust.")
+                }
+                .frame(height: 240)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            Text("Drag on the photo to adjust — faded areas are left out of the pattern.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// The rect an aspect-fit image actually occupies inside the container.
+    private func fitRect(image: CGSize, in container: CGSize) -> CGRect {
+        guard image.width > 0, image.height > 0 else { return .zero }
+        let scale = min(container.width / image.width, container.height / image.height)
+        let w = image.width * scale
+        let h = image.height * scale
+        return CGRect(
+            x: (container.width - w) / 2,
+            y: (container.height - h) / 2,
+            width: w, height: h
+        )
     }
 }

@@ -27,6 +27,8 @@ CREATE FROM ANYTHING
 • Start from a blank board and paint bead by bead
 • Snap a photo or import one — BeadSnap converts it into a bead pattern with
   real bead colors, automatically
+• Remove the background first with one tap: the subject is detected on-device,
+  the background fades away, and a simple brush lets you fine-tune what stays
 • Describe an idea and let AI design a one-of-a-kind pattern for you
   (bring your own Claude API key)
 
@@ -64,3 +66,6 @@ generation, a full bead editor, shopping lists, and PNG export.
   features work without one. Photo conversion and the editor demonstrate
   the core app.
 - No data is collected; camera/photo processing happens on-device.
+- Background removal runs entirely on-device (Vision on iOS; ML Kit subject
+  segmentation on Android — the model is fetched by Play services at install
+  time, and no image ever leaves the device).

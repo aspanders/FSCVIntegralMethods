@@ -1,9 +1,7 @@
 package com.beadsnap.app.ui.screens.create
 
-import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
-import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -32,7 +30,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -230,21 +227,22 @@ fun CreateScreen(
         )
     }
 
-    // Photo conversion settings dialog
-    if (showPhotoSettings) {
-        PhotoSettingsDialog(
+    // Photo conversion settings (grid, colors, background removal)
+    val settingsUri = pendingImageUri
+    if (showPhotoSettings && settingsUri != null) {
+        PhotoSettingsSheet(
+            imageUri = settingsUri,
             gridSize = photoGridSize,
             maxColors = photoMaxColors,
             onGridSizeChanged = { photoGridSize = it },
             onMaxColorsChanged = { photoMaxColors = it },
-            onConvert = {
+            onConvert = { maskedBitmap ->
                 showPhotoSettings = false
-                val uri = pendingImageUri ?: return@PhotoSettingsDialog
                 scope.launch {
                     isConverting = true
                     try {
-                        val bitmap = withContext(Dispatchers.IO) {
-                            val stream = context.contentResolver.openInputStream(uri)
+                        val bitmap = maskedBitmap ?: withContext(Dispatchers.IO) {
+                            val stream = context.contentResolver.openInputStream(settingsUri)
                                 ?: throw Exception("Could not open image")
                             android.graphics.BitmapFactory.decodeStream(stream)
                                 ?: throw Exception("Could not decode image")
@@ -368,46 +366,6 @@ private fun BlankCanvasDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
-    )
-}
-
-@Composable
-private fun PhotoSettingsDialog(
-    gridSize: GridSize,
-    maxColors: Int,
-    onGridSizeChanged: (GridSize) -> Unit,
-    onMaxColorsChanged: (Int) -> Unit,
-    onConvert: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sizes = listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Photo to Beads") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Grid Size", style = MaterialTheme.typography.labelLarge)
-                sizes.forEach { gs ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().clickable { onGridSizeChanged(gs) }.padding(vertical = 4.dp)
-                    ) {
-                        RadioButton(selected = gridSize == gs, onClick = { onGridSizeChanged(gs) })
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text(gs.displayName, style = MaterialTheme.typography.bodyMedium)
-                            Text(gridSizeHint(gs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-                HorizontalDivider()
-                Text("Max bead colors: $maxColors", style = MaterialTheme.typography.bodyMedium)
-                Slider(value = maxColors.toFloat(), onValueChange = { onMaxColorsChanged(it.roundToInt()) }, valueRange = 4f..24f, steps = 19)
-            }
-        },
-        confirmButton = { TextButton(onClick = onConvert) { Text("Convert") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
