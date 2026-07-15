@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BeadSnap — iPad UI Mockup</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0d0d1a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  color: #fff;
+  padding: 56px 48px 80px;
+  min-width: 2500px;
+}
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 64px;
+}
+.hero-text h1 {
+  font-size: 42px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #c084fc 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+.hero-text p {
+  font-size: 16px;
+  color: rgba(255,255,255,0.45);
+  margin-top: 6px;
+  letter-spacing: 0.3px;
+}
+.frames-row {
+  display: flex;
+  gap: 44px;
+  align-items: flex-start;
+}
+.frame-wrap { flex-shrink: 0; text-align: center; }
+.screen-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 14px;
+}
+.ipad {
+  background: linear-gradient(160deg, #d2d2d8 0%, #a8a8b0 100%);
+  border-radius: 36px;
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.25),
+    0 2px 0 rgba(255,255,255,0.25) inset,
+    0 50px 120px rgba(0,0,0,0.75);
+  width: 436px;
+  padding: 0 22px;
+  position: relative;
+}
+.ipad-top-bar {
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: #28282e;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.08), 0 0 4px rgba(100,140,255,0.3);
+}
+.ipad-screen {
+  border-radius: 8px;
+  overflow: hidden;
+  line-height: 0;
+  background: #000;
+}
+.ipad-screen canvas {
+  display: block;
+  width: 392px;
+  height: 565px;
+}
+.ipad-bottom-bar { height: 26px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <canvas id="iconCanvas" width="100" height="100"></canvas>
+  <div class="hero-text">
+    <h1>BeadSnap</h1>
+    <p>Canva for fuse beads &nbsp;·&nbsp; iPad UI Mockup</p>
+  </div>
+</div>
+
+<div class="frames-row">
+  <div class="frame-wrap">
+    <div class="screen-label">Library</div>
+    <div class="ipad">
+      <div class="ipad-top-bar"><div class="camera-dot"></div></div>
+      <div class="ipad-screen"><canvas id="s1" width="820" height="1180"></canvas></div>
+      <div class="ipad-bottom-bar"></div>
+    </div>
+  </div>
+  <div class="frame-wrap">
+    <div class="screen-label">Pattern Editor</div>
+    <div class="ipad">
+      <div class="ipad-top-bar"><div class="camera-dot"></div></div>
+      <div class="ipad-screen"><canvas id="s2" width="820" height="1180"></canvas></div>
+      <div class="ipad-bottom-bar"></div>
+    </div>
+  </div>
+  <div class="frame-wrap">
+    <div class="screen-label">Create — Camera</div>
+    <div class="ipad">
+      <div class="ipad-top-bar"><div class="camera-dot"></div></div>
+      <div class="ipad-screen"><canvas id="s3" width="820" height="1180"></canvas></div>
+      <div class="ipad-bottom-bar"></div>
+    </div>
+  </div>
+  <div class="frame-wrap">
+    <div class="screen-label">Photo → Pattern</div>
+    <div class="ipad">
+      <div class="ipad-top-bar"><div class="camera-dot"></div></div>
+      <div class="ipad-screen"><canvas id="s4" width="820" height="1180"></canvas></div>
+      <div class="ipad-bottom-bar"></div>
+    </div>
+  </div>
+  <div class="frame-wrap">
+    <div class="screen-label">AI Studio</div>
+    <div class="ipad">
+      <div class="ipad-top-bar"><div class="camera-dot"></div></div>
+      <div class="ipad-screen"><canvas id="s5" width="820" height="1180"></canvas></div>
+      <div class="ipad-bottom-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── constants ───────────────────────────────────────────────────────────────
+const W = 820, H = 1180;
+const SB = 48, NB = 56, TB = 83;
+const PURPLE = '#7c3aed', PURPLE_L = '#ede9fe', PURPLE_M = '#a855f7';
+const BLUE = '#007aff', GREEN = '#34c759', RED = '#ff3b30', ORANGE = '#ff9500', YELLOW = '#ffcc00';
+const BG = '#ffffff', BG2 = '#f2f2f7', BG3 = '#e5e5ea';
+const LBL = '#000000', LBL2 = '#3c3c43cc', LBL3 = '#8e8e93', SEP = '#c6c6c8';
+const NAV_BG = '#f8f8f8';
+
+// ─── colour helpers ───────────────────────────────────────────────────────────
+function hexRgb(h) {
+  return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+}
+function lighten(h, a) {
+  const [r,g,b] = hexRgb(h);
+  return `rgb(${Math.min(255,r+Math.round(255*a))},${Math.min(255,g+Math.round(255*a))},${Math.min(255,b+Math.round(255*a))})`;
+}
+function darken(h, a) {
+  const [r,g,b] = hexRgb(h);
+  return `rgb(${Math.max(0,r-Math.round(255*a))},${Math.max(0,g-Math.round(255*a))},${Math.max(0,b-Math.round(255*a))})`;
+}
+
+// ─── draw helpers ─────────────────────────────────────────────────────────────
+function rr(ctx, x, y, w, h, r, fill) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+function txt(ctx, s, x, y, { sz=17, wt='normal', cl=LBL, al='left', bl='middle', mw } = {}) {
+  ctx.font = `${wt} ${sz}px -apple-system,'Helvetica Neue',sans-serif`;
+  ctx.fillStyle = cl; ctx.textAlign = al; ctx.textBaseline = bl;
+  if (mw) ctx.fillText(s, x, y, mw); else ctx.fillText(s, x, y);
+}
+function hline(ctx, y, cl=SEP) {
+  ctx.strokeStyle = cl; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+}
+function vline(ctx, x, y1, y2, cl=SEP) {
+  ctx.strokeStyle = cl; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2); ctx.stroke();
+}
+
+// ─── chrome ───────────────────────────────────────────────────────────────────
+function statusBar(ctx, dark=false) {
+  const cl = dark ? '#fff' : LBL;
+  txt(ctx,'9:41', 40, SB/2, {sz:16, wt:'600', cl});
+  // wifi + battery
+  ctx.fillStyle = cl; ctx.font = '13px Arial';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  ctx.fillText('▲▲▲  ⬛ 100%', W-24, SB/2);
+}
+function navBar(ctx, title, { back, rights=[], bg=NAV_BG, titleCl=LBL } = {}) {
+  ctx.fillStyle = bg; ctx.fillRect(0, SB, W, NB);
+  hline(ctx, SB+NB);
+  if (back) {
+    txt(ctx,'‹', 18, SB+NB/2, {sz:28, wt:'300', cl:PURPLE});
+    txt(ctx, back, 44, SB+NB/2, {sz:17, cl:PURPLE});
+  }
+  txt(ctx, title, W/2, SB+NB/2, {sz:20, wt:'700', cl:titleCl, al:'center'});
+  let rx = W-20;
+  for (const r of rights) {
+    txt(ctx, r.label, rx, SB+NB/2, {sz:r.sz||18, cl:r.cl||PURPLE, al:'right'});
+    rx -= (r.w||52);
+  }
+}
+function tabBar(ctx, active=0) {
+  const y = H-TB;
+  ctx.fillStyle = NAV_BG; ctx.fillRect(0, y, W, TB);
+  hline(ctx, y);
+  const tabs = [['⊞','Library'],['⊕','Create'],['♥','My Patterns']];
+  const tw = W/3;
+  tabs.forEach(([ic,lb], i) => {
+    const cx = tw*i+tw/2;
+    const cl = i===active ? PURPLE : LBL3;
+    ctx.font='26px Arial'; ctx.fillStyle=cl; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(ic, cx, y+22);
+    txt(ctx, lb, cx, y+50, {sz:11, cl, al:'center'});
+    if (i===active) { rr(ctx, cx-20, y+TB-7, 40, 4, 2, PURPLE); }
+  });
+}
+
+// ─── bead drawing ─────────────────────────────────────────────────────────────
+function bead(ctx, cx, cy, r, hex, hole=true) {
+  const g = ctx.createRadialGradient(cx-r*0.28, cy-r*0.3, r*0.02, cx, cy, r);
+  g.addColorStop(0, lighten(hex, 0.32));
+  g.addColorStop(0.45, hex);
+  g.addColorStop(1, darken(hex, 0.28));
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fillStyle = g; ctx.fill();
+  const sp = ctx.createRadialGradient(cx-r*0.28, cy-r*0.35, 0, cx-r*0.28, cy-r*0.35, r*0.55);
+  sp.addColorStop(0, 'rgba(255,255,255,0.52)'); sp.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fillStyle=sp; ctx.fill();
+  if (hole) {
+    ctx.beginPath(); ctx.arc(cx, cy, r*0.21, 0, Math.PI*2);
+    ctx.fillStyle = darken(hex, 0.48); ctx.fill();
+  }
+}
+function drawGrid(ctx, rows, pal, ox, oy, cs, emptyColor='#e0e0e8') {
+  rows.forEach((row, ri) => {
+    [...row].forEach((ch, ci) => {
+      const px = ox + ci*cs, py = oy + ri*cs;
+      if (ch==='.' || ch===' ') {
+        ctx.fillStyle = emptyColor; ctx.fillRect(px, py, cs-1, cs-1);
+      } else {
+        const hex = pal[ch] || '#888';
+        bead(ctx, px+cs/2, py+cs/2, cs*0.44, hex);
+      }
+    });
+  });
+}
+
+// ─── patterns ─────────────────────────────────────────────────────────────────
+const HEART_ROWS = [
+  '................',
+  '...RR....RR.....',
+  '..RRRR..RRRR....',
+  '.RRRRRRRRRRRR...',
+  'RRRRRRRRRRRRRR..',
+  'RRRRRRRRRRRRRR..',
+  '.RRRRRRRRRRRR...',
+  '..RRRRRRRRRR....',
+  '...RRRRRRRRR....',
+  '....RRRRRRR.....',
+  '.....RRRRR......',
+  '......RRR.......',
+  '.......R........',
+  '................',
+  '................',
+  '................',
+];
+const HEART_PAL = { R:'#e63946' };
+
+const BUTTERFLY_ROWS = [
+  '..YYY.......YYY..',
+  '.YYYYY.....YYYYY.',
+  'YYYYYYY...YYYYYYY',
+  '.YYYYYYYY.YYYYYYY',
+  '..YYYYYYYYYYYYYP.',
+  '...PPPPPPPPPPPP..',
+  '...PPPPPPPPPPPP..',
+  '..YYYYYYYYYYYYYP.',
+  '.YYYYYYYY.YYYYYYY',
+  'YYYYYYY...YYYYYYY',
+  '.YYYYY.....YYYYY.',
+  '..YYY.......YYY..',
+];
+const BUTTERFLY_PAL = { Y:'#fbbf24', P:'#7c3aed' };
+
+const STAR_ROWS = [
+  '......YY........',
+  '.....YYYY.......',
+  '....YYYYYY......',
+  'YYYYYYYYYYYYYY..',
+  '.YYYYYYYYYYYYYY.',
+  'YYYYYYYYYYYYYY..',
+  '...YYYYYYYYYY...',
+  '....YYYYYY......',
+  '...YYYYYY.......',
+  '..YYYYYY........',
+  '.YYYYYY.........',
+  '..YYYY..........',
+];
+const STAR_PAL = { Y:'#f59e0b' };
+
+const CAT_ROWS = [
+  'GGG.......GGG...',
+  'GGGGG...GGGGG...',
+  'GGGGGGGGGGGGGG..',
+  'GGGGGGGGGGGGGG..',
+  'GG.GG..GG.GG...',
+  'GGGGGGGGGGGGGG..',
+  'GG.GG..GG.GG...',
+  '.PPPP..PPPP.....',
+  'GGGGGGGGGGGGGG..',
+  '.GGGGGGGGGGGG...',
+  '..GGGGGGGGGG....',
+  '...GGG...GGG....',
+];
+const CAT_PAL = { G:'#b0b0ba', P:'#ff9eb5' };
+
+const MUSHROOM_ROWS = [
+  '....RRRRRR......',
+  '..RRRRRRRRRR....',
+  '.RRRRRWWWRRRR...',
+  'RRRRRWWWWWRRRR..',
+  'RRRRRWWWWWRRRR..',
+  'RRRRRRWWWRRRRR..',
+  '.RRRRRRRRRRRR...',
+  '..BBBBBBBBBB....',
+  '..BBBBBBBBBB....',
+  '..BBBBBBBBBB....',
+  '...BBBBBBBB.....',
+  '....BBBBBB......',
+];
+const MUSH_PAL = { R:'#e63946', W:'#fff', B:'#f5deb3' };
+
+const SUN_ROWS = [
+  '....Y..Y..Y.....',
+  '.....YYYYY......',
+  'Y...YYYYYYYY....',
+  '.YYYYYYOOYYYY...',
+  'YYYYYYOOOOYYYY..',
+  '.YYYYYOOOOYYYY..',
+  '.YYYYYOOOOYYYY..',
+  'YYYYYYOOOOYYYY..',
+  '.YYYYYYOOYYYY...',
+  'Y...YYYYYYYY....',
+  '.....YYYYY......',
+  '....Y..Y..Y.....',
+];
+const SUN_PAL = { Y:'#fde047', O:'#f97316' };
+
+// Flower used for photo-conversion result (16×16)
+const FLOWER_ROWS = [
+  '....PPP.PPP.....',
+  '...PPPPPPPPP....',
+  '..PPPPPPPPPPP...',
+  '..PPPYYYYYYPP...',
+  '..PPYYYYYYYYYY..',
+  '..PPYYYYYYYYYY..',
+  '..PPYYYYYYYYYY..',
+  '..PPYYYYYYYYYY..',
+  '..PPPYYYYYYPP...',
+  '..PPPPPPPPPPP...',
+  '...PPPPPPPPP....',
+  '....GGG.GGG.....',
+  '.....GGGGG......',
+  '......GGG.......',
+  '.......G........',
+  '................',
+];
+const FLOWER_PAL = { P:'#f472b6', Y:'#fde047', G:'#22c55e' };
+
+// Large heart for editor (24×22)
+const BIG_HEART_ROWS = [
+  '........................',
+  '....RRRRR..RRRRR........',
+  '...RRRRRRRRRRRRRRR......',
+  '..RRRRRRRRRRRRRRRRR.....',
+  '.RRRRRRRRRRRRRRRRRRR....',
+  'RRRRRRRRRRRRRRRRRRRRRR..',
+  'RRRRRRRRRRRRRRRRRRRRRR..',
+  'RRRRRRRRRRRRRRRRRRRRRR..',
+  '.RRRRRRRRRRRRRRRRRRRRR..',
+  '..RRRRRRRRRRRRRRRRRRRR..',
+  '...RRRRRRRRRRRRRRRRRRR..',
+  '....RRRRRRRRRRRRRRRRR...',
+  '.....RRRRRRRRRRRRRRR....',
+  '......RRRRRRRRRRRRRR....',
+  '.......RRRRRRRRRRRRR....',
+  '........RRRRRRRRRRRR....',
+  '.........RRRRRRRRRR.....',
+  '..........RRRRRRRR......',
+  '...........RRRRRR.......',
+  '............RRRR........',
+  '.............RR.........',
+  '..............R.........',
+  '........................',
+  '........................',
+];
+const BIG_HEART_PAL = { R:'#e63946' };
+
+// ─── app icon (3-D cylindrical fuse bead) ─────────────────────────────────────
+function drawAppIcon(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // Background – rounded square gradient
+  const bgG = ctx.createLinearGradient(0,0,W,H);
+  bgG.addColorStop(0,'#5b21b6'); bgG.addColorStop(1,'#7c3aed');
+  rr(ctx,0,0,W,H,22,bgG);
+
+  const cx=W/2, cy=H/2+4;
+  const rx=W*0.36, ry=rx*0.38, ch=H*0.28;
+  const beadColor='#f97316';
+
+  // cylinder sides
+  const sideG = ctx.createLinearGradient(cx-rx,0,cx+rx,0);
+  sideG.addColorStop(0, darken(beadColor,0.28));
+  sideG.addColorStop(0.25, beadColor);
+  sideG.addColorStop(0.75, beadColor);
+  sideG.addColorStop(1, darken(beadColor,0.4));
+  ctx.beginPath();
+  ctx.moveTo(cx-rx, cy); ctx.lineTo(cx-rx, cy+ch);
+  ctx.ellipse(cx, cy+ch, rx, ry, 0, Math.PI, 0, false);
+  ctx.lineTo(cx+rx, cy);
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI, true);
+  ctx.fillStyle=sideG; ctx.fill();
+
+  // bottom ellipse
+  ctx.beginPath(); ctx.ellipse(cx,cy+ch,rx,ry,0,0,Math.PI*2);
+  const botG=ctx.createRadialGradient(cx,cy+ch,0,cx,cy+ch,rx);
+  botG.addColorStop(0,darken(beadColor,0.12)); botG.addColorStop(1,darken(beadColor,0.45));
+  ctx.fillStyle=botG; ctx.fill();
+
+  // top face (annular ring)
+  ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+  const topG=ctx.createRadialGradient(cx-rx*0.15,cy-ry*0.25,0,cx,cy,rx);
+  topG.addColorStop(0,lighten(beadColor,0.3)); topG.addColorStop(0.5,beadColor); topG.addColorStop(1,darken(beadColor,0.22));
+  ctx.fillStyle=topG; ctx.fill();
+
+  // center hole
+  const hr=rx*0.28, vhr=ry*0.28;
+  ctx.beginPath(); ctx.ellipse(cx,cy,hr,vhr,0,0,Math.PI*2);
+  ctx.fillStyle='#1c0a00'; ctx.fill();
+
+  // specular highlight on top
+  const specG=ctx.createRadialGradient(cx-rx*0.22,cy-ry*0.38,0,cx-rx*0.22,cy-ry*0.38,rx*0.52);
+  specG.addColorStop(0,'rgba(255,255,255,0.58)'); specG.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fillStyle=specG; ctx.fill();
+
+  // edge rim highlight
+  ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);
+  ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=1.5; ctx.stroke();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCREEN 1 — Library
+// ═════════════════════════════════════════════════════════════════════════════
+function drawLibrary(canvas) {
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+
+  // sidebar
+  const SW=220;
+  ctx.fillStyle=BG2; ctx.fillRect(0,0,SW,H);
+  vline(ctx,SW,0,H);
+
+  statusBar(ctx);
+  // nav
+  ctx.fillStyle=NAV_BG; ctx.fillRect(0,SB,W,NB);
+  hline(ctx,SB+NB);
+  txt(ctx,'BeadSnap',W/2,SB+NB/2,{sz:21,wt:'800',cl:PURPLE,al:'center'});
+  // search icon right
+  ctx.font='22px Arial'; ctx.fillStyle=PURPLE; ctx.textAlign='right'; ctx.textBaseline='middle';
+  ctx.fillText('⌕',W-24,SB+NB/2);
+
+  // sidebar content
+  const sideY = SB+NB+16;
+  // app icon small
+  const ic = document.createElement('canvas'); ic.width=44; ic.height=44; drawAppIcon(ic);
+  ctx.drawImage(ic, 12, sideY, 44, 44);
+  txt(ctx,'BeadSnap',62,sideY+12,{sz:15,wt:'700',cl:PURPLE});
+  txt(ctx,'Fuse Bead Designer',62,sideY+30,{sz:11,cl:LBL3});
+
+  const cats=[['◉','All Patterns',true],['🐾','Animals',false],['✦','Fantasy',false],['🚗','Vehicles',false],['🌿','Nature',false],['⊡','Icons',false],['🎃','Holidays',false],['⊞','My Patterns',false]];
+  let cy2=sideY+70;
+  cats.forEach(([ic2,lb,active])=>{
+    if(active){ rr(ctx,8,cy2,SW-16,42,10,PURPLE_L); }
+    ctx.font='17px Arial'; ctx.fillStyle=active?PURPLE:LBL; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText(ic2,22,cy2+21);
+    txt(ctx,lb,46,cy2+21,{sz:15,wt:active?'600':'normal',cl:active?PURPLE:LBL});
+    cy2+=48;
+  });
+
+  // main grid area
+  const GX=SW+16, GY=SB+NB+16;
+  // search bar
+  rr(ctx,GX,GY,W-GX-16,46,12,BG2);
+  ctx.font='18px Arial'; ctx.fillStyle=LBL3; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('⌕',GX+14,GY+23);
+  txt(ctx,'Search patterns…',GX+38,GY+23,{sz:16,cl:LBL3});
+
+  // category chips
+  const chips=['All','Animals','Fantasy','Nature','Icons'];
+  let chipX=GX, chipY=GY+62;
+  chips.forEach((ch,i)=>{
+    const cw=txt_width(ctx,ch,14)+28;
+    rr(ctx,chipX,chipY,cw,34,17,i===0?PURPLE:BG3);
+    txt(ctx,ch,chipX+14,chipY+17,{sz:14,wt:i===0?'600':'normal',cl:i===0?'#fff':LBL});
+    chipX+=cw+10;
+  });
+
+  // pattern cards 3-col grid
+  const patterns=[
+    {rows:HEART_ROWS,pal:HEART_PAL,name:'Heart',diff:'Easy'},
+    {rows:BUTTERFLY_ROWS,pal:BUTTERFLY_PAL,name:'Butterfly',diff:'Medium'},
+    {rows:STAR_ROWS,pal:STAR_PAL,name:'Star',diff:'Easy'},
+    {rows:CAT_ROWS,pal:CAT_PAL,name:'Cat',diff:'Medium'},
+    {rows:MUSHROOM_ROWS,pal:MUSH_PAL,name:'Mushroom',diff:'Easy'},
+    {rows:SUN_ROWS,pal:SUN_PAL,name:'Sun',diff:'Easy'},
+  ];
+
+  const COLS=3, CARD_W=Math.floor((W-GX-16-16*(COLS-1))/COLS);
+  const CARD_H=CARD_W+56;
+  const THUMB=CARD_W-24;
+  let cardX=GX, cardY=chipY+52;
+
+  patterns.forEach((p,i)=>{
+    const col=i%COLS, row=Math.floor(i/COLS);
+    const cx2=cardX+col*(CARD_W+16), cy3=cardY+row*(CARD_H+16);
+    rr(ctx,cx2,cy3,CARD_W,CARD_H,14,BG);
+    // shadow
+    ctx.shadowColor='rgba(0,0,0,0.08)'; ctx.shadowBlur=12; ctx.shadowOffsetY=4;
+    ctx.beginPath(); ctx.roundRect(cx2,cy3,CARD_W,CARD_H,14); ctx.fillStyle=BG; ctx.fill();
+    ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+
+    // thumbnail
+    const tnX=cx2+12, tnY=cy3+12;
+    rr(ctx,tnX,tnY,THUMB,THUMB,8,BG2);
+    const nr=p.rows.length, nc=p.rows[0].length;
+    const cs=Math.floor(Math.min(THUMB,THUMB)/Math.max(nr,nc));
+    const offX=tnX+(THUMB-nc*cs)/2, offY=tnY+(THUMB-nr*cs)/2;
+    drawGrid(ctx,p.rows,p.pal,offX,offY,cs,BG2);
+
+    // name
+    txt(ctx,p.name,cx2+12,cy3+THUMB+24,{sz:14,wt:'600'});
+    // diff badge
+    const dc=p.diff==='Easy'?'#dcfce7':p.diff==='Medium'?'#fef9c3':'#fee2e2';
+    const dtc=p.diff==='Easy'?'#16a34a':p.diff==='Medium'?'#ca8a04':'#dc2626';
+    const dw=txt_width(ctx,p.diff,11)+16;
+    rr(ctx,cx2+CARD_W-dw-12,cy3+THUMB+14,dw,22,11,dc);
+    txt(ctx,p.diff,cx2+CARD_W-dw/2-12,cy3+THUMB+25,{sz:11,wt:'600',cl:dtc,al:'center'});
+  });
+
+  tabBar(ctx,0);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCREEN 2 — Pattern Editor
+// ═════════════════════════════════════════════════════════════════════════════
+function drawEditor(canvas) {
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+  statusBar(ctx);
+  navBar(ctx,'Heart',{
+    back:'Library',
+    rights:[
+      {label:'Save',sz:16,cl:PURPLE,w:56},
+      {label:'↩',sz:20,cl:PURPLE,w:44},
+      {label:'🗑',sz:18,cl:RED,w:44},
+    ]
+  });
+
+  // Palette panel on right
+  const PP_W=80;
+  const pp_x=W-PP_W;
+  ctx.fillStyle=BG2; ctx.fillRect(pp_x,SB+NB,PP_W,H-SB-NB-TB);
+  vline(ctx,pp_x,SB+NB,H-TB);
+  txt(ctx,'Colors',pp_x+PP_W/2,SB+NB+24,{sz:11,wt:'600',cl:LBL3,al:'center'});
+
+  const colors=['#e63946','#f97316','#fbbf24','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+  colors.forEach((c,i)=>{
+    const cc_y=SB+NB+50+i*68;
+    const sel=i===0;
+    if(sel){ rr(ctx,pp_x+8,cc_y-5,PP_W-16,56,12,PURPLE_L); }
+    ctx.beginPath(); ctx.arc(pp_x+PP_W/2, cc_y+22, sel?20:16, 0, Math.PI*2);
+    ctx.fillStyle=c; ctx.fill();
+    if(sel){
+      ctx.beginPath(); ctx.arc(pp_x+PP_W/2, cc_y+22, 20, 0, Math.PI*2);
+      ctx.strokeStyle=PURPLE; ctx.lineWidth=3; ctx.stroke();
+      ctx.font='12px Arial'; ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('✓',pp_x+PP_W/2,cc_y+22);
+    }
+  });
+
+  // grid
+  const GX=16, GY=SB+NB+16;
+  const GRID_W=pp_x-32, GRID_H=H-GY-TB-70;
+  const nr=BIG_HEART_ROWS.length, nc=BIG_HEART_ROWS[0].length;
+  const cs=Math.floor(Math.min(GRID_W/nc,GRID_H/nr));
+  const offX=GX+(GRID_W-nc*cs)/2, offY=GY+(GRID_H-nr*cs)/2;
+
+  // grid background
+  rr(ctx,GX,GY,GRID_W,GRID_H+16,10,BG2);
+  drawGrid(ctx,BIG_HEART_ROWS,BIG_HEART_PAL,offX,offY,cs,'#e4e4ef');
+
+  // zoom bar at bottom
+  const zY=H-TB-54;
+  rr(ctx,GX,zY,GRID_W,44,10,BG2);
+  txt(ctx,'⊖',GX+20,zY+22,{sz:22,cl:LBL3,al:'left'});
+  txt(ctx,'Zoom',GRID_W/2+GX,zY+22,{sz:14,cl:LBL3,al:'center'});
+  txt(ctx,'⊕',GX+GRID_W-20,zY+22,{sz:22,cl:LBL3,al:'right'});
+
+  tabBar(ctx,1);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCREEN 3 — Create / Camera
+// ═════════════════════════════════════════════════════════════════════════════
+function drawCamera(canvas) {
+  const ctx = canvas.getContext('2d');
+
+  // full screen camera — dark
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+
+  // viewfinder — nature scene with flower
+  const VY=SB+NB+20, VH=H-SB-NB-240;
+  const VW=W-48;
+  // sky gradient background
+  const skyG=ctx.createLinearGradient(24,VY,24,VY+VH);
+  skyG.addColorStop(0,'#87ceeb'); skyG.addColorStop(0.6,'#c8e6f5'); skyG.addColorStop(1,'#a8d5a2');
+  rr(ctx,24,VY,VW,VH,16,skyG);
+
+  // green ground
+  const groundG=ctx.createLinearGradient(0,VY+VH*0.55,0,VY+VH);
+  groundG.addColorStop(0,'#6db56d'); groundG.addColorStop(1,'#4a8f4a');
+  ctx.fillStyle=groundG;
+  ctx.beginPath(); ctx.roundRect(24,VY+VH*0.55,VW,VH*0.45,{lowerLeft:16,lowerRight:16});
+  ctx.fill();
+
+  // bokeh circles (blurred background flowers)
+  const bokeh=[
+    [100,VY+VH*0.3,35,'#f472b6',0.4],[500,VY+VH*0.25,28,'#fbbf24',0.35],
+    [680,VY+VH*0.35,32,'#a78bfa',0.3],[200,VY+VH*0.4,22,'#fde047',0.4],
+    [600,VY+VH*0.45,40,'#fb923c',0.3],
+  ];
+  bokeh.forEach(([bx,by,br,bc,ba])=>{
+    const bg=ctx.createRadialGradient(bx,by,0,bx,by,br);
+    bg.addColorStop(0,bc+(Math.round(ba*255).toString(16).padStart(2,'0')));
+    bg.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fillStyle=bg; ctx.fill();
+  });
+
+  // main in-focus flower (center of frame)
+  const fcx=W/2, fcy=VY+VH*0.52;
+  // stem
+  ctx.strokeStyle='#2d6a2d'; ctx.lineWidth=8;
+  ctx.beginPath(); ctx.moveTo(fcx,fcy+20); ctx.lineTo(fcx,fcy+120); ctx.stroke();
+  // leaves
+  ctx.fillStyle='#3d8b3d';
+  ctx.beginPath(); ctx.ellipse(fcx-30,fcy+70,28,12,-.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(fcx+30,fcy+90,28,12,.5,0,Math.PI*2); ctx.fill();
+  // petals
+  const petals=8;
+  for(let i=0;i<petals;i++){
+    const ang=i*Math.PI*2/petals;
+    const px=fcx+Math.cos(ang)*38, py=fcy+Math.sin(ang)*38;
+    ctx.beginPath(); ctx.ellipse(px,py,20,12,ang,0,Math.PI*2);
+    ctx.fillStyle=i%2===0?'#f472b6':'#fb7185'; ctx.fill();
+  }
+  // center
+  ctx.beginPath(); ctx.arc(fcx,fcy,20,0,Math.PI*2);
+  ctx.fillStyle='#fde047'; ctx.fill();
+  ctx.beginPath(); ctx.arc(fcx,fcy,14,0,Math.PI*2);
+  ctx.fillStyle='#f59e0b'; ctx.fill();
+
+  // focus brackets (camera focus UI)
+  const fw=140, fh=140;
+  const fbx=fcx-fw/2, fby=fcy-fh/2-10;
+  const fl=30, lw=3;
+  ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=lw;
+  // corners
+  [[fbx,fby],[fbx+fw,fby],[fbx,fby+fh],[fbx+fw,fby+fh]].forEach(([cx2,cy2],i)=>{
+    ctx.beginPath();
+    if(i===0){ctx.moveTo(cx2+fl,cy2);ctx.lineTo(cx2,cy2);ctx.lineTo(cx2,cy2+fl);}
+    else if(i===1){ctx.moveTo(cx2-fl,cy2);ctx.lineTo(cx2,cy2);ctx.lineTo(cx2,cy2+fl);}
+    else if(i===2){ctx.moveTo(cx2+fl,cy2);ctx.lineTo(cx2,cy2);ctx.lineTo(cx2,cy2-fl);}
+    else{ctx.moveTo(cx2-fl,cy2);ctx.lineTo(cx2,cy2);ctx.lineTo(cx2,cy2-fl);}
+    ctx.stroke();
+  });
+  // AE/AF label
+  rr(ctx,fcx+fw/2+8,fby+fh/2-14,60,28,6,'rgba(255,200,0,0.85)');
+  txt(ctx,'AE/AF',fcx+fw/2+38,fby+fh/2,{sz:13,wt:'700',cl:'#000',al:'center'});
+
+  // grid overlay on viewfinder (rule of thirds)
+  ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
+  [1/3,2/3].forEach(f=>{
+    ctx.beginPath(); ctx.moveTo(24+VW*f,VY); ctx.lineTo(24+VW*f,VY+VH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(24,VY+VH*f); ctx.lineTo(24+VW,VY+VH*f); ctx.stroke();
+  });
+
+  // status bar (dark)
+  statusBar(ctx, true);
+
+  // nav overlay
+  txt(ctx,'‹',24,SB+NB/2,{sz:28,wt:'300',cl:'#fff'});
+  txt(ctx,'Take Photo',W/2,SB+NB/2,{sz:19,wt:'600',cl:'#fff',al:'center'});
+  txt(ctx,'✕',W-30,SB+NB/2,{sz:22,cl:'#fff',al:'right'});
+
+  // bottom camera controls
+  const ctrlY=H-TB-160;
+  // library thumbnail
+  rr(ctx,40,ctrlY,80,80,10,'#555');
+  drawGrid(ctx,STAR_ROWS,STAR_PAL,44,ctrlY+4,7,'#555');
+  ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.roundRect(40,ctrlY,80,80,10); ctx.stroke();
+
+  // shutter button
+  ctx.beginPath(); ctx.arc(W/2,ctrlY+40,44,0,Math.PI*2);
+  ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(W/2,ctrlY+40,34,0,Math.PI*2);
+  ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.fill();
+
+  // flip camera
+  rr(ctx,W-120,ctrlY,80,80,40,'rgba(255,255,255,0.15)');
+  ctx.font='32px Arial'; ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🔄',W-80,ctrlY+40);
+
+  // photo mode selector
+  const modes=['Video','Photo','Portrait'];
+  let mx=W/2-120;
+  modes.forEach((m,i)=>{
+    const mc=i===1?'#fff':'rgba(255,255,255,0.5)';
+    txt(ctx,m,mx+40,ctrlY+110,{sz:i===1?15:13,wt:i===1?'700':'normal',cl:mc,al:'center'});
+    mx+=80;
+  });
+  rr(ctx,W/2-3,ctrlY+122,6,6,3,'#f59e0b');
+
+  // tab bar (translucent dark)
+  ctx.fillStyle='rgba(20,20,20,0.85)'; ctx.fillRect(0,H-TB,W,TB);
+  hline(ctx,H-TB,'rgba(255,255,255,0.12)');
+  const ttabs=[['⊞','Library'],['⊕','Create'],['♥','My Patterns']];
+  const ttw=W/3;
+  ttabs.forEach(([tic,tlb],i)=>{
+    const tcx=ttw*i+ttw/2;
+    const tc=i===1?PURPLE_M:'rgba(255,255,255,0.5)';
+    ctx.font='26px Arial'; ctx.fillStyle=tc; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(tic,tcx,H-TB+22);
+    txt(ctx,tlb,tcx,H-TB+50,{sz:11,cl:tc,al:'center'});
+    if(i===1) rr(ctx,tcx-20,H-8,40,4,2,PURPLE_M);
+  });
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCREEN 4 — Photo → Pattern Result
+// ═════════════════════════════════════════════════════════════════════════════
+function drawPhotoResult(canvas) {
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+  statusBar(ctx);
+  navBar(ctx,'Photo Converted',{back:'Create',rights:[{label:'✕',sz:20,cl:LBL3,w:40}]});
+
+  const PY=SB+NB+24;
+  const panelW=(W-48)/2, panelH=560;
+
+  // Left panel — original photo
+  rr(ctx,16,PY,panelW,panelH,16,BG2);
+  txt(ctx,'Original Photo',16+panelW/2,PY+22,{sz:13,wt:'600',cl:LBL3,al:'center'});
+
+  // Simulate a flower photo
+  const imgX=16+16, imgY=PY+40, imgW=panelW-32, imgH=panelH-80;
+  rr(ctx,imgX,imgY,imgW,imgH,10,'#87ceeb');
+  // sky
+  const skyG2=ctx.createLinearGradient(imgX,imgY,imgX,imgY+imgH);
+  skyG2.addColorStop(0,'#7ec8e3'); skyG2.addColorStop(0.55,'#b5dce8'); skyG2.addColorStop(0.55,'#5c9e5c'); skyG2.addColorStop(1,'#3d7a3d');
+  ctx.fillStyle=skyG2; ctx.beginPath(); ctx.roundRect(imgX,imgY,imgW,imgH,10); ctx.fill();
+  // bokeh circles
+  [[imgX+30,imgY+80,20,'#f472b6',0.5],[imgX+imgW-40,imgY+60,15,'#fbbf24',0.5],[imgX+imgW-80,imgY+130,18,'#a78bfa',0.4]].forEach(([bx,by,br,bc,ba])=>{
+    const bg=ctx.createRadialGradient(bx,by,0,bx,by,br);
+    bg.addColorStop(0,bc); bg.addColorStop(1,'transparent');
+    ctx.beginPath(); ctx.arc(bx,by,br,0,Math.PI*2); ctx.fillStyle=bg; ctx.fill();
+  });
+  // Main flower in photo
+  const pfcx=imgX+imgW*0.5, pfcy=imgY+imgH*0.48;
+  ctx.strokeStyle='#2d5a2d'; ctx.lineWidth=5;
+  ctx.beginPath(); ctx.moveTo(pfcx,pfcy+15); ctx.lineTo(pfcx,pfcy+imgH*0.35); ctx.stroke();
+  for(let i=0;i<8;i++){
+    const a=i*Math.PI*2/8;
+    ctx.beginPath(); ctx.ellipse(pfcx+Math.cos(a)*25,pfcy+Math.sin(a)*25,15,9,a,0,Math.PI*2);
+    ctx.fillStyle=i%2===0?'#f472b6':'#fb7185'; ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(pfcx,pfcy,15,0,Math.PI*2); ctx.fillStyle='#fde047'; ctx.fill();
+
+  // Right panel — bead pattern
+  const rpX=24+panelW+8;
+  rr(ctx,rpX,PY,panelW,panelH,16,BG2);
+  txt(ctx,'Bead Pattern',rpX+panelW/2,PY+22,{sz:13,wt:'600',cl:LBL3,al:'center'});
+
+  // Draw flower bead pattern
+  const nr=FLOWER_ROWS.length, nc=FLOWER_ROWS[0].length;
+  const cs2=Math.floor(Math.min((panelW-48)/nc,(panelH-80)/nr));
+  const gox=rpX+16+(panelW-32-nc*cs2)/2, goy=PY+40+(panelH-70-nr*cs2)/2;
+  rr(ctx,rpX+16,PY+40,panelW-32,panelH-70,8,BG3);
+  drawGrid(ctx,FLOWER_ROWS,FLOWER_PAL,gox,goy,cs2,BG3);
+
+  // Stats row
+  const stY=PY+panelH+20;
+  const stats=[
+    ['🧩','Grid Size','16 × 16'],
+    ['🎨','Colors Used','3 colors'],
+    ['🔵','Total Beads','112 beads'],
+  ];
+  const sw=(W-32)/3;
+  stats.forEach(([ic,lb,val],i)=>{
+    const sx=16+i*sw;
+    rr(ctx,sx,stY,sw-8,76,12,BG2);
+    ctx.font='22px Arial'; ctx.fillStyle=LBL; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(ic,sx+sw/2-4,stY+22);
+    txt(ctx,lb,sx+sw/2-4,stY+42,{sz:12,cl:LBL3,al:'center'});
+    txt(ctx,val,sx+sw/2-4,stY+60,{sz:14,wt:'600',al:'center'});
+  });
+
+  // colour legend
+  const legY=stY+96;
+  txt(ctx,'Color Palette',W/2,legY,{sz:15,wt:'600',al:'center',cl:LBL3});
+  const legCols=['#f472b6','#fde047','#22c55e'];
+  const legNames=['Pink','Yellow','Green'];
+  legCols.forEach((c,i)=>{
+    const lx=W/2-120+i*120;
+    ctx.beginPath(); ctx.arc(lx,legY+30,14,0,Math.PI*2); ctx.fillStyle=c; ctx.fill();
+    txt(ctx,legNames[i],lx,legY+52,{sz:12,cl:LBL3,al:'center'});
+  });
+
+  // action buttons
+  const btnY=H-TB-70;
+  rr(ctx,16,btnY,W/2-24,52,14,PURPLE);
+  txt(ctx,'Use This Pattern',W/4+4,btnY+26,{sz:17,wt:'600',cl:'#fff',al:'center'});
+  rr(ctx,W/2+8,btnY,W/2-24,52,14,BG2);
+  txt(ctx,'⚙  Adjust',W*3/4,btnY+26,{sz:17,wt:'500',cl:PURPLE,al:'center'});
+
+  tabBar(ctx,1);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SCREEN 5 — AI Studio
+// ═════════════════════════════════════════════════════════════════════════════
+function drawAIStudio(canvas) {
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+  statusBar(ctx);
+  navBar(ctx,'AI Studio',{rights:[{label:'⚙',sz:20,cl:LBL3,w:44}]});
+
+  const CX=SB+NB+16;
+  const LEFT_W=340, RIGHT_X=LEFT_W+32, RIGHT_W=W-RIGHT_X-16;
+
+  // ── left column ──
+  // API status badge
+  rr(ctx,16,CX,LEFT_W,48,12,'#dcfce7');
+  ctx.font='18px Arial'; ctx.fillStyle='#16a34a'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('✓',30,CX+24);
+  txt(ctx,'Claude AI Connected',54,CX+24,{sz:14,wt:'600',cl:'#16a34a'});
+
+  // Prompt section
+  txt(ctx,'Describe your pattern',16,CX+68,{sz:15,wt:'600'});
+  rr(ctx,16,CX+90,LEFT_W,110,12,BG2);
+  txt(ctx,'A cute orange tabby cat sitting',28,CX+115,{sz:15,cl:LBL});
+  txt(ctx,'with a curly tail, simple style',28,CX+138,{sz:15,cl:LBL});
+  txt(ctx,'for a 24×24 bead grid',28,CX+161,{sz:15,cl:LBL3});
+  // cursor blink
+  ctx.fillStyle=PURPLE; ctx.fillRect(28+txt_width(ctx,'for a 24×24 bead grid',15),CX+153,2,20);
+
+  // Category
+  txt(ctx,'Category',16,CX+222,{sz:15,wt:'600'});
+  rr(ctx,16,CX+244,LEFT_W,52,12,BG2);
+  txt(ctx,'Animals',28,CX+270,{sz:16});
+  txt(ctx,'›',LEFT_W+4,CX+270,{sz:22,cl:LBL3,al:'right'});
+
+  // Grid size
+  txt(ctx,'Grid Size',16,CX+320,{sz:15,wt:'600'});
+  const gsizes=[['16×16','Small'],['24×24','Medium'],['32×32','Standard']];
+  gsizes.forEach(([sz,lb],i)=>{
+    const gx=16+i*(LEFT_W/3)+4, gy=CX+342;
+    const sel=i===1;
+    rr(ctx,gx,gy,LEFT_W/3-8,62,10,sel?PURPLE_L:BG2);
+    if(sel){ ctx.strokeStyle=PURPLE; ctx.lineWidth=2; ctx.beginPath(); ctx.roundRect(gx,gy,LEFT_W/3-8,62,10); ctx.stroke(); }
+    txt(ctx,sz,gx+(LEFT_W/3-8)/2,gy+22,{sz:15,wt:'700',cl:sel?PURPLE:LBL,al:'center'});
+    txt(ctx,lb,gx+(LEFT_W/3-8)/2,gy+44,{sz:12,cl:sel?PURPLE:LBL3,al:'center'});
+  });
+
+  // Style toggle
+  txt(ctx,'Style',16,CX+430,{sz:15,wt:'600'});
+  const styles=['Pixel','Simple','Detailed'];
+  styles.forEach((s,i)=>{
+    const sx=16+i*(LEFT_W/3)+4;
+    const sel=i===1;
+    rr(ctx,sx,CX+452,LEFT_W/3-8,38,10,sel?PURPLE:BG2);
+    txt(ctx,s,sx+(LEFT_W/3-8)/2,CX+471,{sz:13,wt:sel?'600':'normal',cl:sel?'#fff':LBL,al:'center'});
+  });
+
+  // Generate button
+  const gbY=CX+514;
+  const gbG=ctx.createLinearGradient(16,gbY,LEFT_W+16,gbY);
+  gbG.addColorStop(0,'#7c3aed'); gbG.addColorStop(1,'#a855f7');
+  ctx.beginPath(); ctx.roundRect(16,gbY,LEFT_W,58,14); ctx.fillStyle=gbG; ctx.fill();
+  ctx.font='20px Arial'; ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('✦',W*0.2,gbY+29);
+  txt(ctx,'Generate Pattern',W*0.3,gbY+29,{sz:18,wt:'700',cl:'#fff',al:'center'});
+
+  // iteration prompt
+  txt(ctx,'Refine Result',16,CX+598,{sz:15,wt:'600'});
+  rr(ctx,16,CX+620,LEFT_W,48,12,BG2);
+  txt(ctx,'Make the tail fluffier…',28,CX+644,{sz:15,cl:LBL3});
+  rr(ctx,LEFT_W-26,CX+632,36,26,8,PURPLE);
+  txt(ctx,'→',LEFT_W-8,CX+645,{sz:17,wt:'700',cl:'#fff',al:'right'});
+
+  // ── divider ──
+  vline(ctx,LEFT_W+24,CX,H-TB-10);
+
+  // ── right column ──
+  txt(ctx,'Generated Pattern',RIGHT_X,CX+8,{sz:16,wt:'700'});
+  txt(ctx,'Orange Tabby Cat · 24×24 · 8 colors',RIGHT_X,CX+34,{sz:13,cl:LBL3});
+
+  // pattern preview (cat pattern + colors)
+  const pnX=RIGHT_X, pnY=CX+56;
+  const pnW=RIGHT_W, pnH=RIGHT_W;
+  rr(ctx,pnX,pnY,pnW,pnH,14,BG2);
+
+  // Draw a cat pattern preview
+  const cs3=Math.floor(Math.min(pnW,pnH)/CAT_ROWS[0].length);
+  const nr3=CAT_ROWS.length, nc3=CAT_ROWS[0].length;
+  const gox3=pnX+(pnW-nc3*cs3)/2, goy3=pnY+(pnH-nr3*cs3)/2;
+  drawGrid(ctx,CAT_ROWS,CAT_PAL,gox3,goy3,cs3,BG2);
+
+  // Color swatches below
+  const swY=pnY+pnH+16;
+  txt(ctx,'Palette',RIGHT_X,swY,{sz:13,wt:'600',cl:LBL3});
+  const swatches=['#b0b0ba','#ff9eb5','#1a1a2e','#f5e6d0','#2c2c2c'];
+  swatches.forEach((c,i)=>{ ctx.beginPath(); ctx.arc(RIGHT_X+14+i*34,swY+22,12,0,Math.PI*2); ctx.fillStyle=c; ctx.fill(); });
+
+  // bead count
+  txt(ctx,'156 beads total',RIGHT_X,swY+48,{sz:13,cl:LBL3});
+  txt(ctx,'Est. 15 min to build',RIGHT_X+150,swY+48,{sz:13,cl:LBL3});
+
+  // action buttons
+  const abY=pnY+pnH+100;
+  const abG=ctx.createLinearGradient(RIGHT_X,abY,RIGHT_X+RIGHT_W,abY);
+  abG.addColorStop(0,'#7c3aed'); abG.addColorStop(1,'#a855f7');
+  ctx.beginPath(); ctx.roundRect(RIGHT_X,abY,RIGHT_W,52,14); ctx.fillStyle=abG; ctx.fill();
+  txt(ctx,'Save to My Patterns',RIGHT_X+RIGHT_W/2,abY+26,{sz:16,wt:'700',cl:'#fff',al:'center'});
+  rr(ctx,RIGHT_X,abY+64,RIGHT_W,52,14,BG2);
+  txt(ctx,'✏  Open in Editor',RIGHT_X+RIGHT_W/2,abY+90,{sz:16,wt:'600',cl:PURPLE,al:'center'});
+
+  tabBar(ctx,1);
+}
+
+// ─── text width helper ────────────────────────────────────────────────────────
+function txt_width(ctx, s, sz) {
+  ctx.font=`${sz}px -apple-system,'Helvetica Neue',sans-serif`;
+  return ctx.measureText(s).width;
+}
+
+// ─── render all ──────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  drawAppIcon(document.getElementById('iconCanvas'));
+  drawLibrary(document.getElementById('s1'));
+  drawEditor(document.getElementById('s2'));
+  drawCamera(document.getElementById('s3'));
+  drawPhotoResult(document.getElementById('s4'));
+  drawAIStudio(document.getElementById('s5'));
+});
+</script>
+</body>
+</html>

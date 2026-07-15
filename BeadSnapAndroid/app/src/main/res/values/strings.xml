@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BeadSnap</string>
+    <string name="tab_library">Library</string>
+    <string name="tab_create">Create</string>
+    <string name="cd_back">Back</string>
+    <string name="privacy_policy_url">https://beadsnap.app/privacy</string>
+</resources>

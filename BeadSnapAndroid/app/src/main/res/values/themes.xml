@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme. Compose overrides via MaterialTheme. -->
+    <style name="Theme.BeadSnap" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

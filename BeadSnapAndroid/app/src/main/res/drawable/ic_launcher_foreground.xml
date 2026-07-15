@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A simple grid of 4 circles representing fuse beads -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group android:translateX="16" android:translateY="16">
+        <!-- Row 1 -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M12,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M38,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M64,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <!-- Row 2 -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M12,38 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <path android:fillColor="#FF9800"
+            android:pathData="M38,38 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M64,38 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <!-- Row 3 -->
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M12,64 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M38,64 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+        <path android:fillColor="#FFFFFF"
+            android:pathData="M64,64 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+    </group>
+</vector>
