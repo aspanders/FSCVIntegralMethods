@@ -1,9 +1,9 @@
 # BeadSnap Privacy Policy
 
-**Effective date:** [DATE]
+**Effective date:** July 15, 2026
 **Developer:** Pegboard Studio ("we," "us," "our")
 **App:** BeadSnap (iOS and Android)
-**Contact:** [PRIVACY CONTACT EMAIL]
+**Contact:** andersjasp@gmail.com
 
 ## In plain English
 
@@ -193,7 +193,7 @@ periodically.
 
 Questions about this policy or how BeadSnap handles data can be sent to:
 
-**[PRIVACY CONTACT EMAIL]**
+**andersjasp@gmail.com**
 
 ---
 
