@@ -7,12 +7,15 @@ plugins {
 
 android {
     namespace = "com.beadsnap.app"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.beadsnap.app"
+        // minSdk 26 = Android 8.0 (2017) — broad backward compatibility.
+        // compileSdk/targetSdk are kept current; they do not affect which
+        // devices can install the app (that is minSdk alone).
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
 
@@ -36,9 +39,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
@@ -46,6 +46,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+// Modern, non-deprecated replacement for the old android.kotlinOptions block
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 
