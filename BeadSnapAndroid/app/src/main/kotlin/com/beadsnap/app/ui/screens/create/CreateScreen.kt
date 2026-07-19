@@ -3,6 +3,7 @@ package com.beadsnap.app.ui.screens.create
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -136,7 +137,7 @@ fun CreateScreen(
                 subtitle = "Turn a picture into a bead pattern",
                 onClick = {
                     photoPickerLauncher.launch(
-                        ActivityResultContracts.PickVisualMedia.ImageOnly
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                     )
                 }
             )
@@ -201,6 +202,7 @@ fun CreateScreen(
                     }
                 }
             }
+        }
         }
     }
 
