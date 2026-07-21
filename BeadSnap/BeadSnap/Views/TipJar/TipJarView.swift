@@ -47,20 +47,15 @@ struct TipJarView: View {
                     }
                 } else {
                     Section("Leave a tip") {
-                        ForEach(tipJar.products, id: \.id) { product in
-                            Button {
-                                Task { await tipJar.purchase(product) }
-                            } label: {
-                                HStack {
-                                    Text(tipEmoji(for: product.id))
-                                    Text(tipName(for: product.id))
-                                    Spacer()
-                                    Text(product.displayPrice)
-                                        .foregroundStyle(.secondary)
-                                        .monospacedDigit()
-                                }
+                        ForEach(headlineProducts, id: \.id) { product in
+                            tipButton(product)
+                        }
+                    }
+                    if !customProducts.isEmpty {
+                        Section("Custom amount") {
+                            ForEach(customProducts, id: \.id) { product in
+                                tipButton(product)
                             }
-                            .disabled(tipJar.isPurchasing)
                         }
                     }
                 }
@@ -75,22 +70,56 @@ struct TipJarView: View {
             .task { await tipJar.loadProducts() }
             .onDisappear { tipJar.showThanks = false }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+    }
+
+    private var headlineProducts: [Product] {
+        tipJar.products.filter { TipJarManager.headlineProductIDs.contains($0.id) }
+    }
+    private var customProducts: [Product] {
+        tipJar.products
+            .filter { TipJarManager.customProductIDs.contains($0.id) }
+            .sorted { $0.price < $1.price }
+    }
+
+    @ViewBuilder
+    private func tipButton(_ product: Product) -> some View {
+        Button {
+            Task { await tipJar.purchase(product) }
+        } label: {
+            HStack {
+                Text(tipEmoji(for: product.id))
+                Text(tipName(for: product.id))
+                Spacer()
+                Text(product.displayPrice)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        .disabled(tipJar.isPurchasing)
     }
 
     private func tipEmoji(for id: String) -> String {
         switch id {
-        case "tip_small":  return "🍬"
-        case "tip_medium": return "☕️"
-        default:           return "🧁"
+        case "tip_small":       return "🍬"
+        case "tip_medium":      return "☕️"
+        case "tip_large":       return "🧁"
+        case "tip_custom_20":   return "🎁"
+        case "tip_custom_50":   return "🌟"
+        case "tip_custom_100":  return "💎"
+        default:                return "💜"
         }
     }
 
     private func tipName(for id: String) -> String {
         switch id {
-        case "tip_small":  return "Small tip"
-        case "tip_medium": return "Nice tip"
-        default:           return "Amazing tip"
+        case "tip_small":       return "Small tip"
+        case "tip_medium":      return "Nice tip"
+        case "tip_large":       return "Amazing tip"
+        case "tip_custom_20":   return "Generous tip"
+        case "tip_custom_50":   return "Incredible tip"
+        case "tip_custom_100":  return "Legendary tip"
+        default:                return "Tip"
         }
     }
 }
@@ -111,7 +140,7 @@ struct TipPromptBanner: View {
                     .font(.headline)
                 Spacer()
             }
-            Text("You've opened BeadSnap 10 times! It's free with no ads — if it's earned a place in your craft kit, consider leaving a small tip.")
+            Text("You've opened BeadSnap 10 times! It's free with no ads. If it's earned a place in your craft kit, consider leaving a small tip.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

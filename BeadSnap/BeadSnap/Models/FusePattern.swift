@@ -13,7 +13,15 @@ struct FusePattern: Identifiable, Codable, Hashable {
     var difficulty: Difficulty
     var tags: [String]
     var sourcePrompt: String?
+    // 3D constructions include how to make the bead panel(s) and how to
+    // assemble them into the finished object. Nil for flat patterns.
+    var buildGuide: String?
+    var assemblyGuide: String?
     var version: Int
+
+    var hasInstructions: Bool {
+        !(buildGuide?.isEmpty ?? true) || !(assemblyGuide?.isEmpty ?? true)
+    }
 
     init(
         id: String,
@@ -26,6 +34,8 @@ struct FusePattern: Identifiable, Codable, Hashable {
         difficulty: Difficulty,
         tags: [String],
         sourcePrompt: String? = nil,
+        buildGuide: String? = nil,
+        assemblyGuide: String? = nil,
         version: Int
     ) {
         self.id = id
@@ -38,6 +48,8 @@ struct FusePattern: Identifiable, Codable, Hashable {
         self.difficulty = difficulty
         self.tags = tags
         self.sourcePrompt = sourcePrompt
+        self.buildGuide = buildGuide
+        self.assemblyGuide = assemblyGuide
         self.version = version
     }
 
@@ -55,6 +67,8 @@ struct FusePattern: Identifiable, Codable, Hashable {
         difficulty   = try c.decodeIfPresent(Difficulty.self, forKey: .difficulty) ?? .easy
         tags         = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         sourcePrompt = try c.decodeIfPresent(String.self, forKey: .sourcePrompt)
+        buildGuide    = try c.decodeIfPresent(String.self, forKey: .buildGuide)
+        assemblyGuide = try c.decodeIfPresent(String.self, forKey: .assemblyGuide)
         version      = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
     }
 
@@ -86,7 +100,7 @@ struct FusePattern: Identifiable, Codable, Hashable {
 // MARK: - Supporting Types
 
 enum PatternCategory: String, Codable, CaseIterable, Identifiable {
-    case animals, fantasy, vehicles, nature, icons, holidays, custom
+    case animals, fantasy, vehicles, nature, icons, holidays, threeD, custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
@@ -96,6 +110,7 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .nature:   return "Nature"
         case .icons:    return "Icons"
         case .holidays: return "Holidays"
+        case .threeD:   return "3D"
         case .custom:   return "My Designs"
         }
     }
@@ -107,6 +122,7 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .nature:   return "🌿"
         case .icons:    return "⭐"
         case .holidays: return "🎉"
+        case .threeD:   return "🧊"
         case .custom:   return "✏️"
         }
     }

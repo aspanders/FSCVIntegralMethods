@@ -12,6 +12,11 @@ final class PatternStore: ObservableObject {
     var allPatterns: [FusePattern] { systemPatterns + userPatterns }
 
     private let userDir: URL
+    private let remoteCache: URL
+    // The bundled seed set is always available offline; the downloadable
+    // library is merged on top of it (remote wins on id collisions).
+    private let seed = SeedPatterns.all
+    private var remote: [FusePattern] = []
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -21,9 +26,41 @@ final class PatternStore: ObservableObject {
     private init() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         userDir = docs.appendingPathComponent("patterns", isDirectory: true)
+        remoteCache = docs.appendingPathComponent("remote_library.json")
         try? FileManager.default.createDirectory(at: userDir, withIntermediateDirectories: true)
-        systemPatterns = SeedPatterns.all.sorted { $0.title < $1.title }
+        systemPatterns = seed.sorted { $0.title < $1.title }
         Task { await loadUserPatterns() }
+        Task { await loadCachedRemote() }
+    }
+
+    // MARK: - Downloadable library
+
+    /// Load any previously-downloaded library from disk so it shows offline.
+    private func loadCachedRemote() async {
+        let url = remoteCache
+        let cached: [FusePattern] = await Task.detached(priority: .utility) {
+            guard let data = try? Data(contentsOf: url),
+                  let wrapper = try? JSONDecoder().decode(RemotePatterns.self, from: data)
+            else { return [] }
+            return wrapper.patterns
+        }.value
+        if !cached.isEmpty { applyRemote(cached) }
+    }
+
+    /// Called by RemoteLibraryService after a fresh download. Persists + merges.
+    func applyRemoteLibrary(_ patterns: [FusePattern], rawData: Data) {
+        let url = remoteCache
+        Task.detached(priority: .utility) {
+            try? rawData.write(to: url, options: .atomic)
+        }
+        applyRemote(patterns)
+    }
+
+    private func applyRemote(_ patterns: [FusePattern]) {
+        remote = patterns.map { var p = $0; p.createdBy = .system; return p }
+        var byID: [String: FusePattern] = [:]
+        for p in seed + remote { byID[p.id] = p }   // remote wins on collisions
+        systemPatterns = byID.values.sorted { $0.title < $1.title }
     }
 
     private func loadUserPatterns() async {

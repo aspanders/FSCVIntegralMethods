@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "count": 111,
+  "perCategory": {
+    "animals": 0,
+    "fantasy": 0,
+    "vehicles": 0,
+    "nature": 0,
+    "icons": 103,
+    "holidays": 0,
+    "threeD": 8
+  },
+  "patternsUrl": "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/claude/fuse-bead-converter-app-706h2s/library/patterns.json",
+  "updatedAt": ""
+}

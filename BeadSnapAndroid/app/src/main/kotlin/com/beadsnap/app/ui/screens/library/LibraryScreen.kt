@@ -33,7 +33,9 @@ import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.ImageConverter
+import com.beadsnap.app.services.RemoteLibraryService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,6 +43,7 @@ import kotlinx.coroutines.withContext
 fun LibraryScreen(
     viewModel: LibraryViewModel,
     store: PatternStore,
+    library: RemoteLibraryService? = null,
     onPatternClick: (FusePattern) -> Unit,
     onOpenTipJar: () -> Unit = {}
 ) {
@@ -50,6 +53,7 @@ fun LibraryScreen(
     val sort        by viewModel.sortOrder.collectAsState()
     val counts      by viewModel.categoryCounts.collectAsState()
     val lastError   by store.lastError.collectAsState()
+    val libraryUpdate by (library?.updateApplied ?: remember { MutableStateFlow(null) }).collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
     var patternToDelete by remember { mutableStateOf<FusePattern?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -59,6 +63,14 @@ fun LibraryScreen(
         lastError?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             store.clearLastError()
+        }
+    }
+
+    // Notify when the downloadable pattern library was refreshed
+    LaunchedEffect(libraryUpdate) {
+        libraryUpdate?.let { count ->
+            snackbarHostState.showSnackbar("Pattern library updated: $count patterns available")
+            library?.clearUpdateNotice()
         }
     }
 

@@ -99,7 +99,7 @@ struct CreateView: View {
             if existing > 0 { p.title = "Imported Photo \(existing + 1)" }
         }
         // Persist immediately so the pattern exists in the library and editor
-        // autosaves have something to update — otherwise all edits are lost.
+        // autosaves have something to update: otherwise all edits are lost.
         if p.createdBy == .user {
             PatternStore.shared.save(p)
         }
@@ -334,7 +334,7 @@ struct CreateView: View {
                             MaskEditView(editor: maskEditor)
                         }
                         if maskEditor.autoUnavailable && !maskEditor.isProcessing {
-                            Text("Automatic selection isn't available — use Remove to paint over the background.")
+                            Text("Automatic selection isn't available. Use Remove to paint over the background.")
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
@@ -442,7 +442,7 @@ private struct MaskEditView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
-            Text("Drag on the photo to adjust — faded areas are left out of the pattern.")
+            Text("Drag on the photo to adjust. Faded areas are left out of the pattern.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

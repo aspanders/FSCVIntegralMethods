@@ -413,7 +413,7 @@ private fun GridSizeChips(
     onSelect: (GridSize) -> Unit,
     enabled: Boolean
 ) {
-    // Exclude xlarge — too large for AI token budget
+    // Exclude xlarge: too large for AI token budget
     val sizes = listOf(GridSize.small, GridSize.medium, GridSize.large)
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp)

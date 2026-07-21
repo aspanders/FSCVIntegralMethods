@@ -88,7 +88,7 @@ class AIPatternService private constructor() {
         Rules (strictly enforced):
         - Grid: width and height each between 8 and 64. Default 32x32 unless asked.
         - Palette: exactly 4 to 16 colors. Use only real Perler/Hama bead colors.
-        - Cells: sparse list. Include only filled cells — omit empty/background positions.
+        - Cells: sparse list. Include only filled cells: omit empty/background positions.
         - All colorId values in cells must match an id in palette.
         - Pixel-art style only. Bold simple shapes. No gradients. No realism.
         - Safe for children ages 4+. No violence, weapons, or inappropriate content.
@@ -205,9 +205,9 @@ class AIPatternService private constructor() {
 
     private fun validate(p: FusePattern): FusePattern {
         if (p.grid.width < 8 || p.grid.width > 64 || p.grid.height < 8 || p.grid.height > 64)
-            throw AIError.SchemaViolation("Grid ${p.grid.width}×${p.grid.height} out of 8–64 range")
+            throw AIError.SchemaViolation("Grid ${p.grid.width}×${p.grid.height} out of 8-64 range")
         if (p.palette.size < 4 || p.palette.size > 16)
-            throw AIError.SchemaViolation("Palette must have 4–16 colors, got ${p.palette.size}")
+            throw AIError.SchemaViolation("Palette must have 4-16 colors, got ${p.palette.size}")
         val ids = p.palette.map { it.id }.toSet()
         for (cell in p.cells) {
             if (cell.colorId != null && cell.colorId !in ids)

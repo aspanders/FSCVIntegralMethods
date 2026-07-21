@@ -32,7 +32,7 @@ final class LibraryViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        // Debounce only keystrokes — chip taps, sort changes, and store updates
+        // Debounce only keystrokes: chip taps, sort changes, and store updates
         // re-filter immediately (matches Android's query-only debounce)
         let debouncedQuery = $searchQuery
             .removeDuplicates()

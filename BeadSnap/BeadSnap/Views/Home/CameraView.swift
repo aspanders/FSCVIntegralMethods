@@ -17,7 +17,7 @@ struct CameraView: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(onCapture: onCapture, onCancel: onCancel) }
 
-    // Dismissal is driven ONLY through the SwiftUI binding (via the callbacks) —
+    // Dismissal is driven ONLY through the SwiftUI binding (via the callbacks) -
     // calling picker.dismiss here would desync the presenting view's state.
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onCapture: (UIImage) -> Void
@@ -62,11 +62,11 @@ struct OnboardingView: View {
     // Same four pages as the Android onboarding
     private let pages: [(icon: String, title: String, body: String)] = [
         ("square.grid.2x2.fill", "Design Bead Patterns",
-         "Create pixel-art patterns for Perler, Hama, and other fuse beads. Tap to place beads on the grid — it's that simple."),
+         "Create pixel-art patterns for Perler, Hama, and other fuse beads. Tap to place beads on the grid. It's that simple."),
         ("photo.fill", "Convert Any Photo",
          "Import a photo or snap one with your camera and BeadSnap automatically converts it into a color-quantized bead pattern."),
         ("wand.and.stars", "AI-Powered Generation",
-         "Describe what you want and Claude AI will generate a unique bead pattern for you. Bring your ideas to life instantly."),
+         "Describe what you want and Claude AI generates a one-of-a-kind bead pattern for you in seconds."),
         ("square.and.arrow.up", "Export & Share",
          "Export your pattern as a PNG image and share with the community or use the shopping list to buy exactly the right beads."),
     ]

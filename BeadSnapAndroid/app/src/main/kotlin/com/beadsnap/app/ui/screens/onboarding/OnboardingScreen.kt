@@ -27,7 +27,7 @@ private val pages = listOf(
     OnboardingPage(
         icon  = Icons.Default.GridOn,
         title = "Design Bead Patterns",
-        body  = "Create pixel-art patterns for Perler, Hama, and other fuse beads. Tap to place beads on the grid — it's that simple."
+        body  = "Create pixel-art patterns for Perler, Hama, and other fuse beads. Tap to place beads on the grid. It's that simple."
     ),
     OnboardingPage(
         icon  = Icons.Default.Photo,
@@ -37,7 +37,7 @@ private val pages = listOf(
     OnboardingPage(
         icon  = Icons.Default.AutoFixHigh,
         title = "AI-Powered Generation",
-        body  = "Describe what you want and Claude AI will generate a unique bead pattern for you. Bring your ideas to life instantly."
+        body  = "Describe what you want and Claude AI generates a one-of-a-kind bead pattern for you in seconds."
     ),
     OnboardingPage(
         icon  = Icons.Default.Share,

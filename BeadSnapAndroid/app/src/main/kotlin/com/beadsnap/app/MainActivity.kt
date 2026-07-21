@@ -10,12 +10,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.AIPatternService
+import com.beadsnap.app.services.RemoteLibraryService
 import com.beadsnap.app.services.TipJarManager
 import com.beadsnap.app.ui.navigation.AppNavigation
 import com.beadsnap.app.ui.screens.onboarding.OnboardingScreen
 import com.beadsnap.app.ui.theme.BeadSnapTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -27,7 +30,11 @@ class MainActivity : ComponentActivity() {
         val store      = PatternStore.getInstance(this)
         val aiService  = AIPatternService.shared
         val tipJar     = TipJarManager.getInstance(this)
+        val library    = RemoteLibraryService.getInstance(this)
         if (savedInstanceState == null) tipJar.recordUse()
+
+        // Auto-update the pattern library in the background on each launch.
+        lifecycleScope.launch { library.syncIfNeeded() }
 
         setContent {
             BeadSnapTheme {
@@ -49,7 +56,8 @@ class MainActivity : ComponentActivity() {
                         windowWidthSizeClass = windowSizeClass.widthSizeClass,
                         store                = store,
                         aiService            = aiService,
-                        tipJar               = tipJar
+                        tipJar               = tipJar,
+                        library              = library
                     )
                 }
             }

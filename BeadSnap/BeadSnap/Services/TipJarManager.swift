@@ -2,15 +2,19 @@ import Foundation
 import StoreKit
 
 /// Wikipedia-style tip jar. BeadSnap is free with no ads; after 10 uses we
-/// show a single friendly in-app prompt. Tips are StoreKit consumables —
+/// show a single friendly in-app prompt. Tips are StoreKit consumables -
 /// App Store policy (3.1.1) requires IAP for tips, not external links.
 @MainActor
 final class TipJarManager: ObservableObject {
     static let shared = TipJarManager()
 
-    // Consumable product IDs — must exist in App Store Connect
-    // (same IDs as Google Play for shared store copy)
-    static let productIDs = ["tip_small", "tip_medium", "tip_large"]
+    // Consumable product IDs: must exist in App Store Connect (same IDs as
+    // Google Play). small/medium/large are the headline tips; the rest back
+    // the "Custom amount" picker. Neither store allows a truly free-form
+    // amount, so "custom" is a wider set of preset price points.
+    static let headlineProductIDs = ["tip_small", "tip_medium", "tip_large"]
+    static let customProductIDs = ["tip_custom_20", "tip_custom_50", "tip_custom_100"]
+    static let productIDs = headlineProductIDs + customProductIDs
 
     private static let promptThreshold = 10   // first ask after 10 uses
     private static let laterRetryUses = 15    // "Maybe later" re-asks after 15 more
@@ -87,7 +91,7 @@ final class TipJarManager: ObservableObject {
             let loaded = try await Product.products(for: Self.productIDs)
             products = loaded.sorted { $0.price < $1.price }
         } catch {
-            // Store unreachable — the tip jar UI shows a graceful empty state
+            // Store unreachable: the tip jar UI shows a graceful empty state
             products = []
         }
     }
@@ -109,7 +113,7 @@ final class TipJarManager: ObservableObject {
                 break
             }
         } catch {
-            // Purchase failed — StoreKit surfaces its own error UI
+            // Purchase failed: StoreKit surfaces its own error UI
         }
     }
 

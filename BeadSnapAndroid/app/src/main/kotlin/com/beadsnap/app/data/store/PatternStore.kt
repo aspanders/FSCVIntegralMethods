@@ -5,6 +5,7 @@ import com.beadsnap.app.data.model.CreatorType
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.model.SeedPatterns
+import com.beadsnap.app.services.RemotePatterns
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,8 +25,14 @@ class PatternStore private constructor(context: Context) {
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true; isLenient = true }
 
     private val userDir: File = File(context.filesDir, "patterns").apply { mkdirs() }
+    private val remoteCache: File = File(context.filesDir, "remote_library.json")
 
-    private val _systemPatterns = MutableStateFlow(SeedPatterns.all.sortedBy { it.title })
+    // The bundled seed set is always available offline; the downloadable
+    // library is merged on top of it (remote wins on id collisions).
+    private val seed = SeedPatterns.all
+    private var remote: List<FusePattern> = emptyList()
+
+    private val _systemPatterns = MutableStateFlow(seed.sortedBy { it.title })
     val systemPatterns: StateFlow<List<FusePattern>> = _systemPatterns.asStateFlow()
 
     private val _userPatterns = MutableStateFlow<List<FusePattern>>(emptyList())
@@ -39,6 +46,40 @@ class PatternStore private constructor(context: Context) {
 
     init {
         scope.launch { loadUserPatterns() }
+        scope.launch { loadCachedRemote() }
+    }
+
+    // ─── Downloadable library ──────────────────────────────────────────────────
+
+    /** Load any previously-downloaded library from disk so it shows offline. */
+    private suspend fun loadCachedRemote() {
+        val cached = withContext(Dispatchers.IO) {
+            if (!remoteCache.exists()) return@withContext emptyList<FusePattern>()
+            try {
+                json.decodeFromString<RemotePatterns>(remoteCache.readText()).patterns
+            } catch (_: Exception) { emptyList() }
+        }
+        if (cached.isNotEmpty()) applyRemote(cached)
+    }
+
+    /** Called by RemoteLibraryService after a fresh download. Persists + merges. */
+    fun applyRemoteLibrary(patterns: List<FusePattern>, rawJson: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val tmp = File(remoteCache.parentFile, "remote_library.json.tmp")
+                    tmp.writeText(rawJson)
+                    tmp.renameTo(remoteCache)
+                } catch (_: Exception) { /* cache best-effort */ }
+            }
+            applyRemote(patterns)
+        }
+    }
+
+    private fun applyRemote(patterns: List<FusePattern>) {
+        remote = patterns.map { it.copy(createdBy = CreatorType.system) }
+        val merged = (seed + remote).associateBy { it.id }.values
+        _systemPatterns.value = merged.sortedBy { it.title }
     }
 
     private suspend fun loadUserPatterns() {

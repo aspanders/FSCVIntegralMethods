@@ -14,9 +14,15 @@ data class FusePattern(
     val difficulty: Difficulty = Difficulty.easy,
     val tags: List<String> = emptyList(),
     val sourcePrompt: String? = null,
+    // 3D constructions include how to make the bead panel(s) and how to
+    // assemble them into the finished object. Null for flat patterns.
+    val buildGuide: String? = null,
+    val assemblyGuide: String? = null,
     var version: Int = 1
 ) {
     val totalBeads: Int get() = cells.count { it.colorId != null }
+
+    val hasInstructions: Boolean get() = !buildGuide.isNullOrBlank() || !assemblyGuide.isNullOrBlank()
 
     fun colorCounts(): List<Pair<BeadColor, Int>> {
         val counts = mutableMapOf<String, Int>()
@@ -43,6 +49,7 @@ enum class PatternCategory(val displayName: String, val emoji: String) {
     nature("Nature", "🌿"),
     icons("Icons", "⭐"),
     holidays("Holidays", "🎉"),
+    threeD("3D", "🧊"),
     custom("My Designs", "✏️")
 }
 

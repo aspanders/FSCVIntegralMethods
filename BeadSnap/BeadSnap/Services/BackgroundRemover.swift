@@ -51,7 +51,7 @@ final class MaskEditor: ObservableObject {
         recomposite()
     }
 
-    /// Paint a circle into the mask at normalized image coordinates (0–1).
+    /// Paint a circle into the mask at normalized image coordinates (0-1).
     func brush(atNormalized point: CGPoint) {
         guard hasImage else { return }
         let cx = Int(point.x * CGFloat(width))
@@ -70,7 +70,7 @@ final class MaskEditor: ObservableObject {
         recomposite()
     }
 
-    /// Final image for conversion — background fully transparent, so the
+    /// Final image for conversion: background fully transparent, so the
     /// converter's alpha < 0.15 skip leaves those cells empty.
     func maskedImage() -> UIImage? {
         composite(fadeAlpha: 0)

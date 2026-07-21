@@ -10,6 +10,7 @@ struct PatternEditorView: View {
     @State private var showColorCounts = false
     @State private var showSaveSuccess = false
     @State private var showExport = false
+    @State private var showInstructions = false
     @AppStorage("hasSeenPaintHint") private var hasSeenPaintHint = false
     @State private var showPaintHint = false
 
@@ -35,6 +36,7 @@ struct PatternEditorView: View {
         .toolbar { toolbarItems }
         .sheet(isPresented: $showSaveSheet) { saveSheet }
         .sheet(isPresented: $showColorCounts) { colorCountSheet }
+        .sheet(isPresented: $showInstructions) { instructionsSheet }
         .sheet(isPresented: $showExport) {
             ShareSheet(items: [viewModel.renderToImage()])
         }
@@ -148,6 +150,13 @@ struct PatternEditorView: View {
             }
             .accessibilityLabel("Show bead count")
 
+            if viewModel.pattern.hasInstructions {
+                Button { showInstructions = true } label: {
+                    Image(systemName: "book")
+                }
+                .accessibilityLabel("Build instructions")
+            }
+
             Button {
                 withAnimation { isErasing.toggle() }
             } label: {
@@ -257,10 +266,46 @@ struct PatternEditorView: View {
         .presentationDetents([.medium, .large])
     }
 
+    // MARK: - Build & assembly instructions (3D patterns)
+
+    private var instructionsSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let build = viewModel.pattern.buildGuide, !build.isEmpty {
+                        Text("Build the panels")
+                            .font(.headline)
+                            .foregroundStyle(.purple)
+                        Text(build)
+                            .font(.body)
+                            .padding(.bottom, 8)
+                    }
+                    if let assembly = viewModel.pattern.assemblyGuide, !assembly.isEmpty {
+                        Text("Assemble")
+                            .font(.headline)
+                            .foregroundStyle(.purple)
+                        Text(assembly)
+                            .font(.body)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+            }
+            .navigationTitle("How to Build")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showInstructions = false }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
     private func shareShoppingList() {
         let lines = viewModel.colorCounts.map { "• \($0.color.name): \($0.count)" }
         let text = """
-        Bead Shopping List — \(viewModel.pattern.title)
+        Bead Shopping List: \(viewModel.pattern.title)
 
         \(lines.joined(separator: "\n"))
 
@@ -268,7 +313,7 @@ struct PatternEditorView: View {
         """
         let vc = UIActivityViewController(activityItems: [text], applicationActivities: nil)
         // This runs while the Bead Count sheet is presented, so we must present
-        // from the TOPMOST controller — presenting from the root silently fails.
+        // from the TOPMOST controller: presenting from the root silently fails.
         let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first { $0.activationState == .foregroundActive } ??

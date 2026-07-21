@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -78,9 +80,34 @@ fun TipJarSheet(
                     }
                 }
                 else -> {
-                    products.forEach { product ->
+                    val headline = products.filter { it.productId in tipJar.headlineProductIds }
+                    val custom = products.filter { it.productId in tipJar.customProductIds }
+                        .sortedBy { it.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0 }
+                    var showCustom by remember { mutableStateOf(false) }
+
+                    headline.forEach { product ->
                         TipOptionRow(product = product) {
                             (context as? Activity)?.let { tipJar.purchase(it, product) }
+                        }
+                    }
+                    if (custom.isNotEmpty()) {
+                        TextButton(
+                            onClick = { showCustom = !showCustom },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                if (showCustom) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Custom amount")
+                        }
+                        if (showCustom) {
+                            custom.forEach { product ->
+                                TipOptionRow(product = product) {
+                                    (context as? Activity)?.let { tipJar.purchase(it, product) }
+                                }
+                            }
                         }
                     }
                 }
@@ -92,9 +119,13 @@ fun TipJarSheet(
 @Composable
 private fun TipOptionRow(product: ProductDetails, onClick: () -> Unit) {
     val (emoji, name) = when (product.productId) {
-        "tip_small"  -> "🍬" to "Small tip"
-        "tip_medium" -> "☕️" to "Nice tip"
-        else         -> "🧁" to "Amazing tip"
+        "tip_small"       -> "🍬" to "Small tip"
+        "tip_medium"      -> "☕️" to "Nice tip"
+        "tip_large"       -> "🧁" to "Amazing tip"
+        "tip_custom_20"   -> "🎁" to "Generous tip"
+        "tip_custom_50"   -> "🌟" to "Incredible tip"
+        "tip_custom_100"  -> "💎" to "Legendary tip"
+        else              -> "💜" to "Tip"
     }
     Card(
         onClick = onClick,
@@ -144,7 +175,7 @@ fun TipPromptBanner(
                 Text("Enjoying BeadSnap?", style = MaterialTheme.typography.titleMedium)
             }
             Text(
-                "You've opened BeadSnap 10 times! It's free with no ads — if it's earned a place in your craft kit, consider leaving a small tip.",
+                "You've opened BeadSnap 10 times! It's free with no ads. If it's earned a place in your craft kit, consider leaving a small tip.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

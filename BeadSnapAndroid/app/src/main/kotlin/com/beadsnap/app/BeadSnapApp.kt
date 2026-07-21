@@ -8,7 +8,7 @@ class BeadSnapApp : Application() {
     override fun onCreate() {
         super.onCreate()
         KeystoreHelper.init(this)
-        // Warm up PatternStore — starts loading user patterns in background
+        // Warm up PatternStore: starts loading user patterns in background
         PatternStore.getInstance(this)
     }
 }

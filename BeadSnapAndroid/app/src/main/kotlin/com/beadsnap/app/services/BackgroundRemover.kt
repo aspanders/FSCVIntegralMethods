@@ -11,7 +11,7 @@ import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 
 /**
- * Pure mask state — true = keep (foreground). Kept free of android.graphics
+ * Pure mask state: true = keep (foreground). Kept free of android.graphics
  * so the brush math is unit-testable.
  */
 class MaskModel(val width: Int, val height: Int) {

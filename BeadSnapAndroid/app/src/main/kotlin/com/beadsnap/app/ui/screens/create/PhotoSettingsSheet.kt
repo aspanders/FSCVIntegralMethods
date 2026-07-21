@@ -156,13 +156,13 @@ fun PhotoSettingsSheet(
                             )
                         }
                         Text(
-                            "Drag on the photo to adjust — faded areas are left out of the pattern.",
+                            "Drag on the photo to adjust. Faded areas are left out of the pattern.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (autoUnavailable) {
                             Text(
-                                "Automatic selection isn't available on this device — use Remove to paint over the background.",
+                                "Automatic selection isn't available on this device. Use Remove to paint over the background.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -286,7 +286,7 @@ private fun MaskEditPreview(
     ) {
         Image(
             bitmap = preview.asImageBitmap(),
-            contentDescription = "Background removal preview — faded areas will be removed",
+            contentDescription = "Background removal preview. Faded areas will be removed",
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize()
         )

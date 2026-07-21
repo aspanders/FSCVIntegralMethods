@@ -54,7 +54,7 @@ final class ImageConverter {
 
     // MARK: - Shared Pattern Renderer
 
-    /// Renders a pattern to an image — thumbnails, previews, and PNG export all
+    /// Renders a pattern to an image: thumbnails, previews, and PNG export all
     /// use this so output matches Android's ImageConverter.renderToBitmap.
     static func renderToImage(pattern: FusePattern, cellSize: CGFloat = 16) -> UIImage {
         let w = CGFloat(pattern.grid.width) * cellSize
@@ -105,7 +105,7 @@ final class ImageConverter {
                 if a < 0.15 {
                     pixels[y][x] = [-1, -1, -1, -1]
                 } else {
-                    // buffer is premultiplied — divide by alpha to recover straight color
+                    // buffer is premultiplied: divide by alpha to recover straight color
                     let scale = a > 0 ? 1 / (255 * a) : 0
                     pixels[y][x] = [
                         min(CGFloat(rawData[i])   * scale, 1),

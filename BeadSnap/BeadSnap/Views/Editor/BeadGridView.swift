@@ -95,7 +95,7 @@ struct BeadGridView: View {
                                 guard x >= 0, x < cols, y >= 0, y < rows else { return }
 
                                 // Nothing is painted until the finger leaves the
-                                // starting cell — a tap resolves in onEnded, and a
+                                // starting cell: a tap resolves in onEnded, and a
                                 // pinch that begins here never marks the canvas.
                                 if strokeStartCell == nil {
                                     strokeStartCell = (x, y)

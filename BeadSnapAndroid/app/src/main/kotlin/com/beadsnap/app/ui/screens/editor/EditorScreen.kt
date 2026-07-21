@@ -73,11 +73,12 @@ fun EditorScreen(
     var showSaveAs    by remember { mutableStateOf(false) }
     var showClearAll  by remember { mutableStateOf(false) }
     var showColorList by remember { mutableStateOf(false) }
+    var showInstructions by remember { mutableStateOf(false) }
     var isExporting   by remember { mutableStateOf(false) }
     var exportError   by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // First-paint hint — mark seen immediately so backing out early doesn't reshow it
+    // First-paint hint: mark seen immediately so backing out early doesn't reshow it
     val prefs = remember { context.getSharedPreferences("beadsnap", Context.MODE_PRIVATE) }
     var showHint by remember {
         val seen = prefs.getBoolean("hasSeenPaintHint", false)
@@ -121,6 +122,12 @@ fun EditorScreen(
                     IconButton(onClick = { showColorList = true },
                         modifier = Modifier.semantics { contentDescription = "Bead counts" }) {
                         Icon(Icons.Default.List, contentDescription = null)
+                    }
+                    if (pattern.hasInstructions) {
+                        IconButton(onClick = { showInstructions = true },
+                            modifier = Modifier.semantics { contentDescription = "Build instructions" }) {
+                            Icon(Icons.Default.MenuBook, contentDescription = null)
+                        }
                     }
                     IconButton(
                         onClick = {
@@ -174,7 +181,7 @@ fun EditorScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            "System pattern — tap Save As to keep your changes",
+                            "System pattern. Tap Save As to keep your changes",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier.weight(1f)
@@ -334,6 +341,15 @@ fun EditorScreen(
             total     = viewModel.totalBeads,
             onDismiss = { showColorList = false },
             onShare   = { scope.launch { shareShoppingList(context, viewModel.colorCounts, pattern.title) } }
+        )
+    }
+
+    if (showInstructions) {
+        InstructionsSheet(
+            title         = pattern.title,
+            buildGuide    = pattern.buildGuide,
+            assemblyGuide = pattern.assemblyGuide,
+            onDismiss     = { showInstructions = false }
         )
     }
 
@@ -501,7 +517,7 @@ private fun PaletteRow(
                     Icon(
                         Icons.Default.Check,
                         contentDescription = null,
-                        // black check on light beads, white on dark — always visible
+                        // black check on light beads, white on dark: always visible
                         tint = if (color.composeColor.luminance() < 0.5f) Color.White else Color.Black,
                         modifier = Modifier.size(20.dp)
                     )
@@ -542,6 +558,42 @@ private fun SaveAsDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+// ─── Build & assembly instructions sheet (3D patterns) ────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InstructionsSheet(
+    title: String,
+    buildGuide: String?,
+    assemblyGuide: String?,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("How to build $title", style = MaterialTheme.typography.titleLarge)
+            if (!buildGuide.isNullOrBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Build the panels", style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary)
+                Text(buildGuide, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (!assemblyGuide.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text("Assemble", style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary)
+                Text(assemblyGuide, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
 }
 
 // ─── Bead count sheet ─────────────────────────────────────────────────────────
@@ -624,7 +676,7 @@ private suspend fun shareShoppingList(
     title: String
 ) {
     val text = buildString {
-        appendLine("Bead Shopping List — $title")
+        appendLine("Bead Shopping List: $title")
         appendLine()
         counts.forEach { (color, count) -> appendLine("• ${color.name}: $count") }
         appendLine()
@@ -632,7 +684,7 @@ private suspend fun shareShoppingList(
     }
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, "Bead Shopping List — $title")
+        putExtra(Intent.EXTRA_SUBJECT, "Bead Shopping List: $title")
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(intent, "Share Shopping List"))

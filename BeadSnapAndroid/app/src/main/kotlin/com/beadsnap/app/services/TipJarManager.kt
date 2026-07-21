@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Wikipedia-style tip jar. BeadSnap is free with no ads; after 10 uses we show
- * a single friendly in-app prompt. Tips are Play Billing consumables — Play
+ * a single friendly in-app prompt. Tips are Play Billing consumables: Play
  * policy requires Play Billing for tips, not external payment links.
  *
  * Prompt decision logic lives in [TipPromptLogic] so it is unit-testable.
@@ -35,9 +35,14 @@ object TipPromptLogic {
 
 class TipJarManager private constructor(context: Context) : PurchasesUpdatedListener {
 
-    // Consumable product IDs — must exist in Play Console
-    // (same IDs as the App Store for shared store copy)
-    val productIds = listOf("tip_small", "tip_medium", "tip_large")
+    // Consumable product IDs: must exist in Play Console (same IDs as the
+    // App Store). small/medium/large are the headline tips; the remaining
+    // tiers back the "Custom amount" picker. Neither Play nor the App Store
+    // allows a truly free-form amount, so "custom" = a wider set of preset
+    // price points the user chooses from.
+    val headlineProductIds = listOf("tip_small", "tip_medium", "tip_large")
+    val customProductIds = listOf("tip_custom_20", "tip_custom_50", "tip_custom_100")
+    val productIds = headlineProductIds + customProductIds
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("tipjar", Context.MODE_PRIVATE)

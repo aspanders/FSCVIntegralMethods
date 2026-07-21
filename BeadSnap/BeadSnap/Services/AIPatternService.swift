@@ -79,7 +79,7 @@ final class AIPatternService {
     Rules (strictly enforced):
     - Grid: width and height each between 8 and 64. Default 32x32 unless asked.
     - Palette: exactly 4 to 16 colors. Use only real Perler/Hama bead colors.
-    - Cells: sparse list. Include only filled cells — omit empty/background positions.
+    - Cells: sparse list. Include only filled cells: omit empty/background positions.
     - All colorId values in cells must match an id in palette.
     - Pixel-art style only. Bold simple shapes. No gradients. No realism.
     - Safe for children ages 4+. No violence, weapons, or inappropriate content.
@@ -192,10 +192,10 @@ final class AIPatternService {
     private func validate(_ p: inout FusePattern) throws {
         guard p.grid.width >= 8, p.grid.width <= 64,
               p.grid.height >= 8, p.grid.height <= 64 else {
-            throw AIError.schemaViolation("Grid \(p.grid.width)×\(p.grid.height) out of 8–64 range")
+            throw AIError.schemaViolation("Grid \(p.grid.width)×\(p.grid.height) out of 8-64 range")
         }
         guard p.palette.count >= 4, p.palette.count <= 16 else {
-            throw AIError.schemaViolation("Palette must have 4–16 colors, got \(p.palette.count)")
+            throw AIError.schemaViolation("Palette must have 4-16 colors, got \(p.palette.count)")
         }
         let ids = Set(p.palette.map(\.id))
         for cell in p.cells {
@@ -207,7 +207,7 @@ final class AIPatternService {
                 throw AIError.schemaViolation("Cell (\(cell.x),\(cell.y)) out of bounds")
             }
         }
-        // Deduplicate cells — last writer wins; prevents EditorViewModel crash
+        // Deduplicate cells: last writer wins; prevents EditorViewModel crash
         var seen = Set<String>()
         p.cells = p.cells.reversed().filter { cell in
             let key = "\(cell.x),\(cell.y)"

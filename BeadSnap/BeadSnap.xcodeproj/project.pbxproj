@@ -35,6 +35,7 @@
 		B1000200000000000000063 /* TipJarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000063 /* TipJarManager.swift */; };
 		B1000200000000000000064 /* TipJarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000064 /* TipJarView.swift */; };
 		B1000200000000000000065 /* BackgroundRemover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000065 /* BackgroundRemover.swift */; };
+		B1000200000000000000066 /* RemoteLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000066 /* RemoteLibraryService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -66,6 +67,7 @@
 		B1000100000000000000063 /* TipJarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarManager.swift; sourceTree = "<group>"; };
 		B1000100000000000000064 /* TipJarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipJarView.swift; sourceTree = "<group>"; };
 		B1000100000000000000065 /* BackgroundRemover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRemover.swift; sourceTree = "<group>"; };
+		B1000100000000000000066 /* RemoteLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteLibraryService.swift; sourceTree = "<group>"; };
 		B1000100000000000000099 /* BeadSnap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BeadSnap.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -214,6 +216,7 @@
 				B1000100000000000000062 /* Keychain.swift */,
 				B1000100000000000000063 /* TipJarManager.swift */,
 				B1000100000000000000065 /* BackgroundRemover.swift */,
+				B1000100000000000000066 /* RemoteLibraryService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -322,6 +325,7 @@
 				B1000200000000000000063 /* TipJarManager.swift in Sources */,
 				B1000200000000000000064 /* TipJarView.swift in Sources */,
 				B1000200000000000000065 /* BackgroundRemover.swift in Sources */,
+				B1000200000000000000066 /* RemoteLibraryService.swift in Sources */,
 				B1000200000000000000040 /* FusePattern.swift in Sources */,
 				B1000200000000000000041 /* BeadPalette.swift in Sources */,
 				B1000200000000000000042 /* PatternStore.swift in Sources */,

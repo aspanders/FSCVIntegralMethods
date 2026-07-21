@@ -91,7 +91,7 @@ object ImageConverter {
                 if (a < 0.15f) {
                     result[y][x] = floatArrayOf(-1f, -1f, -1f, -1f)
                 } else {
-                    // getPixel returns straight (un-premultiplied) ARGB — no alpha division
+                    // getPixel returns straight (un-premultiplied) ARGB: no alpha division
                     result[y][x] = floatArrayOf(
                         Color.red(pixel) / 255f,
                         Color.green(pixel) / 255f,

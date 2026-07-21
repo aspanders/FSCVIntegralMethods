@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.AIPatternService
+import com.beadsnap.app.services.RemoteLibraryService
 import com.beadsnap.app.services.TipJarManager
 import com.beadsnap.app.ui.tipjar.TipJarSheet
 import com.beadsnap.app.ui.tipjar.TipPromptBanner
@@ -61,7 +62,8 @@ fun AppNavigation(
     windowWidthSizeClass: WindowWidthSizeClass,
     store: PatternStore,
     aiService: AIPatternService,
-    tipJar: TipJarManager
+    tipJar: TipJarManager,
+    library: RemoteLibraryService
 ) {
     val navController = rememberNavController()
     val useRail = windowWidthSizeClass != WindowWidthSizeClass.Compact
@@ -99,6 +101,7 @@ fun AppNavigation(
                     navController = navController,
                     store         = store,
                     aiService     = aiService,
+                    library       = library,
                     onOpenTipJar  = { showTipJarSheet = true },
                     modifier      = Modifier.fillMaxSize()
                 )
@@ -131,6 +134,7 @@ fun AppNavigation(
                     navController = navController,
                     store         = store,
                     aiService     = aiService,
+                    library       = library,
                     onOpenTipJar  = { showTipJarSheet = true },
                     modifier      = Modifier.fillMaxSize()
                 )
@@ -163,6 +167,7 @@ private fun BeadSnapNavHost(
     navController: NavHostController,
     store: PatternStore,
     aiService: AIPatternService,
+    library: RemoteLibraryService,
     onOpenTipJar: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -182,6 +187,7 @@ private fun BeadSnapNavHost(
             LibraryScreen(
                 viewModel      = libraryViewModel,
                 store          = store,
+                library        = library,
                 onPatternClick = { pattern ->
                     editorPattern = pattern
                     navController.navigate("editor")

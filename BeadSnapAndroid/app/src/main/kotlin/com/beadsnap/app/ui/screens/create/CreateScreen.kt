@@ -65,7 +65,7 @@ fun CreateScreen(
         }
     }
 
-    // Camera — captures go to a private cache file (never the user's gallery)
+    // Camera: captures go to a private cache file (never the user's gallery)
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
     var cameraImageFile by remember { mutableStateOf<java.io.File?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -179,7 +179,7 @@ fun CreateScreen(
         }
 
         if (isConverting) {
-            // Scrim blocks all input while converting — without it the user can
+            // Scrim blocks all input while converting: without it the user can
             // start a second flow underneath the spinner
             Box(
                 modifier = Modifier
@@ -378,7 +378,7 @@ private fun gridSizeHint(gs: GridSize) = when {
     else            -> "Large canvas for detailed art"
 }
 
-// Private cache file for the capture — never touches the user's gallery,
+// Private cache file for the capture: never touches the user's gallery,
 // and gets deleted once the conversion is done or abandoned.
 private fun createCameraFile(context: Context): java.io.File {
     val dir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }

@@ -1,4 +1,4 @@
-# BeadSnap — Shared Store Listing Copy
+# BeadSnap: Shared Store Listing Copy
 
 Use identical copy on the App Store and Google Play (field limits noted).
 
@@ -9,7 +9,7 @@ BeadSnap
 Fuse bead pattern studio
 
 ## Short description (Google Play, ≤80 chars)
-Design & convert fuse bead patterns — with AI generation. Free, no ads.
+Design & convert fuse bead patterns: with AI generation. Free, no ads.
 
 ## Keywords (App Store, ≤100 chars, comma-separated)
 perler,hama,fuse beads,pixel art,pattern,craft,beads,melty,kids,diy
@@ -21,20 +21,23 @@ perler,hama,fuse beads,pixel art,pattern,craft,beads,melty,kids,diy
 ## Full description (both stores, ≤4000 chars)
 
 Design beautiful fuse bead patterns for Perler, Hama, Artkal, and any melty
-beads — on your phone or tablet.
+beads: on your phone or tablet.
 
 CREATE FROM ANYTHING
 • Start from a blank board and paint bead by bead
-• Snap a photo or import one — BeadSnap converts it into a bead pattern with
+• Snap a photo or import one: BeadSnap converts it into a bead pattern with
   real bead colors, automatically
 • Remove the background first with one tap: the subject is detected on-device,
   the background fades away, and a simple brush lets you fine-tune what stays
 • Describe an idea and let AI design a one-of-a-kind pattern for you
   (bring your own Claude API key)
 
-A LIBRARY TO GET YOU STARTED
-• 25 hand-made patterns across Animals, Fantasy, Vehicles, Nature, Icons,
-  and Holidays
+A GROWING LIBRARY
+• Hundreds of ready-made patterns across Animals, Fantasy, Vehicles, Nature,
+  Icons, Holidays, and 3D builds
+• 3D patterns come with step-by-step build and assembly guides so you can make
+  boxes, dice, planters, and more out of bead panels
+• The library refreshes automatically, so new patterns arrive over time
 • Filter by category, search, and sort by name, difficulty, or newest
 
 A PROPER EDITOR
@@ -50,7 +53,7 @@ BUILD IT FOR REAL
 
 FREE, NO ADS, NO ACCOUNTS
 BeadSnap is completely free with no ads and no sign-up. Everything stays on
-your device. If you enjoy it, there's a small tip jar — entirely optional.
+your device. If you enjoy it, there's a small tip jar: entirely optional.
 
 Perfect for kids' craft sessions, pixel-art fans, and anyone who loves the
 satisfying click of a fuse bead landing on a pegboard.
@@ -67,5 +70,5 @@ generation, a full bead editor, shopping lists, and PNG export.
   the core app.
 - No data is collected; camera/photo processing happens on-device.
 - Background removal runs entirely on-device (Vision on iOS; ML Kit subject
-  segmentation on Android — the model is fetched by Play services at install
+  segmentation on Android: the model is fetched by Play services at install
   time, and no image ever leaves the device).

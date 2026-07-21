@@ -11,7 +11,7 @@ BeadSnap does not collect, store, or transmit any personal information. Every
 pattern you create stays on your device. Photos you convert are processed
 entirely on your device and are never uploaded anywhere. If you choose to use
 the optional AI pattern generator, your text prompt is sent directly from your
-device to Anthropic using your own API key — we never see it. If you leave a
+device to Anthropic using your own API key: we never see it. If you leave a
 tip, Apple or Google handles the payment; we never see your payment details.
 There are no accounts, no ads, and no analytics or tracking of any kind.
 
@@ -25,7 +25,7 @@ you draw patterns by hand, convert photos into bead patterns, generate
 patterns with AI, and browse a built-in library of designs.
 
 We built BeadSnap to work entirely on your device. This policy exists to be
-transparent about the few places data does leave your device — all of which
+transparent about the few places data does leave your device: all of which
 are optional features you choose to use.
 
 ## 2. Information We Do Not Collect
@@ -37,7 +37,7 @@ We do not collect, and the App does not transmit to us:
 - Device identifiers, advertising IDs, or analytics identifiers
 - Usage statistics, crash reports, or telemetry of any kind
 - Your photos, camera captures, or the patterns you create
-- Any account or profile information — BeadSnap has no sign-up, no login,
+- Any account or profile information: BeadSnap has no sign-up, no login,
   and no user accounts
 
 We operate no backend servers for BeadSnap. There is nowhere for this data to
@@ -53,7 +53,7 @@ that are private to the App and sandboxed by iOS or Android:
 - **App preferences**, such as whether you've completed onboarding, how many
   times you've opened the App (used only to time the optional tip-jar
   prompt), and your editor settings
-- **Your Anthropic API key**, if you choose to add one — stored using the
+- **Your Anthropic API key**, if you choose to add one: stored using the
   platform's secure credential storage (the iOS Keychain, or Android's
   EncryptedSharedPreferences backed by the Android Keystore), and never
   included in any backup or transmitted to us
@@ -71,8 +71,8 @@ choose to convert a photo into a bead pattern.
   a preview and generate a converted pattern. The photo file itself is never
   copied, uploaded, or sent anywhere.
 - **Camera:** when you take a photo within the App, the capture is written
-  to a private, app-only location — never to your device's public photo
-  gallery or Photos library — and is deleted automatically once you finish
+  to a private, app-only location: never to your device's public photo
+  gallery or Photos library: and is deleted automatically once you finish
   or cancel the conversion.
 
 You can revoke camera or photo permission at any time in your device's
@@ -104,7 +104,7 @@ If you use this feature:
 
 - Your API key is stored only on your device (see Section 3) and is never
   sent to us.
-- The text prompt you type, and — if you ask BeadSnap to refine a pattern —
+- The text prompt you type, and: if you ask BeadSnap to refine a pattern -
   a compact description of that pattern's colors and layout, are sent
   directly from your device to Anthropic's API (`api.anthropic.com`) using
   your key.
@@ -115,7 +115,7 @@ If you use this feature:
   [anthropic.com/legal/privacy](https://www.anthropic.com/legal/privacy).
 
 If you never open AI Studio or never add an API key, none of this applies to
-you — no data is sent to Anthropic and this feature performs no network
+you: no data is sent to Anthropic and this feature performs no network
 activity.
 
 ## 7. In-App Purchases (Tip Jar)
@@ -127,7 +127,7 @@ additional features or content.
 
 Tip purchases are processed by Apple's In-App Purchase system (iOS) or
 Google Play Billing (Android). We never receive, see, or store your payment
-card details, billing address, or other payment information — that data is
+card details, billing address, or other payment information: that data is
 handled entirely by Apple or Google under their own privacy policies:
 
 - Apple: [apple.com/legal/privacy](https://www.apple.com/legal/privacy/)
@@ -149,11 +149,11 @@ information from any user, this is true regardless of age.
 ## 9. Data Security
 
 Because BeadSnap does not operate servers or collect personal information,
-there is no central database of user data to secure. Data that exists —
-your patterns and, if you choose to add one, your API key — is protected by
+there is no central database of user data to secure. Data that exists -
+your patterns and, if you choose to add one, your API key: is protected by
 the security features built into iOS and Android: app sandboxing, and, for
 your API key specifically, the platform's dedicated secure credential
-storage (Keychain / Android Keystore–backed encrypted storage).
+storage (Keychain / Android Keystore-backed encrypted storage).
 
 ## 10. Third-Party Services
 
@@ -162,10 +162,10 @@ purpose described:
 
 | Service | Purpose | Data involved |
 |---|---|---|
-| Anthropic API | Optional AI pattern generation | Your prompt text, sent directly from your device using your own API key — only if you use AI Studio |
+| Anthropic API | Optional AI pattern generation | Your prompt text, sent directly from your device using your own API key: only if you use AI Studio |
 | Apple In-App Purchase / Google Play Billing | Processing optional tip payments | Handled entirely by Apple/Google; we never receive payment details |
-| Google ML Kit (on-device) | Background removal on Android | None transmitted — processing is entirely on-device |
-| Apple Vision framework (on-device) | Background removal on iOS | None transmitted — processing is entirely on-device |
+| Google ML Kit (on-device) | Background removal on Android | None transmitted: processing is entirely on-device |
+| Apple Vision framework (on-device) | Background removal on iOS | None transmitted: processing is entirely on-device |
 
 BeadSnap contains no advertising SDKs, no analytics SDKs, and no
 cross-app or cross-site tracking of any kind.
