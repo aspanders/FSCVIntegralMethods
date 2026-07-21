@@ -17,7 +17,7 @@ struct TipJarView: View {
                             .foregroundStyle(.pink)
                         Text("Support BeadSnap")
                             .font(.title3.bold())
-                        Text("BeadSnap is free, has no ads, and never sells your data. If it's brought you a little joy, a tip helps keep it that way.")
+                        Text("BeadSnap is a father-and-son project, built just to be a fun, safe place to design fuse beads.\n\nIt's free forever: no ads, no accounts, no subscriptions, no fees, no premium features locked behind a paywall. We don't collect or share your data, and we never ask for your email.\n\nIf it's brought your family a little joy, a tip helps us keep building it. Every donation goes right back into the app.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -58,6 +58,17 @@ struct TipJarView: View {
                             }
                         }
                     }
+                }
+
+                // Feedback: opens Mail. No account, no data collection.
+                Section {
+                    if let url = URL(string: "mailto:andersjasp@gmail.com?subject=BeadSnap%20feedback") {
+                        Link(destination: url) {
+                            Label("Leave a comment", systemImage: "bubble.left")
+                        }
+                    }
+                } footer: {
+                    Text("Got an idea or a bug? We read every message.")
                 }
             }
             .navigationTitle("Tip Jar")

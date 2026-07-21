@@ -2,8 +2,11 @@ package com.beadsnap.app.ui.tipjar
 
 import android.app.Activity
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -37,6 +40,7 @@ fun TipJarSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -49,8 +53,13 @@ fun TipJarSheet(
             )
             Text("Support BeadSnap", style = MaterialTheme.typography.titleLarge)
             Text(
-                "BeadSnap is free, has no ads, and never sells your data. " +
-                "If it's brought you a little joy, a tip helps keep it that way.",
+                "BeadSnap is a father-and-son project, built just to be a fun, " +
+                "safe place to design fuse beads.\n\n" +
+                "It's free forever: no ads, no accounts, no subscriptions, no fees, " +
+                "no premium features locked behind a paywall. We don't collect or " +
+                "share your data, and we never ask for your email.\n\n" +
+                "If it's brought your family a little joy, a tip helps us keep " +
+                "building it. Every donation goes right back into the app.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -112,7 +121,38 @@ fun TipJarSheet(
                     }
                 }
             }
+
+            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+
+            // Feedback: opens the user's mail app. No account, no data collection.
+            OutlinedButton(
+                onClick = { sendFeedback(context) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.ChatBubbleOutline, contentDescription = null,
+                    modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Leave a comment")
+            }
+            Text(
+                "Got an idea or a bug? We read every message.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
         }
+    }
+}
+
+private fun sendFeedback(context: android.content.Context) {
+    val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+        data = android.net.Uri.parse("mailto:andersjasp@gmail.com")
+        putExtra(android.content.Intent.EXTRA_SUBJECT, "BeadSnap feedback")
+    }
+    try {
+        context.startActivity(intent)
+    } catch (_: Exception) {
+        // no mail app configured; silently ignore
     }
 }
 
