@@ -13,9 +13,14 @@ final class PatternStore: ObservableObject {
 
     private let userDir: URL
     private let remoteCache: URL
-    // The bundled seed set is always available offline; the downloadable
-    // library is merged on top of it (remote wins on id collisions).
+    // Three layers, low to high priority:
+    //   seed     - the small curated set compiled into the app
+    //   bundled  - the full library shipped as a resource (library.json), shown
+    //              instantly on first run with no network needed
+    //   remote   - the hosted library downloaded when it's newer than bundled
+    // Higher layers win on id collisions.
     private let seed = SeedPatterns.all
+    private var bundled: [FusePattern] = []
     private var remote: [FusePattern] = []
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -29,8 +34,21 @@ final class PatternStore: ObservableObject {
         remoteCache = docs.appendingPathComponent("remote_library.json")
         try? FileManager.default.createDirectory(at: userDir, withIntermediateDirectories: true)
         systemPatterns = seed.sorted { $0.title < $1.title }
+        loadBundledLibrary()
         Task { await loadUserPatterns() }
         Task { await loadCachedRemote() }
+    }
+
+    // MARK: - Bundled library
+
+    /// Load the full library shipped as an app resource so it shows on first run.
+    private func loadBundledLibrary() {
+        guard let url = Bundle.main.url(forResource: "library", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let wrapper = try? JSONDecoder().decode(RemotePatterns.self, from: data)
+        else { return }
+        bundled = wrapper.patterns.map { var p = $0; p.createdBy = .system; return p }
+        recomputeSystem()
     }
 
     // MARK: - Downloadable library
@@ -58,8 +76,13 @@ final class PatternStore: ObservableObject {
 
     private func applyRemote(_ patterns: [FusePattern]) {
         remote = patterns.map { var p = $0; p.createdBy = .system; return p }
+        recomputeSystem()
+    }
+
+    /// Merge the three layers; later layers win on id collisions.
+    private func recomputeSystem() {
         var byID: [String: FusePattern] = [:]
-        for p in seed + remote { byID[p.id] = p }   // remote wins on collisions
+        for p in seed + bundled + remote { byID[p.id] = p }
         systemPatterns = byID.values.sorted { $0.title < $1.title }
     }
 

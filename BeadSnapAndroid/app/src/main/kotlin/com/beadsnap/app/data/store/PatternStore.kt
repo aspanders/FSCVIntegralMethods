@@ -24,12 +24,18 @@ class PatternStore private constructor(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true; isLenient = true }
 
+    private val assets = context.assets
     private val userDir: File = File(context.filesDir, "patterns").apply { mkdirs() }
     private val remoteCache: File = File(context.filesDir, "remote_library.json")
 
-    // The bundled seed set is always available offline; the downloadable
-    // library is merged on top of it (remote wins on id collisions).
+    // Three layers, low to high priority:
+    //   seed     - the small curated set compiled into the app
+    //   bundled  - the full library shipped as an asset (library.json), shown
+    //              instantly on first run with no network needed
+    //   remote   - the hosted library downloaded when it's newer than bundled
+    // Higher layers win on id collisions.
     private val seed = SeedPatterns.all
+    private var bundled: List<FusePattern> = emptyList()
     private var remote: List<FusePattern> = emptyList()
 
     private val _systemPatterns = MutableStateFlow(seed.sortedBy { it.title })
@@ -46,7 +52,24 @@ class PatternStore private constructor(context: Context) {
 
     init {
         scope.launch { loadUserPatterns() }
+        scope.launch { loadBundledLibrary() }
         scope.launch { loadCachedRemote() }
+    }
+
+    // ─── Bundled library ───────────────────────────────────────────────────────
+
+    /** Load the full library shipped as an app asset so it shows on first run. */
+    private suspend fun loadBundledLibrary() {
+        val loaded = withContext(Dispatchers.IO) {
+            try {
+                val text = assets.open("library.json").bufferedReader().use { it.readText() }
+                json.decodeFromString<RemotePatterns>(text).patterns
+            } catch (_: Exception) { emptyList() }
+        }
+        if (loaded.isNotEmpty()) {
+            bundled = loaded.map { it.copy(createdBy = CreatorType.system) }
+            recomputeSystem()
+        }
     }
 
     // ─── Downloadable library ──────────────────────────────────────────────────
@@ -78,7 +101,12 @@ class PatternStore private constructor(context: Context) {
 
     private fun applyRemote(patterns: List<FusePattern>) {
         remote = patterns.map { it.copy(createdBy = CreatorType.system) }
-        val merged = (seed + remote).associateBy { it.id }.values
+        recomputeSystem()
+    }
+
+    /** Merge the three layers; later layers win on id collisions. */
+    private fun recomputeSystem() {
+        val merged = (seed + bundled + remote).associateBy { it.id }.values
         _systemPatterns.value = merged.sortedBy { it.title }
     }
 

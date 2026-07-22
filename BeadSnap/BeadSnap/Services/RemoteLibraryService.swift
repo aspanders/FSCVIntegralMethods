@@ -38,6 +38,10 @@ final class RemoteLibraryService: ObservableObject {
         "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/" +
         "claude/fuse-bead-converter-app-706h2s/library/manifest.json")!
 
+    // Version of library.json shipped in the app bundle. Keep in sync with the
+    // "version" field of the bundled resource when you refresh it.
+    private let bundledLibraryVersion = 1
+
     private let versionKey = "remoteLibrary.appliedVersion"
 
     /// Set to the new pattern count when an update is applied; UI shows a banner.
@@ -60,7 +64,7 @@ final class RemoteLibraryService: ObservableObject {
     func syncIfNeeded() async {
         guard let manifestData = try? await session.data(from: manifestURL).0,
               let manifest = try? JSONDecoder().decode(LibraryManifest.self, from: manifestData),
-              manifest.version > appliedVersion,
+              manifest.version > max(appliedVersion, bundledLibraryVersion),
               let patternsURL = URL(string: manifest.patternsUrl)
         else { return }
 

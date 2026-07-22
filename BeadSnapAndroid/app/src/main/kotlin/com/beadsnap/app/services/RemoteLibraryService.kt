@@ -78,7 +78,9 @@ class RemoteLibraryService private constructor(context: Context) {
         } catch (_: Exception) {
             return null   // offline or malformed: keep whatever we already have
         }
-        if (manifest.version <= appliedVersion) return null
+        // The app already ships library version BUNDLED_LIBRARY_VERSION as an
+        // asset, so only download when the hosted library is strictly newer.
+        if (manifest.version <= maxOf(appliedVersion, BUNDLED_LIBRARY_VERSION)) return null
 
         val body = try {
             get(manifest.patternsUrl)
@@ -117,6 +119,10 @@ class RemoteLibraryService private constructor(context: Context) {
         }
 
     companion object {
+        // Version of library.json shipped in the app's assets. Keep in sync with
+        // the "version" field of the bundled asset when you refresh it.
+        const val BUNDLED_LIBRARY_VERSION = 1
+
         @Volatile private var instance: RemoteLibraryService? = null
         fun getInstance(context: Context): RemoteLibraryService =
             instance ?: synchronized(this) {
