@@ -47,19 +47,19 @@ def _mask_cells(w, h, pts):
 PALE = {"white", "cream", "ivory", "light_gray", "silver", "lemon",
         "toothpaste", "periwinkle", "light_lavender", "light_pink",
         "light_green", "light_blue", "light_teal", "peach", "blush", "clear"}
-TINTS = {"white": "light_gray", "cream": "tan", "ivory": "tan",
-         "light_gray": "gray", "silver": "gray", "lemon": "cheddar",
-         "toothpaste": "sky_blue", "periwinkle": "lavender",
-         "light_lavender": "lavender", "light_pink": "pink",
-         "light_green": "green", "light_blue": "sky_blue",
-         "light_teal": "teal", "peach": "orange", "blush": "pink",
-         "clear": "light_gray"}
+# Each pale subject gets a clearly darker / more saturated backdrop it contrasts
+# against (never a near-shade of itself), so the subject always reads.
+TINTS = {"white": "navy", "cream": "caramel", "ivory": "caramel", "clear": "sky_blue",
+         "light_gray": "dark_gray", "silver": "dark_gray", "lemon": "orange",
+         "toothpaste": "teal", "periwinkle": "dark_blue", "light_lavender": "dark_purple",
+         "light_pink": "purple", "light_green": "forest", "light_blue": "navy",
+         "light_teal": "teal", "peach": "rust", "blush": "purple"}
 
 
 def _tint_if_pale(g, subject):
-    """Fill a faint backing tint when the subject would vanish on white."""
+    """Fill a contrasting backdrop when the subject would vanish on white."""
     if subject in PALE:
-        g.fill(TINTS.get(subject, "light_gray"))
+        g.fill(TINTS.get(subject, "dark_gray"))
 
 
 def _finish(cat, title, grid, tags, key=None):
@@ -80,11 +80,9 @@ def generate_geometric():
     def add(title, g, tags, key):
         out.append(_finish("geometric", title, g, tags, key))
 
-    # checkerboards
+    # checkerboards (4 colorways per scale = 16, not a third of the catalog)
     for bs in (1, 2, 3, 4):
-        for i, (a, b) in enumerate(combos):
-            if len(out) >= 8 * bs:
-                break
+        for (a, b) in combos[:4]:
             s = 24 if bs < 3 else 30
             g = Grid(s, s)
             for y in range(s):
@@ -92,6 +90,31 @@ def generate_geometric():
                     g.set(x, y, a if ((x // bs) + (y // bs)) % 2 == 0 else b)
             add(f"{bs}x Checker {a}/{b}", g, ["checker", "geometric", a],
                 f"checker-{bs}-{a}-{b}")
+    # plus / cross motifs (new variety)
+    for i, (a, b) in enumerate([("red", "white"), ("navy", "banana"), ("teal", "cream"),
+                                ("hot_pink", "lemon"), ("purple", "aqua"), ("forest", "light_green"),
+                                ("orange", "dark_blue"), ("magenta", "yellow")]):
+        s = 25
+        g = Grid(s, s)
+        g.fill(b)
+        c = s // 2
+        g.rect(c - 2, 1, c + 2, s - 2, a)
+        g.rect(1, c - 2, s - 2, c + 2, a)
+        add(f"Cross {i+1}", g, ["cross", "geometric"], f"cross-{i}")
+    # gingham (three-tone woven look)
+    for i, base in enumerate([("red", "blush", "white"), ("navy", "sky_blue", "white"),
+                              ("forest", "light_green", "cream"), ("purple", "lavender", "white"),
+                              ("teal", "turquoise", "white"), ("dark_red", "peach", "cream")]):
+        d, m, l = base
+        s = 26
+        g = Grid(s, s)
+        band = 3
+        for y in range(s):
+            for x in range(s):
+                vx = (x // band) % 2 == 0
+                vy = (y // band) % 2 == 0
+                g.set(x, y, d if (vx and vy) else (m if (vx or vy) else l))
+        add(f"Gingham {i+1}", g, ["gingham", "geometric"], f"gingham-{i}")
     # stripe families: vertical, horizontal, diagonal
     stripe_sets = [RAINBOW, RAINBOW6, PASTELS, WARM, COOL, BRIGHTS, PINKS, GREENS]
     for orient in ("vert", "horiz", "diag"):
@@ -168,10 +191,10 @@ def generate_geometric():
                 z = abs(((x + y) % 8) - 4)
                 g.set(x, y, cols[(z + y // 4) % len(cols)])
         add(f"Chevron {i+1}", g, ["chevron", "geometric"], f"chev-{i}")
-    # polka dots
-    for i, (bg, dot) in enumerate([("light_pink", "white"), ("navy", "yellow"),
+    # polka dots (contrasting bg/dot pairs, no pale-on-pale)
+    for i, (bg, dot) in enumerate([("hot_pink", "white"), ("navy", "yellow"),
                                    ("teal", "cream"), ("black", "hot_pink"),
-                                   ("cream", "red"), ("purple", "lemon")]):
+                                   ("red", "cream"), ("purple", "lemon")]):
         s = 26
         g = Grid(s, s)
         g.fill(bg)
@@ -198,10 +221,12 @@ def generate_geometric():
 def generate_mandalas():
     out = []
     rnd = random.Random(7)
-    palettes = [RAINBOW, WARM, COOL, PASTELS, BRIGHTS, PURPLES, GREENS, PINKS,
-                BLUES, ["hot_pink", "purple", "aqua", "yellow", "white"],
-                ["navy", "sky_blue", "white", "silver"],
-                ["dark_purple", "magenta", "hot_pink", "lemon"]]
+    # No all-pale palettes (they wash out); each has at least one strong hue.
+    palettes = [RAINBOW, WARM, COOL, BRIGHTS, PURPLES, GREENS, PINKS, BLUES,
+                ["hot_pink", "purple", "aqua", "yellow", "navy"],
+                ["navy", "sky_blue", "hot_pink", "yellow"],
+                ["dark_purple", "magenta", "hot_pink", "lemon"],
+                ["teal", "orange", "magenta", "yellow"]]
     i = 0
     while len(out) < 100:
         pal = palettes[i % len(palettes)]
@@ -210,32 +235,31 @@ def generate_mandalas():
         g = Grid(s, s)
         cx = cy = (s - 1) / 2.0
         maxr = s / 2.0 - 1
-        # center
-        g.disc(cx, cy, rnd.uniform(1.2, 2.4), pal[0])
-        rings = rnd.randint(3, 5)
+        rings = 4 + (i % 2)   # always dense: 4-5 rings, every ring draws a motif
+        # concentric ring outlines fill the body so it always reads as a mandala
         for ri in range(1, rings + 1):
             rr = maxr * ri / rings
-            col = pal[ri % len(pal)]
-            shape = (i + ri) % 4
-            count = sym * (1 if ri % 2 else 2)
-            if shape == 0:      # ring of dots
-                for k in range(count):
-                    a = 2 * math.pi * k / count
-                    g.disc(cx + rr * math.cos(a), cy + rr * math.sin(a),
-                           max(0.8, rr * 0.14), col)
-            elif shape == 1:    # spokes
-                for k in range(sym):
-                    a = 2 * math.pi * k / sym
-                    g.line(cx, cy, cx + rr * math.cos(a), cy + rr * math.sin(a), col)
-            elif shape == 2:    # petals (small ellipses along radius)
-                for k in range(count):
-                    a = 2 * math.pi * k / count
-                    px, py = cx + rr * 0.8 * math.cos(a), cy + rr * 0.8 * math.sin(a)
-                    g.disc(px, py, max(1.0, rr * 0.18), col)
-            else:               # concentric ring outline
-                g.ring(cx, cy, rr, col, max(1.0, s * 0.045))
-        # outer accent ring
-        g.ring(cx, cy, maxr, pal[-1], 1.0)
+            g.ring(cx, cy, rr, pal[ri % len(pal)], max(1.0, s * 0.04))
+        # decorate each ring with dots or petals, plus spokes
+        for ri in range(1, rings + 1):
+            rr = maxr * (ri - 0.5) / rings
+            col = pal[(ri + 1) % len(pal)]
+            count = sym * (2 if ri % 2 else 1)
+            deco = (i + ri) % 2
+            for k in range(count):
+                a = 2 * math.pi * k / count + (0 if ri % 2 else math.pi / count)
+                px, py = cx + rr * math.cos(a), cy + rr * math.sin(a)
+                if deco == 0:
+                    g.disc(px, py, max(1.0, maxr * 0.12), col)
+                else:
+                    g.ellipse(px, py, max(1.0, maxr * 0.14), max(1.0, maxr * 0.08), col)
+        for k in range(sym):   # spokes for radial structure
+            a = 2 * math.pi * k / sym
+            g.line(cx, cy, cx + maxr * 0.9 * math.cos(a), cy + maxr * 0.9 * math.sin(a),
+                   pal[0])
+        g.disc(cx, cy, max(2.0, s * 0.09), pal[1 % len(pal)])   # solid center
+        g.disc(cx, cy, max(1.0, s * 0.045), pal[2 % len(pal)])
+        g.ring(cx, cy, maxr, pal[-1], 1.2)                      # crisp outer ring
         out.append(_finish("mandalas", f"Mandala {len(out)+1}", g,
                            ["mandala", "symmetry", f"{sym}fold"],
                            f"mandala-{i}-{sym}-{s}"))
@@ -273,9 +297,9 @@ def generate_hearts():
         _fill_heart(g, (s - 1) / 2, (s - 1) / 2 - 1, s * 0.62, b)
         out.append(_finish("hearts", f"Outlined Heart {i+1}", g,
                            ["heart", "outline"], f"outline-{a}-{b}"))
-    # 3) rainbow striped hearts
-    for i, cols in enumerate([RAINBOW, PASTELS, WARM, COOL, BRIGHTS, PINKS,
-                              PURPLES, ["red", "white", "hot_pink"]]):
+    # 3) rainbow striped hearts (saturated palettes so every band reads)
+    for i, cols in enumerate([RAINBOW, RAINBOW6, WARM, COOL, BRIGHTS, PINKS,
+                              PURPLES, ["red", "orange", "yellow", "hot_pink"]]):
         s = 28
         g = Grid(s, s)
         cells = _mask_cells(s, s, heart_points((s - 1) / 2, (s - 1) / 2 - 1, s * 0.92))
@@ -359,12 +383,14 @@ def generate_hearts():
             _fill_heart(g, cc, cc - 1, s * 0.98, col2)
             _fill_heart(g, cc, cc - 1, s * 0.78, col)
         elif style == "pair":
-            _fill_heart(g, s * 0.34, s * 0.42, s * 0.5, col)
-            _fill_heart(g, s * 0.66, s * 0.56, s * 0.5, col2)
-        else:  # mini grid
-            g.fill("cream")
+            # two hearts, centered as a balanced pair (no dead corner space)
+            _fill_heart(g, cc - s * 0.2, cc - 1, s * 0.52, col)
+            _fill_heart(g, cc + s * 0.2, cc - 1, s * 0.52, col2)
+        else:  # mini grid (vary background + palette so they are not recolors)
+            bg = ["cream", "navy", "light_lavender", "sky_blue", "black", "teal"][j % 6]
+            g.fill(bg)
             k = 0
-            pal = [PINKS, PURPLES, RAINBOW6, COOL][j % 4]
+            pal = [PINKS, PURPLES, RAINBOW6, COOL, BRIGHTS, WARM][j % 6]
             for hy in range(5, s, 8):
                 for hx in range(5, s, 8):
                     _fill_heart(g, hx, hy, 7.5, pal[k % len(pal)]); k += 1
@@ -424,18 +450,23 @@ def generate_stars():
             g.line(c, c, c + rr * math.cos(a), c + rr * math.sin(a), col)
         g.disc(c, c, s * 0.11, col)
         out.append(_finish("stars", f"Starburst {i+1}", g, ["star", "burst"], f"burst-{i}"))
-    # 4) four-point sparkles / twinkles (8)
+    # 4) four-point sparkles / twinkles on a night backdrop so they pop (8)
     for i, col in enumerate(["white", "lemon", "sky_blue", "aqua", "yellow",
-                             "hot_pink", "lavender", "turquoise"]):
+                             "hot_pink", "light_lavender", "turquoise"]):
         s = 24
         c = (s - 1) / 2
         g = Grid(s, s)
-        _tint_if_pale(g, col)
-        for k in range(4):
+        g.fill(["navy", "dark_blue", "dark_purple"][i % 3])
+        for k in range(4):        # fuller 4-point star, not a thin plus
             a = math.pi / 2 * k
-            g.poly([(c, c), (c + s * 0.1 * math.cos(a + 0.4), c + s * 0.1 * math.sin(a + 0.4)),
+            g.poly([(c + s * 0.2 * math.cos(a + math.pi / 4), c + s * 0.2 * math.sin(a + math.pi / 4)),
                     (c + s * 0.46 * math.cos(a), c + s * 0.46 * math.sin(a)),
-                    (c + s * 0.1 * math.cos(a - 0.4), c + s * 0.1 * math.sin(a - 0.4))], col)
+                    (c + s * 0.2 * math.cos(a - math.pi / 4), c + s * 0.2 * math.sin(a - math.pi / 4)),
+                    (c, c)], col)
+        g.disc(c, c, s * 0.14, col)
+        # a couple of tiny companion twinkles
+        g.disc(c + s * 0.34, c - s * 0.3, 1.2, col)
+        g.disc(c - s * 0.32, c + s * 0.32, 1.0, col)
         out.append(_finish("stars", f"Sparkle {i+1}", g, ["star", "sparkle", "twinkle"], f"spark-{i}"))
     # 5) star of david (6, no pale-on-white)
     for i, col in enumerate(["blue", "sky_blue", "purple", "hot_pink", "teal", "navy"]):
@@ -468,16 +499,30 @@ def generate_stars():
             _draw_star(g, rnd.uniform(3, s - 4), rnd.uniform(3, s - 4),
                        rnd.uniform(2, 3), 5, rnd.choice(["yellow", "white", "hot_pink"]), 0.44)
         out.append(_finish("stars", f"Star Cluster {i+1}", g, ["star", "cluster"], f"clus-{i}"))
-    # 8) star fields on dark boards (fill to 100, capped)
+    # 8) ring of stars around a center star (10)
+    for i in range(10):
+        s = 29
+        c = (s - 1) / 2
+        g = Grid(s, s)
+        ring_col = hues[i % len(hues)]
+        cen_col = hues[(i + 4) % len(hues)]
+        m = 6 + (i % 3)
+        for k in range(m):
+            a = 2 * math.pi * k / m - math.pi / 2
+            _draw_star(g, c + s * 0.34 * math.cos(a), c + s * 0.34 * math.sin(a),
+                       s * 0.1, 5, ring_col, 0.44)
+        _draw_star(g, c, c, s * 0.2, 5, cen_col, 0.44)
+        out.append(_finish("stars", f"Star Wreath {i+1}", g, ["star", "ring", "wreath"], f"wreath-{i}"))
+    # 9) star fields on dark boards (fill to 100, now ~10)
     j = 0
     while len(out) < 100:
         s = 29
         g = Grid(s, s)
         g.fill(["navy", "dark_blue", "dark_purple", "black"][j % 4])
         rnd = random.Random(300 + j)
-        for _ in range(rnd.randint(9, 13)):
+        for _ in range(rnd.randint(10, 14)):
             _draw_star(g, rnd.randint(2, s - 3), rnd.randint(2, s - 3),
-                       rnd.uniform(1.8, 3.2), 5, rnd.choice(["white", "yellow", "lemon", "sky_blue"]), 0.44)
+                       rnd.uniform(2.0, 3.4), 5, rnd.choice(["white", "yellow", "lemon", "sky_blue"]), 0.44)
         out.append(_finish("stars", f"Star Field {len(out)+1}", g,
                            ["star", "field", "night"], f"field-{j}"))
         j += 1
@@ -487,6 +532,8 @@ def generate_stars():
 # ── FLOWERS ──────────────────────────────────────────────────────────────────
 
 def _flower(g, cx, cy, petals, r_pet, pet_col, cen_col, r_cen):
+    # solid base fills the gaps between petals so no background star-hole shows
+    g.disc(cx, cy, r_cen + r_pet * 0.9, pet_col)
     for k in range(petals):
         a = 2 * math.pi * k / petals - math.pi / 2
         px, py = cx + (r_cen + r_pet) * math.cos(a), cy + (r_cen + r_pet) * math.sin(a)
@@ -497,32 +544,38 @@ def _flower(g, cx, cy, petals, r_pet, pet_col, cen_col, r_cen):
 def generate_flowers():
     out = []
     combos = [("hot_pink", "yellow"), ("red", "banana"), ("purple", "lemon"),
-              ("white", "yellow"), ("orange", "dark_brown"), ("light_pink", "cheddar"),
+              ("orange", "dark_brown"), ("magenta", "cheddar"),
               ("lavender", "orange"), ("aqua", "hot_pink"), ("magenta", "lemon"),
-              ("sky_blue", "yellow"), ("neon_green", "red"), ("blush", "plum")]
+              ("sky_blue", "yellow"), ("neon_green", "red"), ("blush", "plum"),
+              ("red", "white"), ("purple", "banana"), ("turquoise", "orange")]
     # classic round-petal flowers
     for i, (p, c) in enumerate(combos):
         for petals in (5, 6, 8):
             if len(out) >= 42:
                 break
-            s = [22, 26, 29][petals % 3] if False else 26
+            s = 26
             g = Grid(s, s)
             cc = (s - 1) / 2
+            _tint_if_pale(g, p)
             _flower(g, cc, cc, petals, s * 0.15, p, c, s * 0.12)
             out.append(_finish("flowers", f"{p.replace('_',' ').title()} Bloom {petals}p", g,
                                ["flower", "bloom", p], f"bloom-{p}-{c}-{petals}"))
-    # daisies (white/colored petals, contrasting center)
-    for i, (p, c) in enumerate([("white", "yellow"), ("light_pink", "cheddar"),
-                                ("lemon", "orange"), ("periwinkle", "yellow"),
-                                ("blush", "dark_brown"), ("toothpaste", "hot_pink")]):
+    # daisies: fuller overlapping petals on a soft sky backdrop so white reads
+    for i, (p, c, bg) in enumerate([("white", "yellow", "sky_blue"),
+                                    ("light_pink", "cheddar", "teal"),
+                                    ("lemon", "orange", "sky_blue"),
+                                    ("white", "hot_pink", "forest"),
+                                    ("cream", "dark_brown", "teal"),
+                                    ("toothpaste", "hot_pink", "navy")]):
         s = 27
         cc = (s - 1) / 2
         g = Grid(s, s)
+        g.fill(bg)
         for k in range(12):
             a = 2 * math.pi * k / 12 - math.pi / 2
-            g.ellipse(cc + s * 0.3 * math.cos(a), cc + s * 0.3 * math.sin(a),
-                      s * 0.08, s * 0.05, p)
-        g.disc(cc, cc, s * 0.13, c)
+            g.ellipse(cc + s * 0.28 * math.cos(a), cc + s * 0.28 * math.sin(a),
+                      s * 0.12, s * 0.075, p)
+        g.disc(cc, cc, s * 0.15, c)
         out.append(_finish("flowers", f"Daisy {i+1}", g, ["flower", "daisy"], f"daisy-{i}"))
     # sunflowers
     for i, cen in enumerate(["dark_brown", "brown", "rust"]):
@@ -563,17 +616,22 @@ def generate_flowers():
         for ri, r in enumerate([0.44, 0.32, 0.2, 0.09]):
             g.disc(cc, cc, s * r, cols[ri % len(cols)])
         out.append(_finish("flowers", f"Rose {i+1}", g, ["flower", "rose"], f"rose-{i}"))
-    # top up with more blooms
+    # top up: varied blooms (rotate petal color, center, petal count, size)
+    petal_cols = ["hot_pink", "red", "purple", "orange", "magenta", "aqua",
+                  "sky_blue", "neon_green", "lavender", "turquoise", "yellow", "blush"]
+    cen_cols = ["yellow", "banana", "dark_brown", "cheddar", "orange", "lemon", "white"]
     j = 0
     while len(out) < 100:
-        p, c = combos[j % len(combos)]
-        petals = (5, 6, 8)[j % 3]
-        s = 24
+        p = petal_cols[j % len(petal_cols)]
+        c = cen_cols[(j * 3) % len(cen_cols)]
+        petals = (5, 6, 8, 6)[j % 4]
+        s = (24, 26, 22)[j % 3]
         cc = (s - 1) / 2
         g = Grid(s, s)
-        _flower(g, cc, cc, petals, s * 0.16, c, p, s * 0.12)
+        _tint_if_pale(g, p)
+        _flower(g, cc, cc, petals, s * (0.15 + 0.02 * (j % 3)), p, c, s * 0.11)
         out.append(_finish("flowers", f"Little Flower {len(out)+1}", g,
-                           ["flower", p], f"little-{j}-{p}-{petals}"))
+                           ["flower", p], f"little-{j}-{p}-{c}-{petals}"))
         j += 1
     return out[:100]
 
@@ -704,18 +762,36 @@ def generate_rainbows():
                 g.set(x, y, order[(z + y // 3) % len(order)])
         out.append(_finish("rainbows", f"Rainbow Chevron {i+1}", g,
                            ["rainbow", "chevron"], f"chev-{i}"))
-    # rainbow confetti dots (10)
-    for i in range(10):
-        s = 27
+    # rainbow plaid: crossing rainbow stripes read clearly as a rainbow (10)
+    for i, order in enumerate(orders + [BRIGHTS, RAINBOW6,
+                                        ["red", "orange", "yellow", "green", "aqua", "blue", "purple"],
+                                        ["hot_pink", "orange", "lemon", "neon_green", "aqua", "purple"]]):
+        if i >= 10:
+            break
+        s = 28
         g = Grid(s, s)
-        g.fill(["white", "navy", "sky_blue", "cream", "black"][i % 5])
-        rnd = random.Random(600 + i)
-        pal = [RAINBOW, BRIGHTS, PASTELS][i % 3]
-        for cy in range(3, s, 5):
-            for cx in range(3, s, 5):
-                g.disc(cx + rnd.randint(-1, 1), cy + rnd.randint(-1, 1), 1.5, rnd.choice(pal))
-        out.append(_finish("rainbows", f"Rainbow Confetti {i+1}", g,
-                           ["rainbow", "confetti", "dots"], f"conf-{i}"))
+        band = max(2, s // (len(order) * 2))
+        for y in range(s):
+            for x in range(s):
+                cx = order[(x // band) % len(order)]
+                cy = order[(y // band) % len(order)]
+                # darker where the two stripe sets cross, lighter elsewhere
+                g.set(x, y, cx if ((x // band) + (y // band)) % 2 == 0 else cy)
+        out.append(_finish("rainbows", f"Rainbow Plaid {i+1}", g,
+                           ["rainbow", "plaid"], f"plaid-{i}"))
+    # rainbow checker (8)
+    for i, order in enumerate(orders):
+        if i >= 8:
+            break
+        s = 28
+        g = Grid(s, s)
+        bs = 4
+        for y in range(s):
+            for x in range(s):
+                idx = ((x // bs) + (y // bs)) % len(order)
+                g.set(x, y, order[idx])
+        out.append(_finish("rainbows", f"Rainbow Check {i+1}", g,
+                           ["rainbow", "checker"], f"rcheck-{i}"))
     # more sunsets (5)
     for i, sky in enumerate([["dark_purple", "magenta", "hot_pink", "orange", "yellow", "lemon"],
                              ["navy", "purple", "red", "orange", "cheddar", "banana"],
@@ -771,11 +847,16 @@ def _banded_planet(g, cc, s, base, band, style):
                 for xx in range(s):
                     if (xx - cc) ** 2 + (yy - cc) ** 2 <= R2:
                         g.set(xx, yy, band)
-    elif style == 1:    # swirl spots
+    elif style == 1:    # swirl spots, clipped inside the planet so no protrusions
         rnd = random.Random(int(cc * 7) + s)
+        R = s * 0.34
         for _ in range(4):
-            g.disc(rnd.uniform(cc - 5, cc + 5), rnd.uniform(cc - 5, cc + 5),
-                   rnd.uniform(1.5, 3), band)
+            sx, sy, sr = rnd.uniform(cc - 4, cc + 4), rnd.uniform(cc - 4, cc + 4), rnd.uniform(1.5, 3)
+            for y in range(int(sy - sr - 1), int(sy + sr + 2)):
+                for x in range(int(sx - sr - 1), int(sx + sr + 2)):
+                    if (x - sx) ** 2 + (y - sy) ** 2 <= sr * sr and \
+                       (x - cc) ** 2 + (y - cc) ** 2 <= R * R:
+                        g.set(x, y, band)
     else:               # crescent shading
         g.disc(cc - s * 0.1, cc - s * 0.1, s * 0.24, band)
 
@@ -907,9 +988,9 @@ def generate_space():
         rnd = random.Random(500 + i)
         pts = [(rnd.randint(3, s - 4), rnd.randint(3, s - 4)) for _ in range(rnd.randint(5, 7))]
         for a in range(len(pts) - 1):
-            g.line(pts[a][0], pts[a][1], pts[a + 1][0], pts[a + 1][1], "dark_blue")
+            g.line(pts[a][0], pts[a][1], pts[a + 1][0], pts[a + 1][1], "gray")  # visible on navy
         for (px, py) in pts:
-            _draw_star(g, px, py, 2.4, 5, rnd.choice(["white", "yellow", "sky_blue"]), 0.44)
+            _draw_star(g, px, py, 2.8, 5, rnd.choice(["white", "yellow", "sky_blue"]), 0.44)
         out.append(_finish("space", f"Constellation {i+1}", g,
                            ["space", "constellation"], f"const-{i}"))
     # satellites (4)
@@ -1002,6 +1083,14 @@ def generate_emoji():
         ("Star Eyes", "stars", "grin", None),
         ("Sleepy", "arcs", "smallo", None),
         ("Angry", "brows", "frown", None),
+        ("Content", "arcs", "smile", None),
+        ("Cheeky", "wink", "tongue", None),
+        ("Shocked", "wide", "open", None),
+        ("Smitten", "hearts", "grin", None),
+        ("Dizzy", "wide", "smallo", None),
+        ("Mischief", "brows", "grin", None),
+        ("Sweet", "dots", "kiss", None),
+        ("Cool Grin", "shades", "grin", None),
     ]
     while len(out) < 100:
         idx = len(out)
@@ -1111,17 +1200,16 @@ def generate_gems():
         _fill_heart(g, (s - 1) / 2, (s - 1) / 2 - 1, s * 0.5, GEM_LIGHT.get(hue, "white"))
         sparkle(g, int((s - 1) / 2 - 2), int((s - 1) / 2 - 3))
         out.append(_finish("gems", f"Heart Gem {i+1}", g, ["gem", "heart", hue], f"heartgem-{hue}"))
-    # oval gems (8)
+    # oval gems (8): clean filled oval + crown highlight + girdle line
     for i, hue in enumerate(GEM_HUES[:8]):
         s = 22
         cc = (s - 1) / 2
         g = Grid(s, s)
-        g.ellipse(cc, cc, s * 0.24, s * 0.42, hue)
-        g.ellipse(cc, cc - s * 0.1, s * 0.13, s * 0.2, GEM_LIGHT.get(hue, "white"))
-        for k in range(6):
-            a = 2 * math.pi * k / 6
-            g.line(cc, cc, cc + s * 0.22 * math.cos(a), cc + s * 0.4 * math.sin(a), "white")
-        sparkle(g, int(cc - 2), int(cc - s * 0.18))
+        g.ellipse(cc, cc, s * 0.26, s * 0.42, hue)                       # solid body
+        g.ellipse(cc, cc - s * 0.12, s * 0.15, s * 0.18, GEM_LIGHT.get(hue, "white"))  # crown
+        g.line(cc - s * 0.26, cc, cc + s * 0.26, cc, "white")            # girdle
+        g.line(cc, cc - s * 0.42, cc, cc + s * 0.42, GEM_LIGHT.get(hue, "white"))
+        sparkle(g, int(cc - 2), int(cc - s * 0.2))
         out.append(_finish("gems", f"Oval Gem {i+1}", g, ["gem", "oval", hue], f"oval-{hue}"))
     # trillion (triangle) gems (8)
     for i, hue in enumerate(GEM_HUES[:8]):

@@ -203,11 +203,23 @@ SHAPES = [
   ["‧‧###‧‧","‧#####‧","#######","#######","#######","‧#####‧","‧‧###‧‧"],{"#":"cream"}),
 ]
 
+# Pale fills need a contrasting backdrop or they vanish on the white board.
+_PALE_ICON = {"white", "cream", "ivory", "silver", "light_gray"}
+_ICON_BG = {"white": "navy", "cream": "caramel", "ivory": "caramel",
+            "silver": "dark_gray", "light_gray": "dark_gray"}
+
+
 def shape_pattern(entry):
     key, title, tags, rows, cmap = entry
     w = max(len(r) for r in rows)
     h = len(rows)
     cells = cells_from_ascii(rows, cmap)
+    fills = set(cmap.values())
+    if fills and all(c in _PALE_ICON for c in fills):
+        bg = _ICON_BG.get(sorted(fills)[0], "navy")
+        occupied = {(x, y) for x, y, _ in cells}
+        cells = [(x, y, bg) for y in range(h) for x in range(w)
+                 if (x, y) not in occupied] + cells
     return make_pattern(stable_id("icon", key), title, "icons", w, h, cells,
                         tags=tags + ["icon", "shape"], difficulty="easy")
 
