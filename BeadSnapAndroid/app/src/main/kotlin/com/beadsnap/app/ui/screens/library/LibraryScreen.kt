@@ -231,7 +231,11 @@ private fun PatternCard(
     LaunchedEffect(cacheKey) {
         if (thumbnail == null) {
             val bmp = withContext(Dispatchers.Default) {
-                ImageConverter.renderToBitmap(pattern, cellSizePx = 4)
+                // Render to a crisp ~512px thumbnail regardless of board size, so
+                // beads stay sharp on high-density screens. Cached per pattern.
+                val maxDim = maxOf(pattern.grid.width, pattern.grid.height)
+                val cell = (512 / maxDim).coerceIn(10, 24)
+                ImageConverter.renderToBitmap(pattern, cellSizePx = cell)
             }
             ThumbnailCache.put(cacheKey, bmp)
             thumbnail = bmp

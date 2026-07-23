@@ -40,7 +40,7 @@ final class RemoteLibraryService: ObservableObject {
 
     // Version of library.json shipped in the app bundle. Keep in sync with the
     // "version" field of the bundled resource when you refresh it.
-    private let bundledLibraryVersion = 1
+    private let bundledLibraryVersion = 2
 
     private let versionKey = "remoteLibrary.appliedVersion"
 

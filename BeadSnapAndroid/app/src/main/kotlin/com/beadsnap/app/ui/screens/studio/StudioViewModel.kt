@@ -25,7 +25,7 @@ class StudioViewModel(
     private val _prompt = MutableStateFlow("")
     val prompt: StateFlow<String> = _prompt.asStateFlow()
 
-    private val _selectedCategory = MutableStateFlow<PatternCategory?>(PatternCategory.animals)
+    private val _selectedCategory = MutableStateFlow<PatternCategory?>(PatternCategory.geometric)
     val selectedCategory: StateFlow<PatternCategory?> = _selectedCategory.asStateFlow()
 
     private val _selectedGridSize = MutableStateFlow(GridSize.large)

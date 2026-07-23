@@ -3,7 +3,7 @@ import SwiftUI
 @MainActor
 final class StudioViewModel: ObservableObject {
     @Published var prompt = ""
-    @Published var selectedCategory: PatternCategory? = .animals
+    @Published var selectedCategory: PatternCategory? = .geometric
     @Published var selectedGridSize: GridSize = .large
     @Published var isGenerating = false
     @Published var generatedPattern: FusePattern?

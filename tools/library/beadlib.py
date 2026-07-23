@@ -12,7 +12,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 PALETTE_PATH = os.path.join(REPO, "library", "palette.json")
 
-CATEGORIES = ["animals", "fantasy", "vehicles", "nature", "icons", "holidays", "threeD"]
+# The 10 content categories are procedurally generated (100 each). threeD is a
+# retained specialty (build/assembly guides); custom is the user's own designs.
+CATEGORIES = ["geometric", "mandalas", "hearts", "stars", "flowers",
+              "rainbows", "space", "emoji", "gems", "icons", "threeD"]
 
 # ── Palette ────────────────────────────────────────────────────────────────
 

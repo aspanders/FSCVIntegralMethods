@@ -63,24 +63,29 @@ final class ImageConverter {
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: w, height: h), format: format)
         let colorById = Dictionary(uniqueKeysWithValues: pattern.palette.map { ($0.id, $0) })
-        let inset = cellSize * 0.06
+        let r = cellSize / 2                 // bead radius = half the pitch, so beads touch
+        let holeR = cellSize * 0.17          // the tube hole through a fuse bead
+        let rimWidth = max(0.5, cellSize * 0.05)
         return renderer.image { _ in
             UIColor.white.setFill()
             UIRectFill(CGRect(x: 0, y: 0, width: w, height: h))
             for cell in pattern.cells {
                 guard let id = cell.colorId, let c = colorById[id] else { continue }
-                let rect = CGRect(
-                    x: CGFloat(cell.x) * cellSize + inset,
-                    y: CGFloat(cell.y) * cellSize + inset,
-                    width: cellSize - 2 * inset,
-                    height: cellSize - 2 * inset
-                )
+                let cx = CGFloat(cell.x) * cellSize + r
+                let cy = CGFloat(cell.y) * cellSize + r
+                let beadRect = CGRect(x: cx - r, y: cy - r, width: 2 * r, height: 2 * r)
+                // Full-size bead: its edges meet the neighbors, like fused beads.
                 c.uiColor.setFill()
-                UIBezierPath(ovalIn: rect).fill()
-                let stroke = UIBezierPath(ovalIn: rect)
-                UIColor.black.withAlphaComponent(0.15).setStroke()
-                stroke.lineWidth = 0.5
-                stroke.stroke()
+                UIBezierPath(ovalIn: beadRect).fill()
+                // Faint center hole gives the fused-bead look.
+                UIColor.white.withAlphaComponent(0.11).setFill()
+                UIBezierPath(ovalIn: CGRect(x: cx - holeR, y: cy - holeR,
+                                            width: 2 * holeR, height: 2 * holeR)).fill()
+                // Thin rim for definition where beads meet.
+                let rim = UIBezierPath(ovalIn: beadRect.insetBy(dx: rimWidth / 2, dy: rimWidth / 2))
+                UIColor.black.withAlphaComponent(0.12).setStroke()
+                rim.lineWidth = rimWidth
+                rim.stroke()
             }
         }
     }

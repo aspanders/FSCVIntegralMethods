@@ -16,7 +16,8 @@ struct BeadGridView: View {
 
     private let minCell: CGFloat = 8
     private let maxCell: CGFloat = 44
-    private let spacing: CGFloat = 1
+    // Zero spacing so full-size beads touch their neighbors (fused-bead look).
+    private let spacing: CGFloat = 0
 
     private var step: CGFloat { cellSize + spacing }
 

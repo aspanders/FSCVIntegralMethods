@@ -17,10 +17,31 @@ struct FusePattern: Identifiable, Codable, Hashable {
     // assemble them into the finished object. Nil for flat patterns.
     var buildGuide: String?
     var assemblyGuide: String?
+    // Compact wire form: one string per grid row, each char = palette index
+    // ('.' = empty). Present only in the shipped library; expanded to `cells`
+    // when decoded. Defaults to nil so the explicit init below need not set it.
+    var rows: [String]? = nil
     var version: Int
 
     var hasInstructions: Bool {
         !(buildGuide?.isEmpty ?? true) || !(assemblyGuide?.isEmpty ?? true)
+    }
+
+    // Palette-index charset for the compact `rows` encoding.
+    // Keep in sync with tools/library/compact.py and the Android model.
+    static let rowChars = Array("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+    static func expand(rows: [String], palette: [PaletteColor]) -> [Cell] {
+        var out: [Cell] = []
+        for (y, row) in rows.enumerated() {
+            for (x, ch) in row.enumerated() {
+                if ch == "." { continue }
+                if let idx = rowChars.firstIndex(of: ch), idx < palette.count {
+                    out.append(Cell(x: x, y: y, colorId: palette[idx].id))
+                }
+            }
+        }
+        return out
     }
 
     init(
@@ -63,7 +84,13 @@ struct FusePattern: Identifiable, Codable, Hashable {
         createdBy    = try c.decodeIfPresent(CreatorType.self, forKey: .createdBy) ?? .user
         grid         = try c.decodeIfPresent(GridSize.self, forKey: .grid) ?? .large
         palette      = try c.decodeIfPresent([PaletteColor].self, forKey: .palette) ?? []
-        cells        = try c.decodeIfPresent([Cell].self, forKey: .cells) ?? []
+        var decodedCells = try c.decodeIfPresent([Cell].self, forKey: .cells) ?? []
+        if decodedCells.isEmpty,
+           let compactRows = try c.decodeIfPresent([String].self, forKey: .rows) {
+            decodedCells = FusePattern.expand(rows: compactRows, palette: palette)
+        }
+        cells        = decodedCells
+        rows         = nil
         difficulty   = try c.decodeIfPresent(Difficulty.self, forKey: .difficulty) ?? .easy
         tags         = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         sourcePrompt = try c.decodeIfPresent(String.self, forKey: .sourcePrompt)
@@ -100,30 +127,40 @@ struct FusePattern: Identifiable, Codable, Hashable {
 // MARK: - Supporting Types
 
 enum PatternCategory: String, Codable, CaseIterable, Identifiable {
-    case animals, fantasy, vehicles, nature, icons, holidays, threeD, custom
+    // 10 content categories (100 patterns each) + 3D specialty + user designs.
+    case geometric, mandalas, hearts, stars, flowers, rainbows, space, emoji,
+         gems, icons, threeD, custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .animals:  return "Animals"
-        case .fantasy:  return "Fantasy"
-        case .vehicles: return "Vehicles"
-        case .nature:   return "Nature"
-        case .icons:    return "Icons"
-        case .holidays: return "Holidays"
-        case .threeD:   return "3D"
-        case .custom:   return "My Designs"
+        case .geometric: return "Geometric"
+        case .mandalas:  return "Mandalas"
+        case .hearts:    return "Hearts"
+        case .stars:     return "Stars"
+        case .flowers:   return "Flowers"
+        case .rainbows:  return "Rainbows"
+        case .space:     return "Space"
+        case .emoji:     return "Emoji"
+        case .gems:      return "Gems"
+        case .icons:     return "Icons"
+        case .threeD:    return "3D"
+        case .custom:    return "My Designs"
         }
     }
     var emoji: String {
         switch self {
-        case .animals:  return "🐾"
-        case .fantasy:  return "🔮"
-        case .vehicles: return "🚀"
-        case .nature:   return "🌿"
-        case .icons:    return "⭐"
-        case .holidays: return "🎉"
-        case .threeD:   return "🧊"
-        case .custom:   return "✏️"
+        case .geometric: return "🔷"
+        case .mandalas:  return "🌀"
+        case .hearts:    return "💗"
+        case .stars:     return "⭐"
+        case .flowers:   return "🌸"
+        case .rainbows:  return "🌈"
+        case .space:     return "🚀"
+        case .emoji:     return "😊"
+        case .gems:      return "💎"
+        case .icons:     return "🔤"
+        case .threeD:    return "🧊"
+        case .custom:    return "✏️"
         }
     }
 }

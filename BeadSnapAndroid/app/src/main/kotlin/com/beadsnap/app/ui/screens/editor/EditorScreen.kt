@@ -461,16 +461,19 @@ private fun DrawScope.drawBeadGrid(
     emptyColor: Color,
     gridColor: Color
 ) {
-    val inset = step * 0.07f
+    val holeR = step * 0.17f
     for (row in 0 until rows) {
         for (col in 0 until cols) {
-            val key   = "$col,$row"
-            val color = cellMap[key]?.let { colorLookup[it] } ?: emptyColor
-            drawCircle(
-                color  = color,
-                radius = step / 2f - inset,
-                center = Offset(col * step + step / 2f, row * step + step / 2f)
-            )
+            val key    = "$col,$row"
+            val filled = cellMap[key]?.let { colorLookup[it] }
+            val color  = filled ?: emptyColor
+            val center = Offset(col * step + step / 2f, row * step + step / 2f)
+            // Bead radius = half the pitch, so fused beads touch their neighbors.
+            drawCircle(color = color, radius = step / 2f, center = center)
+            // Faint center hole gives filled beads the fused-bead look.
+            if (filled != null) {
+                drawCircle(color = Color.White.copy(alpha = 0.11f), radius = holeR, center = center)
+            }
             // subtle grid lines
             drawRect(
                 color    = gridColor,

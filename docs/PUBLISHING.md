@@ -81,7 +81,7 @@ Product IDs are identical on both stores (referenced in
 Common first-submission rejections to pre-empt:
 - IAP products not attached to the version → attach all three tips.
 - Privacy policy URL unreachable → test in an incognito browser.
-- “App is a demo/minimal”: not a risk here; mention the 25 built-in
+- “App is a demo/minimal”: not a risk here; mention the 1,000+ built-in
   patterns, photo conversion, and editor in review notes.
 - Camera/photo permission strings must match actual use (already set in
   Info.plist).

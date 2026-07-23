@@ -33,8 +33,8 @@ CREATE FROM ANYTHING
   (bring your own Claude API key)
 
 A GROWING LIBRARY
-• Hundreds of ready-made patterns across Animals, Fantasy, Vehicles, Nature,
-  Icons, Holidays, and 3D builds
+• Over 1,000 ready-made patterns: 100 in each of Geometric, Mandalas, Hearts,
+  Stars, Flowers, Rainbows, Space, Emoji, Gems, and Icons, plus 3D builds
 • 3D patterns come with step-by-step build and assembly guides so you can make
   boxes, dice, planters, and more out of bead panels
 • The library refreshes automatically, so new patterns arrive over time
@@ -59,8 +59,9 @@ Perfect for kids' craft sessions, pixel-art fans, and anyone who loves the
 satisfying click of a fuse bead landing on a pegboard.
 
 ## What's new (v1.0.0)
-First release! 25 built-in patterns, photo-to-pattern conversion, AI pattern
-generation, a full bead editor, shopping lists, and PNG export.
+First release! Over 1,000 built-in patterns across 10 categories plus 3D
+builds, photo-to-pattern conversion, AI pattern generation, a full bead editor,
+shopping lists, and PNG export.
 
 ## Review notes (both stores)
 - The app is fully functional without any purchase; the three IAPs are

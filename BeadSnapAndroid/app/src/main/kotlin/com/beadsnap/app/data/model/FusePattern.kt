@@ -18,11 +18,32 @@ data class FusePattern(
     // assemble them into the finished object. Null for flat patterns.
     val buildGuide: String? = null,
     val assemblyGuide: String? = null,
+    // Compact wire form: one string per grid row, each char = palette index
+    // ('.' = empty). Present only in the shipped library; expanded to `cells`
+    // on load via materialized(). Kept out of the in-memory pattern afterward.
+    val rows: List<String>? = null,
     var version: Int = 1
 ) {
     val totalBeads: Int get() = cells.count { it.colorId != null }
 
     val hasInstructions: Boolean get() = !buildGuide.isNullOrBlank() || !assemblyGuide.isNullOrBlank()
+
+    /** Expand the compact `rows` encoding into `cells` (no-op if already cells). */
+    fun materialized(): FusePattern {
+        val r = rows
+        if (r == null || cells.isNotEmpty()) return if (rows == null) this else copy(rows = null)
+        val expanded = ArrayList<Cell>()
+        for (y in r.indices) {
+            val row = r[y]
+            for (x in row.indices) {
+                val ch = row[x]
+                if (ch == '.') continue
+                val i = CHARS.indexOf(ch)
+                if (i in palette.indices) expanded.add(Cell(x, y, palette[i].id))
+            }
+        }
+        return copy(cells = expanded, rows = null)
+    }
 
     fun colorCounts(): List<Pair<BeadColor, Int>> {
         val counts = mutableMapOf<String, Int>()
@@ -39,16 +60,27 @@ data class FusePattern(
         val id = colorIdAt(x, y) ?: return null
         return palette.firstOrNull { it.id == id }
     }
+
+    companion object {
+        // Palette-index charset for the compact `rows` encoding.
+        // Keep in sync with tools/library/compact.py and the iOS model.
+        const val CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    }
 }
 
 @Serializable
 enum class PatternCategory(val displayName: String, val emoji: String) {
-    animals("Animals", "🐾"),
-    fantasy("Fantasy", "🔮"),
-    vehicles("Vehicles", "🚀"),
-    nature("Nature", "🌿"),
-    icons("Icons", "⭐"),
-    holidays("Holidays", "🎉"),
+    // 10 content categories (100 patterns each) + 3D specialty + user designs.
+    geometric("Geometric", "🔷"),
+    mandalas("Mandalas", "🌀"),
+    hearts("Hearts", "💗"),
+    stars("Stars", "⭐"),
+    flowers("Flowers", "🌸"),
+    rainbows("Rainbows", "🌈"),
+    space("Space", "🚀"),
+    emoji("Emoji", "😊"),
+    gems("Gems", "💎"),
+    icons("Icons", "🔤"),
     threeD("3D", "🧊"),
     custom("My Designs", "✏️")
 }

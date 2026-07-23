@@ -67,7 +67,7 @@ class PatternStore private constructor(context: Context) {
             } catch (_: Exception) { emptyList() }
         }
         if (loaded.isNotEmpty()) {
-            bundled = loaded.map { it.copy(createdBy = CreatorType.system) }
+            bundled = loaded.map { it.materialized().copy(createdBy = CreatorType.system) }
             recomputeSystem()
         }
     }
@@ -100,7 +100,7 @@ class PatternStore private constructor(context: Context) {
     }
 
     private fun applyRemote(patterns: List<FusePattern>) {
-        remote = patterns.map { it.copy(createdBy = CreatorType.system) }
+        remote = patterns.map { it.materialized().copy(createdBy = CreatorType.system) }
         recomputeSystem()
     }
 

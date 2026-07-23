@@ -57,24 +57,30 @@ object ImageConverter {
         canvas.drawColor(Color.WHITE)
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // Thin rim for bead definition where fused beads meet.
+        val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 0.5f
-            color = Color.argb(38, 0, 0, 0)   // 15% black
+            strokeWidth = (cellSizePx * 0.05f).coerceAtLeast(0.5f)
+            color = Color.argb(30, 0, 0, 0)   // ~12% black
+        }
+        // The center hole of a fuse bead, drawn as a faint light ring.
+        val holePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.argb(28, 255, 255, 255)
         }
         val colorById = pattern.palette.associateBy { it.id }
-        val inset = cellSizePx * 0.06f
+        val r = cellSizePx / 2f          // bead radius = half the pitch, so beads touch
+        val holeR = cellSizePx * 0.17f   // hole = the tube through the bead
 
         for (cell in pattern.cells) {
             val color = colorById[cell.colorId] ?: continue
+            val cx = cell.x * cellSizePx + r
+            val cy = cell.y * cellSizePx + r
             paint.color = color.androidColor
             paint.style = Paint.Style.FILL
-            val left  = cell.x * cellSizePx + inset
-            val top   = cell.y * cellSizePx + inset
-            val right  = left + cellSizePx - 2 * inset
-            val bottom = top  + cellSizePx - 2 * inset
-            canvas.drawOval(left, top, right, bottom, paint)
-            canvas.drawOval(left, top, right, bottom, strokePaint)
+            canvas.drawCircle(cx, cy, r, paint)        // full-size bead: edges touch neighbors
+            canvas.drawCircle(cx, cy, holeR, holePaint) // faint center hole = fused-bead look
+            canvas.drawCircle(cx, cy, r - rimPaint.strokeWidth / 2f, rimPaint)
         }
         return bitmap
     }

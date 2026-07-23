@@ -121,7 +121,7 @@ class RemoteLibraryService private constructor(context: Context) {
     companion object {
         // Version of library.json shipped in the app's assets. Keep in sync with
         // the "version" field of the bundled asset when you refresh it.
-        const val BUNDLED_LIBRARY_VERSION = 1
+        const val BUNDLED_LIBRARY_VERSION = 2
 
         @Volatile private var instance: RemoteLibraryService? = null
         fun getInstance(context: Context): RemoteLibraryService =

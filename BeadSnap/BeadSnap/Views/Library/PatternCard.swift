@@ -63,9 +63,13 @@ struct PatternThumbnail: View {
 
     private static func renderAsync(pattern: FusePattern) async -> UIImage {
         let p = pattern
-        // Same shared renderer as previews and export, so thumbnails match Android
+        // Same shared renderer as previews and export, so thumbnails match Android.
+        // Render to a crisp ~512px thumbnail regardless of board size so beads
+        // stay sharp on high-density screens.
+        let maxDim = max(p.grid.width, p.grid.height)
+        let cell = CGFloat(min(24, max(10, 512 / maxDim)))
         return await Task.detached(priority: .userInitiated) {
-            ImageConverter.renderToImage(pattern: p, cellSize: 6)
+            ImageConverter.renderToImage(pattern: p, cellSize: cell)
         }.value
     }
 }
