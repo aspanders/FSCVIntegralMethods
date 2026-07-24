@@ -23,7 +23,7 @@ import kotlin.coroutines.resumeWithException
 
 sealed class AIError : Exception() {
     data object NoAPIKey : AIError() {
-        override val message = "No API key set. Tap 'Set Up AI' to add your Claude API key."
+        override val message = "No API key set. Tap 'Set Up AI' to add your Claude or ChatGPT API key."
     }
     data class NetworkError(override val cause: Exception) : AIError() {
         override val message = "Network error: ${cause.message}"
@@ -50,6 +50,19 @@ sealed class AIError : Exception() {
     }
 }
 
+/**
+ * The AI backend the user paired. Both call their provider over HTTPS with the
+ * user's own key; keys live in EncryptedSharedPreferences (KeystoreHelper).
+ */
+enum class AIProvider(val displayName: String, val keyAccount: String, val keyHint: String) {
+    CLAUDE("Claude (Anthropic)", "claude_api_key", "sk-ant-…"),
+    OPENAI("ChatGPT (OpenAI)", "openai_api_key", "sk-…");
+
+    companion object {
+        fun from(s: String?): AIProvider = entries.firstOrNull { it.name == s } ?: CLAUDE
+    }
+}
+
 class AIPatternService private constructor() {
 
     private val client = OkHttpClient.Builder()
@@ -57,15 +70,29 @@ class AIPatternService private constructor() {
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-    private val apiKeyAccount = "claude_api_key"
+    // coerceInputValues: an unknown category from the model falls back to the
+    // default (custom) instead of failing the whole decode.
+    private val json = Json {
+        ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true
+    }
+    private val providerAccount = "ai_provider"
+
+    /** Which provider requests use. Persisted (not sensitive), defaults to Claude. */
+    var provider: AIProvider
+        get() = AIProvider.from(KeystoreHelper.load(providerAccount))
+        set(value) { KeystoreHelper.save(providerAccount, value.name) }
+
+    // Per-provider keys, so both can be stored and swapped freely.
+    fun apiKey(p: AIProvider): String = KeystoreHelper.load(p.keyAccount) ?: ""
+    fun setApiKey(p: AIProvider, value: String) {
+        if (value.isBlank()) KeystoreHelper.delete(p.keyAccount)
+        else KeystoreHelper.save(p.keyAccount, value.trim())
+    }
+    fun hasKey(p: AIProvider): Boolean = apiKey(p).isNotBlank()
 
     var apiKey: String
-        get() = KeystoreHelper.load(apiKeyAccount) ?: ""
-        set(value) {
-            if (value.isBlank()) KeystoreHelper.delete(apiKeyAccount)
-            else KeystoreHelper.save(apiKeyAccount, value.trim())
-        }
+        get() = apiKey(provider)
+        set(value) { setApiKey(provider, value) }
 
     val hasAPIKey: Boolean get() = apiKey.isNotBlank()
 
@@ -75,7 +102,7 @@ class AIPatternService private constructor() {
         {
           "id": "<uuid-string>",
           "title": "<short title>",
-          "category": "<animals|fantasy|vehicles|nature|icons|holidays|custom>",
+          "category": "<animals|space|food|emoji|holidays|icons|custom>",
           "createdBy": "ai",
           "grid": {"width": <8-64>, "height": <8-64>},
           "palette": [{"id": "<id>", "name": "<name>", "hex": "<#RRGGBB>"}],
@@ -150,7 +177,12 @@ class AIPatternService private constructor() {
             })
         }
 
-    private fun buildRequest(userMessage: String): Request {
+    private fun buildRequest(userMessage: String): Request = when (provider) {
+        AIProvider.CLAUDE -> claudeRequest(userMessage)
+        AIProvider.OPENAI -> openAIRequest(userMessage)
+    }
+
+    private fun claudeRequest(userMessage: String): Request {
         val bodyJson = JSONObject().apply {
             put("model", "claude-haiku-4-5")
             put("max_tokens", 4096)
@@ -171,15 +203,37 @@ class AIPatternService private constructor() {
             .build()
     }
 
+    private fun openAIRequest(userMessage: String): Request {
+        val bodyJson = JSONObject().apply {
+            put("model", "gpt-4o-mini")
+            put("max_tokens", 4096)
+            // Force strict JSON output so extractJson always has a clean object.
+            put("response_format", JSONObject().put("type", "json_object"))
+            put("messages", org.json.JSONArray().apply {
+                put(JSONObject().put("role", "system").put("content", systemPrompt))
+                put(JSONObject().put("role", "user").put("content", userMessage))
+            })
+        }
+        return Request.Builder()
+            .url("https://api.openai.com/v1/chat/completions")
+            .post(bodyJson.toString().toRequestBody("application/json".toMediaType()))
+            .header("Authorization", "Bearer $apiKey")
+            .header("content-type", "application/json")
+            .build()
+    }
+
     private fun parseResponse(response: Response): FusePattern {
         response.use { resp ->
             if (!resp.isSuccessful) throw AIError.HttpError(resp.code)
             val body = resp.body?.string() ?: throw AIError.NoContent
             val contentText = try {
-                JSONObject(body)
-                    .getJSONArray("content")
-                    .getJSONObject(0)
-                    .getString("text")
+                when (provider) {
+                    AIProvider.CLAUDE -> JSONObject(body)
+                        .getJSONArray("content").getJSONObject(0).getString("text")
+                    AIProvider.OPENAI -> JSONObject(body)
+                        .getJSONArray("choices").getJSONObject(0)
+                        .getJSONObject("message").getString("content")
+                }
             } catch (_: Exception) { throw AIError.NoContent }
 
             if (contentText.isBlank()) throw AIError.NoContent

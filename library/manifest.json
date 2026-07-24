@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "count": 1011,
+  "version": 3,
+  "count": 2211,
   "perCategory": {
     "geometric": 100,
     "mandalas": 100,
@@ -12,6 +12,18 @@
     "emoji": 100,
     "gems": 100,
     "icons": 103,
+    "animals": 100,
+    "birds": 100,
+    "fish": 100,
+    "bugs": 100,
+    "food": 100,
+    "sweets": 100,
+    "trees": 100,
+    "vehicles": 100,
+    "snowflakes": 100,
+    "holidays": 100,
+    "videogame": 100,
+    "sports": 100,
     "threeD": 8
   },
   "patternsUrl": "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/claude/fuse-bead-converter-app-706h2s/library/patterns.json",

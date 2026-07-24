@@ -78,13 +78,17 @@ you stage looks like what a user would get converting the same photo in-app.
 
 ## Categories
 
-Ten content categories, 100 patterns each, plus the `threeD` specialty:
+Twenty-two content categories, 100 patterns each, plus the `threeD` specialty:
 
-`geometric mandalas hearts stars flowers rainbows space emoji gems icons threeD`
+`geometric mandalas hearts stars flowers rainbows space emoji gems icons
+animals birds fish bugs food sweets trees vehicles snowflakes holidays
+videogame sports threeD`
 
 (plus `custom` for user designs, which never appears in the published library).
 
-- The nine parametric categories come from `gen_library.py`.
+- `gen_library.py` produces the first nine parametric categories.
+- `gen_library2.py` produces animals, birds, fish, bugs, food, sweets, trees,
+  vehicles, snowflakes, holidays, videogame, and sports.
 - **icons** comes from `gen_icons.py` (letters, digits, symbols).
 - **threeD** comes from `gen_3d.py`; each carries a `buildGuide` and
   `assemblyGuide` the app shows on an Instructions sheet.

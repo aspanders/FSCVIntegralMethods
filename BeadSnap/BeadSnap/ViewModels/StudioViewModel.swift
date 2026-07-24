@@ -9,23 +9,31 @@ final class StudioViewModel: ObservableObject {
     @Published var generatedPattern: FusePattern?
     @Published var errorMessage: String?
     @Published private(set) var hasAPIKey: Bool
+    @Published private(set) var provider: AIProvider
 
     private let service = AIPatternService.shared
     private var generationTask: Task<Void, Never>?
     private var isSaving = false
 
     init() {
-        hasAPIKey = AIPatternService.shared.hasAPIKey
+        let svc = AIPatternService.shared
+        provider = svc.provider
+        hasAPIKey = svc.hasAPIKey
     }
 
     func refreshAPIKeyStatus() {
         hasAPIKey = service.hasAPIKey
+        provider = service.provider
     }
 
     var apiKey: String { service.apiKey }
+    func apiKey(for p: AIProvider) -> String { service.apiKey(for: p) }
+    func hasKey(for p: AIProvider) -> Bool { service.hasAPIKey(for: p) }
 
-    func saveAPIKey(_ key: String) {
-        service.apiKey = key
+    /// Save the key for a provider and make it the active one.
+    func saveAPIKey(_ key: String, for p: AIProvider) {
+        service.setAPIKey(key, for: p)
+        service.provider = p
         refreshAPIKeyStatus()
     }
 

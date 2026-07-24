@@ -44,6 +44,7 @@ fun AIStudioScreen(
     val generatedPattern by viewModel.generatedPattern.collectAsState()
     val errorMessage     by viewModel.errorMessage.collectAsState()
     val hasKey           by viewModel.hasAPIKey.collectAsState()
+    val aiProvider       by viewModel.provider.collectAsState()
 
     var showKeySetup     by remember { mutableStateOf(!viewModel.hasAPIKey.value) }
     var showIterateSheet by remember { mutableStateOf(false) }
@@ -64,9 +65,10 @@ fun AIStudioScreen(
             // API key banner
             if (!hasKey || showKeySetup) {
                 APIKeySetupCard(
-                    currentKey = viewModel.apiKey,
-                    onSave = { key ->
-                        viewModel.saveAPIKey(key)
+                    initialProvider = aiProvider,
+                    keyFor = { viewModel.apiKey(it) },
+                    onSave = { key, prov ->
+                        viewModel.saveAPIKey(key, prov)
                         showKeySetup = false
                     }
                 )
@@ -188,12 +190,16 @@ fun AIStudioScreen(
 
 // ─── API key setup ─────────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun APIKeySetupCard(
-    currentKey: String,
-    onSave: (String) -> Unit
+    initialProvider: com.beadsnap.app.services.AIProvider,
+    keyFor: (com.beadsnap.app.services.AIProvider) -> String,
+    onSave: (String, com.beadsnap.app.services.AIProvider) -> Unit
 ) {
-    var key by remember { mutableStateOf(currentKey) }
+    var provider by remember { mutableStateOf(initialProvider) }
+    // reload the stored key for whichever provider is selected
+    var key by remember(provider) { mutableStateOf(keyFor(provider)) }
     var visible by remember { mutableStateOf(false) }
 
     Card(
@@ -209,21 +215,30 @@ private fun APIKeySetupCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.Key, contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary)
-                Text("Anthropic API Key Required",
+                Text("Set Up AI",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
             Text(
-                "Enter your Anthropic API key to enable AI pattern generation. " +
-                "Keys are stored securely in device Keystore.",
+                "BeadSnap works with Claude or ChatGPT. Choose one and paste your " +
+                "key. Keys are stored securely in device Keystore.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.beadsnap.app.services.AIProvider.entries.forEach { p ->
+                    FilterChip(
+                        selected = provider == p,
+                        onClick = { provider = p },
+                        label = { Text(p.displayName) }
+                    )
+                }
+            }
             OutlinedTextField(
                 value = key,
                 onValueChange = { key = it },
-                label = { Text("API Key") },
-                placeholder = { Text("sk-ant-…") },
+                label = { Text("${provider.displayName} API Key") },
+                placeholder = { Text(provider.keyHint) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 visualTransformation = if (visible) VisualTransformation.None
@@ -237,8 +252,15 @@ private fun APIKeySetupCard(
                     }
                 }
             )
+            Text(
+                if (provider == com.beadsnap.app.services.AIProvider.CLAUDE)
+                    "Get a key at console.anthropic.com"
+                else "Get a key at platform.openai.com",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
             Button(
-                onClick  = { onSave(key.trim()) },
+                onClick  = { onSave(key.trim(), provider) },
                 enabled  = key.isNotBlank(),
                 modifier = Modifier.fillMaxWidth()
             ) {

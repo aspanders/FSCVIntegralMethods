@@ -11,7 +11,7 @@ enum AIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noAPIKey:              return "No API key set. Tap 'Set Up AI' to add your Claude API key."
+        case .noAPIKey:              return "No API key set. Tap 'Set Up AI' to add your Claude or ChatGPT API key."
         case .networkError(let e):   return "Network error: \(e.localizedDescription)"
         case .httpError(let code):
             switch code {
@@ -28,14 +28,30 @@ enum AIError: LocalizedError {
     }
 }
 
+/// The AI backend the user paired. Both use the user's own key over HTTPS; keys
+/// live in the Keychain, the provider choice (not sensitive) in UserDefaults.
+enum AIProvider: String, CaseIterable, Identifiable {
+    case claude, openai
+    var id: String { rawValue }
+    var displayName: String { self == .claude ? "Claude (Anthropic)" : "ChatGPT (OpenAI)" }
+    var keyAccount: String { self == .claude ? "claude_api_key" : "openai_api_key" }
+    var keyPrefixHint: String { self == .claude ? "sk-ant-…" : "sk-…" }
+    var consoleURL: String {
+        self == .claude ? "https://console.anthropic.com/settings/keys"
+                        : "https://platform.openai.com/api-keys"
+    }
+}
+
 final class AIPatternService {
     static let shared = AIPatternService()
     private init() {}
 
-    private let apiURL = URL(string: "https://api.anthropic.com/v1/messages")!
-    private let model = "claude-haiku-4-5"
+    private let claudeURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    private let openAIURL = URL(string: "https://api.openai.com/v1/chat/completions")!
+    private let claudeModel = "claude-haiku-4-5"
+    private let openAIModel = "gpt-4o-mini"
 
-    private let apiKeyAccount = "claude_api_key"
+    private let providerKey = "ai_provider"
 
     // Bounded timeouts matching Android's OkHttp config (30s connect / 60s read)
     private let session: URLSession = {
@@ -45,18 +61,29 @@ final class AIPatternService {
         return URLSession(configuration: config)
     }()
 
-    var apiKey: String {
-        get { Keychain.load(for: apiKeyAccount) ?? "" }
-        set {
-            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                Keychain.delete(for: apiKeyAccount)
-            } else {
-                Keychain.save(trimmed, for: apiKeyAccount)
-            }
-        }
+    /// Which provider requests use. Persisted, defaults to Claude.
+    var provider: AIProvider {
+        get { AIProvider(rawValue: UserDefaults.standard.string(forKey: providerKey) ?? "") ?? .claude }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: providerKey) }
     }
-    var hasAPIKey: Bool { !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    // Per-provider keys (Keychain), so both can be stored and swapped freely.
+    func apiKey(for p: AIProvider) -> String { Keychain.load(for: p.keyAccount) ?? "" }
+    func setAPIKey(_ value: String, for p: AIProvider) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { Keychain.delete(for: p.keyAccount) }
+        else { Keychain.save(trimmed, for: p.keyAccount) }
+    }
+    func hasAPIKey(for p: AIProvider) -> Bool {
+        !apiKey(for: p).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // Current-provider convenience (keeps existing call sites working).
+    var apiKey: String {
+        get { apiKey(for: provider) }
+        set { setAPIKey(newValue, for: provider) }
+    }
+    var hasAPIKey: Bool { hasAPIKey(for: provider) }
 
     // MARK: - System Prompt
 
@@ -66,7 +93,7 @@ final class AIPatternService {
     {
       "id": "<uuid-string>",
       "title": "<short title>",
-      "category": "<animals|fantasy|vehicles|nature|icons|holidays|custom>",
+      "category": "<animals|space|food|emoji|holidays|icons|custom>",
       "createdBy": "ai",
       "grid": {"width": <8-64>, "height": <8-64>},
       "palette": [{"id": "<id>", "name": "<name>", "hex": "<#RRGGBB>"}],
@@ -123,45 +150,7 @@ final class AIPatternService {
     // MARK: - Private
 
     private func callAPI(userMessage: String) async throws -> FusePattern {
-        var req = URLRequest(url: apiURL)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-
-        let body: [String: Any] = [
-            "model": model,
-            "max_tokens": 4096,
-            "system": systemPrompt,
-            "messages": [["role": "user", "content": userMessage]]
-        ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let data: Data
-        let urlResponse: URLResponse
-        do { (data, urlResponse) = try await session.data(for: req) }
-        catch {
-            // Rethrow cancellation so callers can distinguish user cancel from failure
-            if error is CancellationError || (error as? URLError)?.code == .cancelled {
-                throw CancellationError()
-            }
-            throw AIError.networkError(error)
-        }
-
-        if let http = urlResponse as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw AIError.httpError(http.statusCode)
-        }
-
-        struct Response: Decodable {
-            struct Content: Decodable { let text: String }
-            let content: [Content]
-        }
-        guard let resp = try? JSONDecoder().decode(Response.self, from: data),
-              let text = resp.content.first?.text,
-              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw AIError.noContent
-        }
-
+        let text = try await requestText(user: userMessage)
         let jsonData = try extractJSON(from: text)
         let pattern: FusePattern
         let decoder = JSONDecoder()
@@ -172,6 +161,82 @@ final class AIPatternService {
         var mutable = pattern
         try validate(&mutable)
         return mutable
+    }
+
+    /// Get the raw model text from whichever provider is selected.
+    private func requestText(user: String) async throws -> String {
+        switch provider {
+        case .claude: return try await callClaude(user: user)
+        case .openai: return try await callOpenAI(user: user)
+        }
+    }
+
+    private func send(_ req: URLRequest) async throws -> Data {
+        let data: Data
+        let resp: URLResponse
+        do { (data, resp) = try await session.data(for: req) }
+        catch {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                throw CancellationError()
+            }
+            throw AIError.networkError(error)
+        }
+        if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw AIError.httpError(http.statusCode)
+        }
+        return data
+    }
+
+    private func callClaude(user: String) async throws -> String {
+        var req = URLRequest(url: claudeURL)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        let body: [String: Any] = [
+            "model": claudeModel,
+            "max_tokens": 4096,
+            "system": systemPrompt,
+            "messages": [["role": "user", "content": user]]
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await send(req)
+        struct R: Decodable { struct C: Decodable { let text: String }; let content: [C] }
+        guard let r = try? JSONDecoder().decode(R.self, from: data),
+              let t = r.content.first?.text,
+              !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AIError.noContent
+        }
+        return t
+    }
+
+    private func callOpenAI(user: String) async throws -> String {
+        var req = URLRequest(url: openAIURL)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = [
+            "model": openAIModel,
+            "max_tokens": 4096,
+            // Force strict JSON output so extractJSON always has a clean object.
+            "response_format": ["type": "json_object"],
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": user]
+            ]
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let data = try await send(req)
+        struct R: Decodable {
+            struct Choice: Decodable { struct Msg: Decodable { let content: String }; let message: Msg }
+            let choices: [Choice]
+        }
+        guard let r = try? JSONDecoder().decode(R.self, from: data),
+              let t = r.choices.first?.message.content,
+              !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AIError.noContent
+        }
+        return t
     }
 
     private func extractJSON(from text: String) throws -> Data {

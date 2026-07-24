@@ -30,11 +30,13 @@ CREATE FROM ANYTHING
 • Remove the background first with one tap: the subject is detected on-device,
   the background fades away, and a simple brush lets you fine-tune what stays
 • Describe an idea and let AI design a one-of-a-kind pattern for you
-  (bring your own Claude API key)
+  (bring your own Claude or ChatGPT API key)
 
 A GROWING LIBRARY
-• Over 1,000 ready-made patterns: 100 in each of Geometric, Mandalas, Hearts,
-  Stars, Flowers, Rainbows, Space, Emoji, Gems, and Icons, plus 3D builds
+• Over 2,000 ready-made patterns: 100 in each of 22 categories: Geometric,
+  Mandalas, Hearts, Stars, Flowers, Rainbows, Space, Emoji, Gems, Icons,
+  Animals, Birds, Fish, Bugs, Food, Sweets, Trees, Vehicles, Snowflakes,
+  Holidays, Video Game, and Sports, plus 3D builds
 • 3D patterns come with step-by-step build and assembly guides so you can make
   boxes, dice, planters, and more out of bead panels
 • The library refreshes automatically, so new patterns arrive over time
@@ -59,15 +61,15 @@ Perfect for kids' craft sessions, pixel-art fans, and anyone who loves the
 satisfying click of a fuse bead landing on a pegboard.
 
 ## What's new (v1.0.0)
-First release! Over 1,000 built-in patterns across 10 categories plus 3D
-builds, photo-to-pattern conversion, AI pattern generation, a full bead editor,
-shopping lists, and PNG export.
+First release! Over 2,000 built-in patterns across 22 categories plus 3D
+builds, photo-to-pattern conversion, AI pattern generation (Claude or ChatGPT),
+a full bead editor, shopping lists, and PNG export.
 
 ## Review notes (both stores)
 - The app is fully functional without any purchase; the three IAPs are
   voluntary tips that unlock nothing.
-- AI generation requires the reviewer's own Anthropic API key; all other
-  features work without one. Photo conversion and the editor demonstrate
+- AI generation requires the reviewer's own Claude or ChatGPT API key; all
+  other features work without one. Photo conversion and the editor demonstrate
   the core app.
 - No data is collected; camera/photo processing happens on-device.
 - Background removal runs entirely on-device (Vision on iOS; ML Kit subject

@@ -18,7 +18,7 @@ Current version: **1.0.0** (iOS build 1 / Android versionCode 1).
 
 ## 1. Privacy policy (required by BOTH stores)
 
-The apps use Camera + Photos and store an optional user-supplied Anthropic API
+The apps use Camera + Photos and store an optional user-supplied Claude or ChatGPT API
 key on-device (iOS Keychain / Android EncryptedSharedPreferences). Nothing is
 collected or transmitted to us.
 
@@ -81,7 +81,7 @@ Product IDs are identical on both stores (referenced in
 Common first-submission rejections to pre-empt:
 - IAP products not attached to the version → attach all three tips.
 - Privacy policy URL unreachable → test in an incognito browser.
-- “App is a demo/minimal”: not a risk here; mention the 1,000+ built-in
+- “App is a demo/minimal”: not a risk here; mention the 2,000+ built-in
   patterns, photo conversion, and editor in review notes.
 - Camera/photo permission strings must match actual use (already set in
   Info.plist).

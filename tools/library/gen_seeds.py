@@ -9,6 +9,7 @@ import os
 
 import gen_icons
 import gen_library
+import gen_library2
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
@@ -47,16 +48,21 @@ def _smallest(ps, tag=None):
     return min(cand, key=lambda p: len(p["cells"]))
 
 
+ORDER = ["geometric", "mandalas", "hearts", "stars", "flowers", "rainbows",
+         "space", "emoji", "gems", "icons", "animals", "birds", "fish", "bugs",
+         "food", "sweets", "trees", "vehicles", "snowflakes", "holidays",
+         "videogame", "sports"]
+
+
 def collect_seeds():
     seeds = {}
-    for cat, fn in gen_library.GENERATORS.items():
+    allgen = {**gen_library.GENERATORS, **gen_library2.GENERATORS}
+    for cat, fn in allgen.items():
         ps = fn()
-        seeds[cat] = PICKS[cat](ps)
-    # icons: a clean letter A
+        pick = PICKS.get(cat)
+        seeds[cat] = pick(ps) if pick else _smallest(ps)   # new cats: smallest compact one
     seeds["icons"] = _named(gen_icons.generate(), "Letter A")
-    return [seeds[c] for c in
-            ["geometric", "mandalas", "hearts", "stars", "flowers",
-             "rainbows", "space", "emoji", "gems", "icons"]]
+    return [seeds[c] for c in ORDER]
 
 
 DIFF = {"easy": "easy", "medium": "medium", "hard": "hard"}
@@ -70,7 +76,7 @@ def emit_kotlin(seeds):
          "object SeedPatterns {", ""]
     names = []
     for p in seeds:
-        nm = NAMES[p["category"]]
+        nm = NAMES.get(p["category"], p["category"])
         names.append(nm)
         pal = ", ".join(f'BeadColor("{c["id"]}","{c["name"]}","{c["hex"]}")' for c in p["palette"])
         cells = ", ".join(f'Cell({c["x"]},{c["y"]},"{c["colorId"]}")' for c in p["cells"])
@@ -97,7 +103,7 @@ def emit_swift(seeds):
          "enum SeedPatterns {", ""]
     names = []
     for p in seeds:
-        nm = NAMES[p["category"]]
+        nm = NAMES.get(p["category"], p["category"])
         names.append(nm)
         pal = ", ".join(f'PaletteColor(id: "{c["id"]}", name: "{c["name"]}", hex: "{c["hex"]}")'
                         for c in p["palette"])

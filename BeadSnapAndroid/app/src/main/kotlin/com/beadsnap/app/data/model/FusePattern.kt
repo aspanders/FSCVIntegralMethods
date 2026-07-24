@@ -70,7 +70,7 @@ data class FusePattern(
 
 @Serializable
 enum class PatternCategory(val displayName: String, val emoji: String) {
-    // 10 content categories (100 patterns each) + 3D specialty + user designs.
+    // 22 content categories (100 patterns each) + 3D specialty + user designs.
     geometric("Geometric", "🔷"),
     mandalas("Mandalas", "🌀"),
     hearts("Hearts", "💗"),
@@ -81,6 +81,18 @@ enum class PatternCategory(val displayName: String, val emoji: String) {
     emoji("Emoji", "😊"),
     gems("Gems", "💎"),
     icons("Icons", "🔤"),
+    animals("Animals", "🐾"),
+    birds("Birds", "🐦"),
+    fish("Fish", "🐟"),
+    bugs("Bugs", "🐛"),
+    food("Food", "🍎"),
+    sweets("Sweets", "🍬"),
+    trees("Trees", "🌳"),
+    vehicles("Vehicles", "🚗"),
+    snowflakes("Snowflakes", "❄️"),
+    holidays("Holidays", "🎁"),
+    videogame("Video Game", "🎮"),
+    sports("Sports", "⚽"),
     threeD("3D", "🧊"),
     custom("My Designs", "✏️")
 }

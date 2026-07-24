@@ -4,6 +4,7 @@ struct AIStudioView: View {
     @StateObject private var viewModel = StudioViewModel()
     @State private var showAPIKeySheet = false
     @State private var apiKeyInput = ""
+    @State private var apiKeyProvider: AIProvider = .claude
     @State private var iterateInstruction = ""
     @State private var showIterateSheet = false
     @State private var editingPattern: FusePattern?
@@ -63,7 +64,7 @@ struct AIStudioView: View {
                     .foregroundStyle(.purple)
             }
         } footer: {
-            Text("AI Studio needs a free Claude API key from console.anthropic.com.")
+            Text("AI Studio works with your own Claude or ChatGPT API key.")
         }
     }
 
@@ -211,24 +212,46 @@ struct AIStudioView: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField("sk-ant-...", text: $apiKeyInput)
+                    Picker("AI Provider", selection: $apiKeyProvider) {
+                        ForEach(AIProvider.allCases) { p in
+                            Text(p.displayName).tag(p)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Choose your AI")
+                } footer: {
+                    Text("BeadSnap works with either Claude or ChatGPT. Pick the one you have a key for.")
+                }
+
+                Section {
+                    SecureField(apiKeyProvider.keyPrefixHint, text: $apiKeyInput)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                 } header: {
-                    Text("Claude API Key")
+                    Text("\(apiKeyProvider.displayName) API Key")
                 } footer: {
-                    Text("Get a free key at console.anthropic.com. Stored securely in the iOS Keychain.")
+                    Text(apiKeyProvider == .claude
+                         ? "Get a key at console.anthropic.com. Stored securely in the iOS Keychain."
+                         : "Get a key at platform.openai.com. Stored securely in the iOS Keychain.")
                 }
             }
             .navigationTitle("Set Up AI")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                apiKeyProvider = viewModel.provider
+                apiKeyInput = viewModel.apiKey(for: apiKeyProvider)
+            }
+            .onChange(of: apiKeyProvider) { _, p in
+                apiKeyInput = viewModel.apiKey(for: p)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { showAPIKeySheet = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        viewModel.saveAPIKey(apiKeyInput)
+                        viewModel.saveAPIKey(apiKeyInput, for: apiKeyProvider)
                         showAPIKeySheet = false
                     }
                     .bold()

@@ -24,6 +24,7 @@ import shutil
 import gen_icons
 import gen_3d
 import gen_library
+import gen_library2
 import compact
 from beadlib import REPO, CATEGORIES
 
@@ -44,6 +45,7 @@ DEFAULT_RAW_BASE = "https://raw.githubusercontent.com/aspanders/FSCVIntegralMeth
 def collect():
     patterns = []
     patterns += gen_library.generate()   # 9 categories x 100 procedural patterns
+    patterns += gen_library2.generate()  # 12 more categories x 100 procedural patterns
     patterns += gen_icons.generate()     # icons: letters, digits, symbols
     patterns += gen_3d.generate()        # threeD builds with guides
     if os.path.exists(INCOMING):

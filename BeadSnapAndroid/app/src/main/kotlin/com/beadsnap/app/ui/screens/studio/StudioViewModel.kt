@@ -43,7 +43,12 @@ class StudioViewModel(
     private val _hasAPIKey = MutableStateFlow(service.hasAPIKey)
     val hasAPIKey: StateFlow<Boolean> = _hasAPIKey.asStateFlow()
 
+    private val _provider = MutableStateFlow(service.provider)
+    val provider: StateFlow<com.beadsnap.app.services.AIProvider> = _provider.asStateFlow()
+
     val apiKey: String get() = service.apiKey
+    fun apiKey(p: com.beadsnap.app.services.AIProvider): String = service.apiKey(p)
+    fun hasKey(p: com.beadsnap.app.services.AIProvider): Boolean = service.hasKey(p)
 
     private var generationJob: Job? = null
     private var isSaving = false
@@ -99,8 +104,10 @@ class StudioViewModel(
         generationJob = job
     }
 
-    fun saveAPIKey(key: String) {
-        service.apiKey = key
+    fun saveAPIKey(key: String, provider: com.beadsnap.app.services.AIProvider = service.provider) {
+        service.setApiKey(provider, key)
+        service.provider = provider
+        _provider.value = provider
         _hasAPIKey.value = service.hasAPIKey
     }
 

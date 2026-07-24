@@ -11,7 +11,7 @@ BeadSnap does not collect, store, or transmit any personal information. Every
 pattern you create stays on your device. Photos you convert are processed
 entirely on your device and are never uploaded anywhere. If you choose to use
 the optional AI pattern generator, your text prompt is sent directly from your
-device to Anthropic using your own API key: we never see it. If you leave a
+device to your chosen AI provider (Anthropic or OpenAI) using your own API key: we never see it. If you leave a
 tip, Apple or Google handles the payment; we never see your payment details.
 There are no accounts, no ads, and no analytics or tracking of any kind.
 
@@ -53,7 +53,7 @@ that are private to the App and sandboxed by iOS or Android:
 - **App preferences**, such as whether you've completed onboarding, how many
   times you've opened the App (used only to time the optional tip-jar
   prompt), and your editor settings
-- **Your Anthropic API key**, if you choose to add one: stored using the
+- **Your Claude or ChatGPT API key**, if you choose to add one: stored using the
   platform's secure credential storage (the iOS Keychain, or Android's
   EncryptedSharedPreferences backed by the Android Keystore), and never
   included in any backup or transmitted to us
@@ -98,7 +98,8 @@ result also operates entirely locally.
 
 BeadSnap's AI Studio lets you generate a bead pattern from a text
 description. This feature is entirely optional and requires you to provide
-your own Anthropic API key.
+your own API key for one of two AI providers: Anthropic (Claude) or
+OpenAI (ChatGPT). You choose which provider to use.
 
 If you use this feature:
 
@@ -106,16 +107,16 @@ If you use this feature:
   sent to us.
 - The text prompt you type, and: if you ask BeadSnap to refine a pattern -
   a compact description of that pattern's colors and layout, are sent
-  directly from your device to Anthropic's API (`api.anthropic.com`) using
-  your key.
-- This exchange happens directly between your device and Anthropic. We do
+  directly from your device to the AI provider you chose, using your key:
+  Anthropic's API (`api.anthropic.com`) or OpenAI's API (`api.openai.com`).
+- This exchange happens directly between your device and that provider. We do
   not see, log, or store any part of it.
-- Anthropic's handling of this data is governed by Anthropic's own privacy
-  policy, available at
-  [anthropic.com/legal/privacy](https://www.anthropic.com/legal/privacy).
+- The provider's handling of this data is governed by its own privacy policy:
+  [anthropic.com/legal/privacy](https://www.anthropic.com/legal/privacy) or
+  [openai.com/policies/privacy-policy](https://openai.com/policies/privacy-policy).
 
 If you never open AI Studio or never add an API key, none of this applies to
-you: no data is sent to Anthropic and this feature performs no network
+you: no data is sent to any AI provider and this feature performs no network
 activity.
 
 ## 7. In-App Purchases (Tip Jar)
@@ -162,7 +163,7 @@ purpose described:
 
 | Service | Purpose | Data involved |
 |---|---|---|
-| Anthropic API | Optional AI pattern generation | Your prompt text, sent directly from your device using your own API key: only if you use AI Studio |
+| Claude or ChatGPT API | Optional AI pattern generation | Your prompt text, sent directly from your device using your own API key: only if you use AI Studio |
 | Apple In-App Purchase / Google Play Billing | Processing optional tip payments | Handled entirely by Apple/Google; we never receive payment details |
 | Google ML Kit (on-device) | Background removal on Android | None transmitted: processing is entirely on-device |
 | Apple Vision framework (on-device) | Background removal on iOS | None transmitted: processing is entirely on-device |
@@ -174,7 +175,7 @@ cross-app or cross-site tracking of any kind.
 
 - **Permissions:** you can grant or revoke camera and photo access at any
   time in your device's system settings.
-- **AI features:** you can remove your Anthropic API key at any time from
+- **AI features:** you can remove your API key at any time from
   AI Studio's settings; doing so disables AI generation entirely.
 - **Your data:** since everything is stored locally, uninstalling the App
   deletes all patterns, preferences, and any stored API key immediately and

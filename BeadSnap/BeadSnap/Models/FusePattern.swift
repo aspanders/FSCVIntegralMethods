@@ -127,40 +127,65 @@ struct FusePattern: Identifiable, Codable, Hashable {
 // MARK: - Supporting Types
 
 enum PatternCategory: String, Codable, CaseIterable, Identifiable {
-    // 10 content categories (100 patterns each) + 3D specialty + user designs.
+    // 22 content categories (100 patterns each) + 3D specialty + user designs.
     case geometric, mandalas, hearts, stars, flowers, rainbows, space, emoji,
-         gems, icons, threeD, custom
+         gems, icons, animals, birds, fish, bugs, food, sweets, trees, vehicles,
+         snowflakes, holidays, videogame, sports, threeD, custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .geometric: return "Geometric"
-        case .mandalas:  return "Mandalas"
-        case .hearts:    return "Hearts"
-        case .stars:     return "Stars"
-        case .flowers:   return "Flowers"
-        case .rainbows:  return "Rainbows"
-        case .space:     return "Space"
-        case .emoji:     return "Emoji"
-        case .gems:      return "Gems"
-        case .icons:     return "Icons"
-        case .threeD:    return "3D"
-        case .custom:    return "My Designs"
+        case .geometric:  return "Geometric"
+        case .mandalas:   return "Mandalas"
+        case .hearts:     return "Hearts"
+        case .stars:      return "Stars"
+        case .flowers:    return "Flowers"
+        case .rainbows:   return "Rainbows"
+        case .space:      return "Space"
+        case .emoji:      return "Emoji"
+        case .gems:       return "Gems"
+        case .icons:      return "Icons"
+        case .animals:    return "Animals"
+        case .birds:      return "Birds"
+        case .fish:       return "Fish"
+        case .bugs:       return "Bugs"
+        case .food:       return "Food"
+        case .sweets:     return "Sweets"
+        case .trees:      return "Trees"
+        case .vehicles:   return "Vehicles"
+        case .snowflakes: return "Snowflakes"
+        case .holidays:   return "Holidays"
+        case .videogame:  return "Video Game"
+        case .sports:     return "Sports"
+        case .threeD:     return "3D"
+        case .custom:     return "My Designs"
         }
     }
     var emoji: String {
         switch self {
-        case .geometric: return "🔷"
-        case .mandalas:  return "🌀"
-        case .hearts:    return "💗"
-        case .stars:     return "⭐"
-        case .flowers:   return "🌸"
-        case .rainbows:  return "🌈"
-        case .space:     return "🚀"
-        case .emoji:     return "😊"
-        case .gems:      return "💎"
-        case .icons:     return "🔤"
-        case .threeD:    return "🧊"
-        case .custom:    return "✏️"
+        case .geometric:  return "🔷"
+        case .mandalas:   return "🌀"
+        case .hearts:     return "💗"
+        case .stars:      return "⭐"
+        case .flowers:    return "🌸"
+        case .rainbows:   return "🌈"
+        case .space:      return "🚀"
+        case .emoji:      return "😊"
+        case .gems:       return "💎"
+        case .icons:      return "🔤"
+        case .animals:    return "🐾"
+        case .birds:      return "🐦"
+        case .fish:       return "🐟"
+        case .bugs:       return "🐛"
+        case .food:       return "🍎"
+        case .sweets:     return "🍬"
+        case .trees:      return "🌳"
+        case .vehicles:   return "🚗"
+        case .snowflakes: return "❄️"
+        case .holidays:   return "🎁"
+        case .videogame:  return "🎮"
+        case .sports:     return "⚽"
+        case .threeD:     return "🧊"
+        case .custom:     return "✏️"
         }
     }
 }
