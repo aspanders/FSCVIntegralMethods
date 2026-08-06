@@ -425,6 +425,138 @@ def geometric():
     return _emit("geometric", _geo_configs(), 200)
 
 
+# ── MANDALAS ─────────────────────────────────────────────────────────────────
+
+MPAL = [["red", "orange", "yellow", "green", "blue", "purple"],
+        ["navy", "sky_blue", "white", "hot_pink"], ["purple", "magenta", "lemon", "aqua"],
+        ["teal", "orange", "hot_pink", "yellow"], ["forest", "light_green", "banana", "red"],
+        ["dark_purple", "lavender", "aqua", "white"], ["dark_red", "orange", "banana", "cream"],
+        ["blue", "aqua", "white", "hot_pink"], ["magenta", "purple", "sky_blue", "lemon"]]
+RING_SHAPES = ["dot", "petal", "spoke", "ring", "tri", "square", "star", "scallop"]
+
+
+def _mandala(sym, seq, s, pal):
+    g = Grid(s, s)
+    c = (s - 1) / 2.0
+    maxr = s / 2.0 - 1
+    rings = len(seq)
+    for ri, shape in enumerate(seq):
+        rr = maxr * (ri + 1) / (rings + 0.4)
+        col = pal[ri % len(pal)]
+        count = sym * (2 if ri % 2 else 1)
+        if shape == "ring":
+            g.ring(c, c, rr, col, max(1.0, s * 0.045))
+        elif shape == "spoke":
+            for k in range(sym):
+                a = 2 * math.pi * k / sym
+                g.line(c, c, c + rr * math.cos(a), c + rr * math.sin(a), col)
+        else:
+            for k in range(count):
+                a = 2 * math.pi * k / count + (0 if ri % 2 else math.pi / count)
+                px, py = c + rr * math.cos(a), c + rr * math.sin(a)
+                rad = max(1.0, maxr * 0.13)
+                if shape == "dot":
+                    g.disc(px, py, rad, col)
+                elif shape == "petal":
+                    g.ellipse(px, py, rad * 1.2, rad * 0.6, col)
+                elif shape == "tri":
+                    g.poly(reg_polygon(px, py, rad + 0.5, 3, rot=a - math.pi / 2), col)
+                elif shape == "square":
+                    g.poly(reg_polygon(px, py, rad + 0.3, 4, rot=a), col)
+                elif shape == "star":
+                    g.poly(star_points(px, py, rad + 1, (rad + 1) * 0.45, 5, rot=a), col)
+                elif shape == "scallop":
+                    g.disc(px, py, rad * 0.9, col)
+    g.disc(c, c, max(1.6, s * 0.08), pal[1 % len(pal)])
+    g.disc(c, c, max(1.0, s * 0.04), pal[2 % len(pal)])
+    g.ring(c, c, maxr, pal[-1], 1.1)
+    return g
+
+
+def mandalas():
+    gens = []
+    base = len(RING_SHAPES)
+    syms = (6, 8, 10, 12, 5, 16)
+    # interleave symmetry; a rising `code` gives a fresh ring-shape sequence
+    for i in range(2400):
+        sym = syms[i % len(syms)]
+        nrings = 3 + (i // len(syms)) % 3
+        code = i // (len(syms) * 3)                      # new sequence every 18
+        seq = [RING_SHAPES[(code // (base ** k)) % base] for k in range(nrings)]
+        s = (24, 28, 30)[i % 3]
+        pal = MPAL[i % len(MPAL)]
+        gens.append((f"Mandala {sym}-fold {i+1}", _mandala(sym, seq, s, pal),
+                     ["mandala", f"{sym}fold"]))
+    return _emit("mandalas", gens, 200)
+
+
+# ── SNOWFLAKES ───────────────────────────────────────────────────────────────
+
+SPAL = ["white", "sky_blue", "toothpaste", "aqua", "light_blue", "periwinkle", "turquoise"]
+SBG = ["navy", "dark_blue", "blue", "dark_purple", "teal"]
+
+
+def _snowflake(spec, s, col, bg):
+    g = Grid(s, s)
+    g.fill(bg)
+    c = (s - 1) / 2.0
+    maxr = s / 2.0 - 1
+    branches, tip, spine = spec
+    for k in range(6):
+        a = math.pi / 3 * k
+        ux, uy = math.cos(a - math.pi / 2), math.sin(a - math.pi / 2)
+        ex, ey = c + maxr * ux, c + maxr * uy
+        g.line(c, c, ex, ey, col)
+        if spine == "double":
+            for off in (-1, 1):
+                px, py = c - off * uy * 1.2, c + off * ux * 1.2
+                g.line(px, py, px + maxr * 0.9 * ux, py + maxr * 0.9 * uy, col)
+        for (frac, blen, bang) in branches:
+            bx, by = c + maxr * frac * ux, c + maxr * frac * uy
+            for sgn in (-1, 1):
+                ba = a - math.pi / 2 + sgn * bang
+                g.line(bx, by, bx + maxr * blen * math.cos(ba), by + maxr * blen * math.sin(ba), col)
+        if tip == "dot":
+            g.disc(ex, ey, max(1.0, s * 0.05), col)
+        elif tip == "vee":
+            for sgn in (-1, 1):
+                ba = a - math.pi / 2 + sgn * math.pi / 4
+                g.line(ex, ey, ex + maxr * 0.15 * math.cos(ba), ey + maxr * 0.15 * math.sin(ba), col)
+        elif tip == "cross":
+            g.disc(ex, ey, 1.2, col)
+            for sgn in (-1, 1):
+                g.line(ex - uy * 2 * sgn, ey + ux * 2 * sgn, ex + uy * 2 * sgn, ey - ux * 2 * sgn, col)
+    g.disc(c, c, max(1.5, s * 0.08), col)
+    return g
+
+
+def snowflakes():
+    gens = []
+    i = 0
+    fracs = [0.35, 0.5, 0.62, 0.75, 0.85]
+    angs = [math.pi / 6, math.pi / 4, math.pi / 3, math.pi / 2.5]
+    lens = [0.12, 0.16, 0.2, 0.26]
+    tips = ["dot", "vee", "cross", "none"]
+    spines = ["single", "double"]
+    for nb in (2, 3):
+        for tip in tips:
+            for spine in spines:
+                for ai, ang in enumerate(angs):
+                    for li, ln in enumerate(lens):
+                        # choose branch positions deterministically
+                        positions = fracs[:nb] if (i % 2 == 0) else fracs[-nb:]
+                        branches = [(f, ln * (1.0 if j % 2 == 0 else 0.7), ang) for j, f in enumerate(positions)]
+                        s = (24, 27, 29)[i % 3]
+                        col = SPAL[i % len(SPAL)]
+                        bg = SBG[i % len(SBG)]
+                        gens.append((f"Snowflake {i+1}", _snowflake((branches, tip, spine), s, col, bg),
+                                     ["snowflake", "crystal"]))
+                        i += 1
+    return _emit("snowflakes", gens, 200)
+
+
 GENERATORS = {
     "geometric": geometric,
+    "mandalas": mandalas,
+    "snowflakes": snowflakes,
 }

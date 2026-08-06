@@ -1218,7 +1218,7 @@ GENERATORS = {
     "sweets": generate_sweets,
     "trees": generate_trees,
     "vehicles": generate_vehicles,
-    "snowflakes": generate_snowflakes,
+    "snowflakes": __import__("gen_unique").snowflakes,  # overhauled: 200 unique
     "holidays": generate_holidays,
     "videogame": generate_videogame,
     "sports": generate_sports,
