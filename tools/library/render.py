@@ -92,6 +92,41 @@ def montage(patterns, cols=10, thumb=132, pad=10, label=True, title=None):
     return canvas
 
 
+def numbered_montage(patterns, start=1, cols=5, thumb=190, pad=14, title=None):
+    """Montage where each tile shows only its INDEX (not its name), so an
+    independent reviewer judges recognizability without being told the answer."""
+    n = len(patterns)
+    rows = (n + cols - 1) // cols
+    labelh = 22
+    titleh = 34 if title else 0
+    cellw = thumb + pad
+    cellh = thumb + labelh + pad
+    W = cols * cellw + pad
+    H = rows * cellh + pad + titleh
+    canvas = Image.new("RGB", (W, H), (245, 246, 248))
+    dd = ImageDraw.Draw(canvas)
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 15)
+        tfont = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 20)
+    except Exception:
+        font = ImageFont.load_default(); tfont = font
+    if title:
+        dd.text((pad, 8), title, fill=(20, 20, 20), font=tfont)
+    for i, pat in enumerate(patterns):
+        rr, cc = divmod(i, cols)
+        x = pad + cc * cellw
+        y = pad + titleh + rr * cellh
+        dd.rectangle([x - 3, y - 3, x + thumb + 3, y + thumb + labelh], outline=(210, 213, 218), width=1)
+        maxdim = max(pat["grid"]["width"], pat["grid"]["height"])
+        im = render_pattern(pat, cell=max(6, (thumb * 3) // maxdim))
+        im.thumbnail((thumb, thumb), Image.LANCZOS)
+        ox = x + (thumb - im.width) // 2
+        oy = y + (thumb - im.height) // 2
+        canvas.paste(im, (ox, oy))
+        dd.text((x + 4, y + thumb + 2), f"#{start + i}", fill=(120, 40, 200), font=font)
+    return canvas
+
+
 if __name__ == "__main__":
     import sys
     data = json.load(open(sys.argv[1]))

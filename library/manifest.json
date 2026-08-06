@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "count": 2211,
+  "version": 4,
+  "count": 2311,
   "perCategory": {
     "geometric": 100,
     "mandalas": 100,
@@ -9,7 +9,7 @@
     "flowers": 100,
     "rainbows": 100,
     "space": 100,
-    "emoji": 100,
+    "emoji": 200,
     "gems": 100,
     "icons": 103,
     "animals": 100,

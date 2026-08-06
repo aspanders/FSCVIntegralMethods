@@ -1036,105 +1036,161 @@ def _arc(g, cx, cy, w, depth, col, smile=True):
         g.disc(x, y, 0.75, col)
 
 
-def _mouth(g, cc, s, kind, face):
-    my = cc + s * 0.15
+def _draw_eyes(g, cc, s, kind):
+    ex, er = s * 0.17, s * 0.07
+    ey = cc - s * 0.06
+    lx, rx = cc - ex, cc + ex
+    if kind == "dots":
+        g.disc(lx, ey, er, "black"); g.disc(rx, ey, er, "black")
+    elif kind == "big":
+        g.disc(lx, ey, er * 1.4, "black"); g.disc(rx, ey, er * 1.4, "black")
+    elif kind == "wide":
+        for x in (lx, rx):
+            g.disc(x, ey, er * 1.5, "white"); g.disc(x, ey, er * 0.8, "black")
+            g.set(int(x - er * 0.4), int(ey - er * 0.4), "white")
+    elif kind == "oval":
+        for x in (lx, rx):
+            g.ellipse(x, ey, er * 0.7, er * 1.35, "white"); g.ellipse(x, ey, er * 0.5, er * 0.9, "black")
+    elif kind == "sparkle":
+        for x in (lx, rx):
+            g.disc(x, ey, er * 1.1, "black"); g.disc(x - er * 0.4, ey - er * 0.4, er * 0.4, "white")
+    elif kind == "happy":            # ^ ^
+        _arc(g, lx, ey, er * 2.2, er, "black", smile=False)
+        _arc(g, rx, ey, er * 2.2, er, "black", smile=False)
+    elif kind == "teary":            # u u
+        _arc(g, lx, ey, er * 2.2, er, "black", smile=True)
+        _arc(g, rx, ey, er * 2.2, er, "black", smile=True)
+    elif kind == "wink_l":
+        _arc(g, lx, ey, er * 2.2, er, "black", smile=False); g.disc(rx, ey, er, "black")
+    elif kind == "wink_r":
+        g.disc(lx, ey, er, "black"); _arc(g, rx, ey, er * 2.2, er, "black", smile=False)
+    elif kind == "star":
+        g.poly(star_points(lx, ey, er * 1.7, er * 0.7, 5), "sky_blue")
+        g.poly(star_points(rx, ey, er * 1.7, er * 0.7, 5), "sky_blue")
+    elif kind == "heart":
+        _fill_heart(g, lx, ey, er * 2.6, "red"); _fill_heart(g, rx, ey, er * 2.6, "red")
+    elif kind == "dizzy":
+        for x in (lx, rx):
+            g.ring(x, ey, er * 1.2, "black", 1); g.ring(x, ey, er * 0.55, "black", 1)
+    elif kind == "sleepy":
+        for x in (lx, rx):
+            g.disc(x, ey + er * 0.4, er * 0.6, "black"); g.line(x - er, ey - er * 0.4, x + er, ey - er * 0.4, "black")
+    elif kind == "squint":
+        for x in (lx, rx):
+            g.line(x - er, ey, x + er, ey, "black")
+    elif kind == "dead":             # X X
+        for x in (lx, rx):
+            g.line(x - er, ey - er, x + er, ey + er, "black"); g.line(x - er, ey + er, x + er, ey - er, "black")
+    elif kind == "shades":
+        g.rect(lx - er * 1.4, ey - er, lx + er * 1.4, ey + er, "black")
+        g.rect(rx - er * 1.4, ey - er, rx + er * 1.4, ey + er, "black")
+        g.line(lx + er, ey, rx - er, ey, "black")
+    elif kind == "glasses":
+        for x in (lx, rx):
+            g.ring(x, ey, er * 1.35, "dark_gray", 1); g.disc(x, ey, er * 0.6, "black")
+        g.line(lx + er, ey, rx - er, ey, "dark_gray")
+    elif kind == "cyclops":
+        g.disc(cc, ey, er * 1.5, "white"); g.disc(cc, ey, er * 0.8, "black")
+    elif kind == "shock":
+        for x in (lx, rx):
+            g.disc(x, ey, er * 1.7, "white"); g.disc(x, ey, er * 0.5, "black")
+    elif kind == "side":
+        for x in (lx, rx):
+            g.disc(x, ey, er * 1.3, "white"); g.disc(x + er * 0.5, ey, er * 0.6, "black")
+    elif kind == "angry":
+        g.disc(lx, ey, er, "black"); g.disc(rx, ey, er, "black")
+        g.line(lx - er, ey - er - 1, lx + er, ey - 1, "dark_brown")
+        g.line(rx - er, ey - 1, rx + er, ey - er - 1, "dark_brown")
+
+
+def _draw_mouth(g, cc, s, kind):
+    my = cc + s * 0.17
     if kind == "smile":
         _arc(g, cc, my, s * 0.34, s * 0.11, "black", smile=True)
+    elif kind == "grin":
+        g.ellipse(cc, my, s * 0.2, s * 0.13, "dark_red")
+        g.rect(cc - s * 0.2, my - s * 0.14, cc + s * 0.2, my - 1, "yellow")
+        g.rect(cc - s * 0.18, my - 1, cc + s * 0.18, my + 1, "white")
+    elif kind == "laugh":
+        g.ellipse(cc, my + 1, s * 0.17, s * 0.16, "dark_red")
+        g.ellipse(cc, my + s * 0.1, s * 0.09, s * 0.06, "red")
+        g.rect(cc - s * 0.16, my - s * 0.1, cc + s * 0.16, my - s * 0.03, "white")
     elif kind == "frown":
         _arc(g, cc, my + s * 0.05, s * 0.3, s * 0.1, "black", smile=False)
-    elif kind == "line":
+    elif kind == "flat":
         g.line(cc - s * 0.14, my, cc + s * 0.14, my, "black")
-    elif kind == "grin":
-        # open smiling mouth: filled lower half-oval with a tooth strip
-        g.ellipse(cc, my, s * 0.2, s * 0.13, "dark_red")
-        g.rect(cc - s * 0.2, my - s * 0.14, cc + s * 0.2, my - 1, face)  # cut top → "D"
-        g.rect(cc - s * 0.18, my - 1, cc + s * 0.18, my + 1, "white")    # teeth
-    elif kind == "open":
-        g.ellipse(cc, my + 1, s * 0.16, s * 0.15, "dark_red")
-        g.ellipse(cc, my + s * 0.09, s * 0.09, s * 0.06, "red")          # tongue
-    elif kind == "o":
-        g.disc(cc, my, s * 0.1, "dark_red"); g.ring(cc, my, s * 0.12, "black", 1)
-    elif kind == "smallo":
-        g.disc(cc, my, s * 0.05, "dark_red"); g.ring(cc, my, s * 0.07, "black", 1)
     elif kind == "tongue":
         _arc(g, cc, my, s * 0.32, s * 0.1, "black", smile=True)
         g.disc(cc + s * 0.05, my + s * 0.08, s * 0.06, "hot_pink")
     elif kind == "kiss":
-        g.disc(cc, my, s * 0.05, "red")
+        g.disc(cc, my, s * 0.055, "red")
         _arc(g, cc, my - 1, s * 0.14, s * 0.05, "red", smile=True)
+    elif kind == "o":
+        g.disc(cc, my, s * 0.1, "dark_red"); g.ring(cc, my, s * 0.12, "black", 1)
+    elif kind == "gasp":
+        g.ellipse(cc, my, s * 0.09, s * 0.15, "dark_red"); g.ring(cc, my, s * 0.1, "black", 1)
+    elif kind == "smirk":
+        _arc(g, cc + s * 0.06, my, s * 0.2, s * 0.09, "black", smile=True)
+    elif kind == "cat":
+        _arc(g, cc - s * 0.09, my, s * 0.16, s * 0.06, "black", smile=True)
+        _arc(g, cc + s * 0.09, my, s * 0.16, s * 0.06, "black", smile=True)
+    elif kind == "grimace":
+        g.rect(cc - s * 0.18, my - s * 0.05, cc + s * 0.18, my + s * 0.05, "white")
+        for x in range(int(cc - s * 0.16), int(cc + s * 0.18), 3):
+            g.line(x, my - s * 0.05, x, my + s * 0.05, "dark_gray")
+        g.rect(cc - s * 0.18, my - s * 0.05, cc + s * 0.18, my + s * 0.05, "black") if False else None
+        g.line(cc - s * 0.18, my - s * 0.05, cc + s * 0.18, my - s * 0.05, "black")
+        g.line(cc - s * 0.18, my + s * 0.05, cc + s * 0.18, my + s * 0.05, "black")
+    elif kind == "tiny":
+        _arc(g, cc, my, s * 0.16, s * 0.05, "black", smile=True)
+    elif kind == "wavy":
+        for i in range(-3, 4):
+            g.set(int(cc + i * s * 0.05), int(my + (s * 0.04 if i % 2 else -s * 0.04)), "black")
+
+
+EYE_NAME = {"dots": "Happy", "big": "Bright", "wide": "Wide", "oval": "Doe",
+            "sparkle": "Sparkly", "happy": "Beaming", "teary": "Misty",
+            "wink_l": "Winking", "wink_r": "Winking", "star": "Star",
+            "heart": "Love", "dizzy": "Dizzy", "sleepy": "Sleepy",
+            "squint": "Squinting", "dead": "Knocked-Out", "shades": "Cool",
+            "glasses": "Nerdy", "cyclops": "Cyclops", "shock": "Shocked",
+            "side": "Side-Eye", "angry": "Angry"}
+MOUTH_NAME = {"smile": "Smile", "grin": "Grin", "laugh": "Laugh", "frown": "Frown",
+              "flat": "Neutral", "tongue": "Tongue", "kiss": "Kiss", "o": "Surprised",
+              "gasp": "Gasp", "smirk": "Smirk", "cat": "Cat Smile",
+              "grimace": "Grimace", "tiny": "Shy Smile", "wavy": "Unsure"}
 
 
 def generate_emoji():
-    out = []
-    expressions = [
-        ("Happy", "dots", "smile", None),
-        ("Grinning", "dots", "grin", None),
-        ("Big Smile", "arcs", "grin", None),
-        ("Winking", "wink", "smile", None),
-        ("Love", "hearts", "smile", None),
-        ("Cool", "shades", "smile", None),
-        ("Sad", "dots", "frown", None),
-        ("Crying", "dots", "frown", "tear"),
-        ("Surprised", "wide", "o", None),
-        ("Silly", "dots", "tongue", None),
-        ("Neutral", "dots", "line", None),
-        ("Laughing", "arcs", "open", None),
-        ("Kiss", "dots", "kiss", None),
-        ("Star Eyes", "stars", "grin", None),
-        ("Sleepy", "arcs", "smallo", None),
-        ("Angry", "brows", "frown", None),
-        ("Content", "arcs", "smile", None),
-        ("Cheeky", "wink", "tongue", None),
-        ("Shocked", "wide", "open", None),
-        ("Smitten", "hearts", "grin", None),
-        ("Dizzy", "wide", "smallo", None),
-        ("Mischief", "brows", "grin", None),
-        ("Sweet", "dots", "kiss", None),
-        ("Cool Grin", "shades", "grin", None),
-    ]
-    while len(out) < 100:
-        idx = len(out)
-        name, eyes, mouth, extra = expressions[idx % len(expressions)]
-        face = FACES[(idx // len(expressions)) % len(FACES)]
-        s = 24
+    """200 structurally-distinct faces: every eyes x mouth pair is a different
+    expression (not a recolor). Deduped to keep only unique designs."""
+    from uniqueness import signature
+    eyes = list(EYE_NAME.keys())
+    mouths = list(MOUTH_NAME.keys())
+    out, seen = [], set()
+    # order pairs so the most "iconic" expressions come first
+    pairs = [(e, m) for e in eyes for m in mouths]
+    for e, m in pairs:
+        if len(out) >= 200:
+            break
+        s = 26
         g = Grid(s, s)
         cc = (s - 1) / 2
-        g.disc(cc, cc, s * 0.45, face)
-        ex, ey, er = s * 0.17, s * 0.1, s * 0.065
-        if eyes == "dots":
-            g.disc(cc - ex, cc - ey, er, "black"); g.disc(cc + ex, cc - ey, er, "black")
-        elif eyes == "wide":
-            g.disc(cc - ex, cc - ey, er * 1.5, "white"); g.disc(cc + ex, cc - ey, er * 1.5, "white")
-            g.disc(cc - ex, cc - ey, er * 0.8, "black"); g.disc(cc + ex, cc - ey, er * 0.8, "black")
-        elif eyes == "wink":
-            g.disc(cc - ex, cc - ey, er, "black")
-            _arc(g, cc + ex, cc - ey, er * 2, er, "black", smile=True)
-        elif eyes == "arcs":
-            _arc(g, cc - ex, cc - ey, er * 2, er, "black", smile=True)
-            _arc(g, cc + ex, cc - ey, er * 2, er, "black", smile=True)
-        elif eyes == "hearts":
-            _fill_heart(g, cc - ex, cc - ey, 6, "red"); _fill_heart(g, cc + ex, cc - ey, 6, "red")
-        elif eyes == "stars":
-            g.poly(star_points(cc - ex, cc - ey, er * 1.7, er * 0.7, 5), "sky_blue")
-            g.poly(star_points(cc + ex, cc - ey, er * 1.7, er * 0.7, 5), "sky_blue")
-        elif eyes == "shades":
-            g.rect(cc - ex - er * 1.3, cc - ey - er, cc - ex + er * 1.3, cc - ey + er, "black")
-            g.rect(cc + ex - er * 1.3, cc - ey - er, cc + ex + er * 1.3, cc - ey + er, "black")
-            g.line(cc - ex + er, cc - ey, cc + ex - er, cc - ey, "black")
-        elif eyes == "brows":
-            g.disc(cc - ex, cc - ey, er, "black"); g.disc(cc + ex, cc - ey, er, "black")
-            g.line(cc - ex - er, cc - ey - er - 1, cc - ex + er, cc - ey - 1, "dark_brown")
-            g.line(cc + ex - er, cc - ey - 1, cc + ex + er, cc - ey - er - 1, "dark_brown")
-        _mouth(g, cc, s, mouth, face)
-        if extra == "tear":
-            g.disc(cc - ex, cc + s * 0.05, 1.5, "sky_blue")
-        if name in ("Happy", "Love", "Silly", "Kiss"):
-            g.disc(cc - s * 0.3, cc + s * 0.06, 1.7, "blush")
-            g.disc(cc + s * 0.3, cc + s * 0.06, 1.7, "blush")
-        out.append(_finish("emoji", f"{name} Face {len(out)+1}", g,
-                           ["emoji", "face", name.split()[0].lower()],
-                           f"emoji-{name}-{face}-{len(out)}"))
-    return out[:100]
+        g.disc(cc, cc, s * 0.45, "yellow")
+        _draw_eyes(g, cc, s, e)
+        _draw_mouth(g, cc, s, m)
+        # a touch of blush on the sweetest combos (structural, tiny, not a recolor)
+        if (e in ("heart", "sparkle", "happy")) and m in ("smile", "kiss", "grin"):
+            g.disc(cc - s * 0.3, cc + s * 0.07, 1.6, "blush")
+            g.disc(cc + s * 0.3, cc + s * 0.07, 1.6, "blush")
+        pat = _finish("emoji", f"{EYE_NAME[e]} {MOUTH_NAME[m]}", g,
+                      ["emoji", "face", EYE_NAME[e].lower()], f"emoji-{e}-{m}")
+        sig = signature(pat)
+        if sig in seen:
+            continue
+        seen.add(sig)
+        out.append(pat)
+    return out
 
 
 # ── GEMS ─────────────────────────────────────────────────────────────────────
