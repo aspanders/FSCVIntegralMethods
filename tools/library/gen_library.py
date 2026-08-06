@@ -1319,8 +1319,10 @@ def generate_gems():
     return out[:100]
 
 
+import gen_unique  # noqa: E402  (200-unique overhauled generators)
+
 GENERATORS = {
-    "geometric": generate_geometric,
+    "geometric": gen_unique.geometric,   # overhauled: 200 structurally-unique
     "mandalas": generate_mandalas,
     "hearts": generate_hearts,
     "stars": generate_stars,
