@@ -581,8 +581,307 @@ def snowflakes():
     return _emit("snowflakes", gens, 200)
 
 
+# ── HEARTS ───────────────────────────────────────────────────────────────────
+
+def _heart_cells(s, size, cx=None, cy=None):
+    cx = (s - 1) / 2 if cx is None else cx
+    cy = (s - 1) / 2 - 1 if cy is None else cy
+    m = Grid(s, s)
+    m.poly(heart_points(cx, cy, size), "X")
+    return {(x, y) for x, y, _ in m.cells()}
+
+
+def hearts():
+    S = 27
+    mask = _heart_cells(S, S * 0.94)
+    xs = [x for x, _ in mask]; ys = [y for _, y in mask]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    W = x1 - x0 + 1; H = y1 - y0 + 1
+    gens = []
+
+    def build(title, fn, tags):
+        g = Grid(S, S)
+        for (x, y) in mask:
+            c = fn(x - x0, y - y0)
+            if c:
+                g.set(x, y, c)
+        gens.append((title, g, ["heart"] + tags))
+
+    def col2(a=("red", "white")):
+        return a
+    A, B = "red", "white"
+    # solid
+    build("Solid Heart", lambda x, y: A, ["solid"])
+    # stripes h/v/diag/anti x widths
+    for w in range(1, 7):
+        build(f"H-Stripe Heart w{w}", lambda x, y, w=w: (A, B)[(y // w) % 2], ["stripe"])
+        build(f"V-Stripe Heart w{w}", lambda x, y, w=w: (A, B)[(x // w) % 2], ["stripe"])
+        build(f"Diag Heart w{w}", lambda x, y, w=w: (A, B)[((x + y) // w) % 2], ["stripe"])
+        build(f"Anti Heart w{w}", lambda x, y, w=w: (A, B)[((x - y + H) // w) % 2], ["stripe"])
+    # checker / diag-checker
+    for b in range(1, 7):
+        build(f"Checker Heart b{b}", lambda x, y, b=b: (A, B)[((x // b) + (y // b)) % 2], ["checker"])
+    for b in range(2, 6):
+        build(f"Diag Checker Heart b{b}", lambda x, y, b=b: (A, B)[(((x + y) // b) + ((x - y + H) // b)) % 2], ["checker"])
+    # dot grids inside
+    for sp in range(2, 6):
+        build(f"Dot Heart s{sp}", lambda x, y, sp=sp: B if (x % sp == sp // 2 and y % sp == sp // 2) else A, ["dots"])
+    # concentric heart rings
+    for n in range(2, 8):
+        rings = [_heart_cells(S, S * 0.94 * (1 - i / (n + 0.5))) for i in range(n)]
+
+        def fn(x, y, rings=rings):
+            ax, ay = x + x0, y + y0
+            for i, r in enumerate(rings):
+                if (ax, ay) in r:
+                    return ("red", "hot_pink", "white")[i % 3]
+            return "red"
+        build(f"Concentric Heart n{n}", fn, ["concentric"])
+    # outline thickness
+    for t in range(1, 5):
+        inner = _heart_cells(S, S * 0.94 * (1 - 0.14 * t))
+        build(f"Outline Heart t{t}", lambda x, y, inner=inner: B if (x + x0, y + y0) in inner else A, ["outline"])
+    # bordered (2-color frame + solid)
+    for t in range(1, 4):
+        inner = _heart_cells(S, S * 0.94 * (1 - 0.16 * t))
+        build(f"Bordered Heart t{t}", lambda x, y, inner=inner: A if (x + x0, y + y0) in inner else B, ["border"])
+    # half splits
+    for d in ("v", "h", "d", "a"):
+        build(f"Split Heart {d}", lambda x, y, d=d: A if {"v": x < W / 2, "h": y < H / 2, "d": x + y < (W + H) / 2, "a": x - y < 0}[d] else B, ["split"])
+    # chevron / zigzag / waves fills
+    for p in range(2, 7):
+        build(f"Chevron Heart p{p}", lambda x, y, p=p: (A, B)[(abs(((x + y) % (2 * p)) - p)) % 2], ["chevron"])
+    for p in range(3, 7):
+        build(f"Wave Heart p{p}", lambda x, y, p=p: (A, B)[int((y + 2 * math.sin(x * 2 * math.pi / p)) // 2) % 2], ["wave"])
+    # cross / plus inside
+    for w in range(1, 4):
+        build(f"Cross Heart w{w}", lambda x, y, w=w: B if abs(x - W / 2) <= w or abs(y - H / 2) <= w else A, ["cross"])
+        build(f"X Heart w{w}", lambda x, y, w=w: B if abs(x - y) <= w or abs(x + y - H) <= w else A, ["cross"])
+    # inner icon
+    def inner_icon(shape):
+        cx, cy = (S - 1) / 2, (S - 1) / 2
+        ig = Grid(S, S)
+        if shape == "heart":
+            ig.poly(heart_points(cx, cy - 1, S * 0.45), "I")
+        elif shape == "star":
+            ig.poly(star_points(cx, cy, S * 0.22, S * 0.1, 5), "I")
+        elif shape == "circle":
+            ig.disc(cx, cy, S * 0.2, "I")
+        elif shape == "diamond":
+            ig.poly(reg_polygon(cx, cy, S * 0.24, 4, rot=0), "I")
+        elif shape == "ring":
+            ig.ring(cx, cy, S * 0.22, "I", 2)
+        elif shape == "plus":
+            ig.rect(cx - 2, cy - S * 0.22, cx + 2, cy + S * 0.22, "I"); ig.rect(cx - S * 0.22, cy - 2, cx + S * 0.22, cy + 2, "I")
+        return {(x, y) for x, y, _ in ig.cells()}
+    for shape in ("heart", "star", "circle", "diamond", "ring", "plus"):
+        ic = inner_icon(shape)
+        build(f"Heart with {shape}", lambda x, y, ic=ic: B if (x + x0, y + y0) in ic else A, ["inner", shape])
+    # gradient bands (multi-band by width) - structural via band count
+    ramp = ["dark_red", "red", "hot_pink", "magenta", "pink", "light_pink"]
+    for nb in range(2, 7):
+        build(f"Ombre Heart n{nb}", lambda x, y, nb=nb: ramp[min(int(y / (H / nb)), len(ramp) - 1)], ["ombre"])
+        build(f"Ombre V Heart n{nb}", lambda x, y, nb=nb: ramp[min(int(x / (W / nb)), len(ramp) - 1)], ["ombre"])
+    # mini-heart tessellation inside (density)
+    for step in (5, 6, 7, 8):
+        minis = set()
+        for hy in range(y0 + 2, y1, step):
+            for hx in range(x0 + 2, x1, step):
+                minis |= _heart_cells(S, step * 0.9, hx, hy)
+        build(f"Mini-Heart Heart s{step}", lambda x, y, minis=minis: B if (x + x0, y + y0) in minis else A, ["tessellation"])
+    # lattice / diagonal grid inside
+    for sp in range(3, 7):
+        build(f"Lattice Heart s{sp}", lambda x, y, sp=sp: B if (x % sp == 0 or (x + y) % sp == 0) else A, ["lattice"])
+    # crosshatch inside
+    for sp in range(2, 6):
+        build(f"Crosshatch Heart s{sp}", lambda x, y, sp=sp: B if ((x + y) % sp == 0 or (x - y + H) % sp == 0) else A, ["crosshatch"])
+    # polka on two-tone
+    for sp in (3, 4, 5):
+        build(f"Polka Heart s{sp}", lambda x, y, sp=sp: A if ((x % sp) - sp // 2) ** 2 + ((y % sp) - sp // 2) ** 2 <= 1 else B, ["polka"])
+    # concentric shape inside (square/diamond/circle rings from center)
+    cxr, cyr = W / 2, H / 2
+    for shape in ("square", "diamond", "circle"):
+        for t in (2, 3):
+            def fn(x, y, shape=shape, t=t):
+                if shape == "square":
+                    d = max(abs(x - cxr), abs(y - cyr))
+                elif shape == "diamond":
+                    d = abs(x - cxr) + abs(y - cyr)
+                else:
+                    d = math.hypot(x - cxr, y - cyr)
+                return (A, B)[int(d // t) % 2]
+            build(f"{shape.title()}-Ring Heart t{t}", fn, ["concentric"])
+    # monogram hearts: a letter or digit inside (from the 5x7 font)
+    from gen_icons import FONT
+    cxg, cyg = (S - 1) / 2, (S - 1) / 2 - 2
+
+    def glyph_cells(rows, scale=2):
+        gw, gh = 5 * scale, 7 * scale
+        ox, oy = int(cxg - gw / 2), int(cyg - gh / 2)
+        cells = set()
+        for r, row in enumerate(rows):
+            for cc, ch in enumerate(row):
+                if ch == "#":
+                    for dy in range(scale):
+                        for dx in range(scale):
+                            cells.add((ox + cc * scale + dx, oy + r * scale + dy))
+        return cells
+    for ch, rows in FONT.items():
+        gc = glyph_cells(rows)
+        build(f"Monogram Heart {ch}", lambda x, y, gc=gc: B if (x + x0, y + y0) in gc else A, ["monogram", ch.lower()])
+    # arrangements: use whole board, not the mask
+    def build_full(title, drawer, tags):
+        g = Grid(S, S)
+        drawer(g)
+        gens.append((title, g, ["heart"] + tags))
+    for i, (px, py, sz) in enumerate([(0.32, 0.44, 0.5), (0.5, 0.5, 0.55)]):
+        pass
+    # double / triple / row / winged / arrow
+    build_full("Two Hearts", lambda g: (g.poly(heart_points(S * 0.34, S * 0.42, S * 0.5), "red"),
+                                        g.poly(heart_points(S * 0.66, S * 0.56, S * 0.5), "hot_pink")), ["pair"])
+    build_full("Three Hearts", lambda g: [g.poly(heart_points(S * fx, S * fy, S * 0.4), c)
+                                          for fx, fy, c in [(0.3, 0.4, "red"), (0.7, 0.4, "hot_pink"), (0.5, 0.66, "magenta")]], ["triple"])
+    build_full("Heart Trio Row", lambda g: [g.poly(heart_points(S * fx, S * 0.5, S * 0.34), "red") for fx in (0.25, 0.5, 0.75)], ["row"])
+    def winged(g):
+        g.poly(heart_points(S * 0.5, S * 0.48, S * 0.5), "red")
+        for sgn in (-1, 1):
+            for k in range(3):
+                g.ellipse(S * 0.5 + sgn * S * (0.22 + k * 0.07), S * 0.45, S * 0.05, S * 0.09, "white")
+    build_full("Winged Heart", winged, ["winged"])
+    def arrowed(g):
+        g.poly(heart_points(S * 0.5, S * 0.48, S * 0.56), "red")
+        g.line(S * 0.1, S * 0.62, S * 0.9, S * 0.36, "dark_brown")
+        g.poly([(S * 0.9, S * 0.36), (S * 0.78, S * 0.34), (S * 0.8, S * 0.44)], "dark_gray")
+        g.poly([(S * 0.12, S * 0.6), (S * 0.2, S * 0.55), (S * 0.2, S * 0.66)], "dark_gray")
+    build_full("Cupid Heart", arrowed, ["arrow"])
+    def banner(g):
+        g.poly(heart_points(S * 0.5, S * 0.42, S * 0.6), "red")
+        g.rect(S * 0.15, S * 0.6, S * 0.85, S * 0.72, "cream")
+        g.poly([(S * 0.15, S * 0.6), (S * 0.05, S * 0.66), (S * 0.15, S * 0.72)], "cream")
+        g.poly([(S * 0.85, S * 0.6), (S * 0.95, S * 0.66), (S * 0.85, S * 0.72)], "cream")
+    build_full("Banner Heart", banner, ["banner"])
+    return _emit("hearts", gens, 200)
+
+
+# ── STARS ────────────────────────────────────────────────────────────────────
+
+SHUES = ["yellow", "orange", "cheddar", "hot_pink", "aqua", "red", "sky_blue",
+         "lavender", "neon_green", "magenta", "banana", "turquoise", "purple", "blue"]
+
+
+def stars():
+    S = 27
+    c = (S - 1) / 2
+    gens = []
+
+    def add(title, g, tags):
+        gens.append((title, g, ["star"] + tags))
+
+    hi = 0
+
+    def hue():
+        nonlocal hi
+        hi += 1
+        return SHUES[hi % len(SHUES)]
+
+    # solid n-point stars: point count x inner-ratio x size
+    for n in (4, 5, 6, 7, 8, 9, 10, 12):
+        for ratio in (0.38, 0.46, 0.55):
+            for size in (0.4, 0.47):
+                g = Grid(S, S)
+                g.poly(star_points(c, c, S * size, S * size * ratio, n), hue())
+                add(f"{n}-Point r{ratio} z{size}", g, [f"{n}point"])
+    # nested two-tone
+    for n in (5, 6, 8):
+        for ratio in (0.4, 0.5):
+            g = Grid(S, S)
+            g.poly(star_points(c, c, S * 0.46, S * 0.46 * ratio, n), hue())
+            g.poly(star_points(c, c, S * 0.28, S * 0.28 * ratio, n), hue())
+            add(f"Nested {n}pt r{ratio}", g, ["nested"])
+    # concentric star rings (3 nested outlines)
+    for n in (5, 6, 8):
+        g = Grid(S, S)
+        for rr in (0.46, 0.34, 0.22):
+            g.poly_outline(star_points(c, c, S * rr, S * rr * 0.45, n), hue(), t=0)
+        add(f"Ring Star {n}pt", g, ["rings"])
+    # star polygons / n-grams (connect every k-th vertex)
+    for n, k in [(5, 2), (6, 2), (7, 2), (7, 3), (8, 3), (9, 2), (9, 4), (10, 3), (12, 5), (8, 2), (10, 4), (11, 3), (11, 4)]:
+        g = Grid(S, S)
+        verts = reg_polygon(c, c, S * 0.46, n, rot=-math.pi / 2)
+        col = hue()
+        for i in range(n):
+            a = verts[i]; b = verts[(i + k) % n]
+            g.line(a[0], a[1], b[0], b[1], col)
+        add(f"{n}/{k} Star Polygon", g, ["polygon", "ngram"])
+    # starbursts
+    for rays in (8, 10, 12, 14, 16, 18, 20, 24, 28, 32):
+        g = Grid(S, S)
+        col = hue()
+        for kk in range(rays):
+            a = 2 * math.pi * kk / rays
+            rr = S * 0.46 if kk % 2 == 0 else S * 0.28
+            g.line(c, c, c + rr * math.cos(a), c + rr * math.sin(a), col)
+        g.disc(c, c, S * 0.09, col)
+        add(f"Starburst {rays}", g, ["burst"])
+    # sparkles (4-point) varied
+    for w in (0.14, 0.2, 0.28):
+        for r in (0.4, 0.48):
+            g = Grid(S, S)
+            col = hue()
+            for kk in range(4):
+                a = math.pi / 2 * kk
+                g.poly([(c + S * w * math.cos(a + math.pi / 4), c + S * w * math.sin(a + math.pi / 4)),
+                        (c + S * r * math.cos(a), c + S * r * math.sin(a)),
+                        (c + S * w * math.cos(a - math.pi / 4), c + S * w * math.sin(a - math.pi / 4)),
+                        (c, c)], col)
+            add(f"Sparkle w{w} r{r}", g, ["sparkle"])
+    # ring of stars around a center star
+    for m in (5, 6, 7, 8, 10, 12):
+        g = Grid(S, S)
+        rc, cc2 = hue(), hue()
+        for kk in range(m):
+            a = 2 * math.pi * kk / m - math.pi / 2
+            g.poly(star_points(c + S * 0.34 * math.cos(a), c + S * 0.34 * math.sin(a), S * 0.09, S * 0.04, 5), rc)
+        g.poly(star_points(c, c, S * 0.18, S * 0.08, 5), cc2)
+        add(f"Star Wreath {m}", g, ["wreath"])
+    # star grids / tessellation
+    for sp in (5, 6, 7, 8):
+        g = Grid(S, S)
+        col = hue()
+        for cy in range(sp // 2, S, sp):
+            for cx in range(sp // 2, S, sp):
+                g.poly(star_points(cx, cy, sp * 0.42, sp * 0.42 * 0.45, 5), col)
+        add(f"Star Grid s{sp}", g, ["grid"])
+    # internal-pattern stars: fill a big 5/6-point star mask with a pattern
+    for n in (5, 6):
+        smask = {(x, y) for x, y, _ in
+                 [(cx, cy, "M") for cx in range(S) for cy in range(S)]
+                 if False}
+        mg = Grid(S, S)
+        mg.poly(star_points(c, c, S * 0.48, S * 0.48 * 0.45, n), "M")
+        smask = {(x, y) for x, y, _ in mg.cells()}
+        xs = [x for x, _ in smask]; ys = [y for _, y in smask]
+        mx0, my0 = min(xs), min(ys)
+        A, Bc = hue(), "white"
+        fills = [("H", lambda x, y, w: (A, Bc)[(y // w) % 2]),
+                 ("V", lambda x, y, w: (A, Bc)[(x // w) % 2]),
+                 ("Diag", lambda x, y, w: (A, Bc)[((x + y) // w) % 2]),
+                 ("Check", lambda x, y, w: (A, Bc)[((x // w) + (y // w)) % 2]),
+                 ("Ring", lambda x, y, w: (A, Bc)[int(math.hypot(x - (c - mx0), y - (c - my0)) // w) % 2]),
+                 ("Dot", lambda x, y, w: Bc if (x % w == w // 2 and y % w == w // 2) else A)]
+        for fname, ffn in fills:
+            for w in (2, 3):
+                g = Grid(S, S)
+                for (x, y) in smask:
+                    g.set(x, y, ffn(x - mx0, y - my0, w))
+                add(f"{n}pt {fname} Star w{w}", g, ["pattern"])
+    return _emit("stars", gens, 200)
+
+
 GENERATORS = {
     "geometric": geometric,
     "mandalas": mandalas,
     "snowflakes": snowflakes,
+    "hearts": hearts,
+    "stars": stars,
 }

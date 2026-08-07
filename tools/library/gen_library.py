@@ -1324,8 +1324,8 @@ import gen_unique  # noqa: E402  (200-unique overhauled generators)
 GENERATORS = {
     "geometric": gen_unique.geometric,   # overhauled: 200 structurally-unique
     "mandalas": gen_unique.mandalas,     # overhauled: 200 structurally-unique
-    "hearts": generate_hearts,
-    "stars": generate_stars,
+    "hearts": gen_unique.hearts,         # overhauled: 133 structurally-unique (silhouette-capped)
+    "stars": gen_unique.stars,           # overhauled: 120 structurally-unique
     "flowers": generate_flowers,
     "rainbows": generate_rainbows,
     "space": generate_space,

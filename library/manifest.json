@@ -1,11 +1,11 @@
 {
-  "version": 6,
-  "count": 2611,
+  "version": 7,
+  "count": 2664,
   "perCategory": {
     "geometric": 200,
     "mandalas": 200,
-    "hearts": 100,
-    "stars": 100,
+    "hearts": 133,
+    "stars": 120,
     "flowers": 100,
     "rainbows": 100,
     "space": 100,
