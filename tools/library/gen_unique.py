@@ -496,62 +496,88 @@ SPAL = ["white", "sky_blue", "toothpaste", "aqua", "light_blue", "periwinkle", "
 SBG = ["navy", "dark_blue", "blue", "dark_purple", "teal"]
 
 
+def _hexplate(g, cx, cy, r, col):
+    g.poly(reg_polygon(cx, cy, r, 6, rot=0), col)
+
+
 def _snowflake(spec, s, col, bg):
+    """One ornate 6-fold ice crystal. All six arms are the same motif rotated,
+    so symmetry is exact; richness comes from dendritic side-branches (that
+    themselves fork), hexagonal plates, and varied tips."""
     g = Grid(s, s)
     g.fill(bg)
     c = (s - 1) / 2.0
-    maxr = s / 2.0 - 1
-    branches, tip, spine = spec
+    maxr = s / 2.0 - 1.5
+    positions, blen, bang, sub, plates, tip, center = spec
     for k in range(6):
-        a = math.pi / 3 * k
-        ux, uy = math.cos(a - math.pi / 2), math.sin(a - math.pi / 2)
-        ex, ey = c + maxr * ux, c + maxr * uy
-        g.line(c, c, ex, ey, col)
-        if spine == "double":
-            for off in (-1, 1):
-                px, py = c - off * uy * 1.2, c + off * ux * 1.2
-                g.line(px, py, px + maxr * 0.9 * ux, py + maxr * 0.9 * uy, col)
-        for (frac, blen, bang) in branches:
-            bx, by = c + maxr * frac * ux, c + maxr * frac * uy
+        a = -math.pi / 2 + k * math.pi / 3
+        dx, dy = math.cos(a), math.sin(a)
+        ex, ey = c + maxr * dx, c + maxr * dy
+        g.line(c, c, ex, ey, col)                       # main spine
+        for frac in positions:
+            bx, by = c + maxr * frac * dx, c + maxr * frac * dy
+            bl = maxr * blen * (1.0 - 0.35 * frac)      # branches shrink outward
             for sgn in (-1, 1):
-                ba = a - math.pi / 2 + sgn * bang
-                g.line(bx, by, bx + maxr * blen * math.cos(ba), by + maxr * blen * math.sin(ba), col)
+                ba = a + sgn * bang
+                bex, bey = bx + bl * math.cos(ba), by + bl * math.sin(ba)
+                g.line(bx, by, bex, bey, col)           # side branch
+                if sub:                                  # fork it → fern look
+                    mx, my = bx + 0.6 * (bex - bx), by + 0.6 * (bey - by)
+                    for sgn2 in (-1, 1):
+                        sba = ba + sgn2 * bang * 0.85
+                        g.line(mx, my, mx + bl * 0.5 * math.cos(sba),
+                               my + bl * 0.5 * math.sin(sba), col)
+        for frac in plates:
+            _hexplate(g, c + maxr * frac * dx, c + maxr * frac * dy, max(1.4, s * 0.05), col)
         if tip == "dot":
-            g.disc(ex, ey, max(1.0, s * 0.05), col)
-        elif tip == "vee":
+            g.disc(ex, ey, max(1.3, s * 0.055), col)
+        elif tip == "plate":
+            _hexplate(g, ex, ey, max(1.7, s * 0.07), col)
+        elif tip == "fern":
             for sgn in (-1, 1):
-                ba = a - math.pi / 2 + sgn * math.pi / 4
-                g.line(ex, ey, ex + maxr * 0.15 * math.cos(ba), ey + maxr * 0.15 * math.sin(ba), col)
-        elif tip == "cross":
-            g.disc(ex, ey, 1.2, col)
+                ba = a + sgn * math.pi / 4
+                g.line(ex, ey, ex + maxr * 0.16 * math.cos(ba), ey + maxr * 0.16 * math.sin(ba), col)
+        elif tip == "split":
+            bx, by = c + maxr * 0.86 * dx, c + maxr * 0.86 * dy
             for sgn in (-1, 1):
-                g.line(ex - uy * 2 * sgn, ey + ux * 2 * sgn, ex + uy * 2 * sgn, ey - ux * 2 * sgn, col)
-    g.disc(c, c, max(1.5, s * 0.08), col)
+                ba = a + sgn * math.pi / 7
+                g.line(bx, by, bx + maxr * 0.16 * math.cos(ba), by + maxr * 0.16 * math.sin(ba), col)
+    if center == "hex":
+        _hexplate(g, c, c, max(2.2, s * 0.11), col)
+        _hexplate(g, c, c, max(1.2, s * 0.055), bg)
+    elif center == "star":
+        g.poly(star_points(c, c, s * 0.13, s * 0.06, 6), col)
+    else:
+        g.disc(c, c, max(1.8, s * 0.09), col)
     return g
 
 
 def snowflakes():
     gens = []
+    # richer, denser branch position sets first so the set skews ornate
+    posn = [[0.3, 0.45, 0.6, 0.75, 0.9], [0.35, 0.55, 0.72, 0.88],
+            [0.3, 0.5, 0.7, 0.85], [0.4, 0.6, 0.78, 0.92], [0.32, 0.52, 0.72, 0.9],
+            [0.45, 0.65, 0.85], [0.35, 0.6, 0.82], [0.3, 0.55, 0.75, 0.9]]
+    angs = [math.pi / 3, math.pi / 4, math.pi / 2.5, math.pi / 5]
+    lens = [0.28, 0.34, 0.22, 0.4]
+    plate_sets = [[], [0.55], [0.5, 0.85], [0.4, 0.7], [0.6, 0.9]]
+    tips = ["fern", "plate", "split", "dot"]
+    centers = ["hex", "star", "dot"]
     i = 0
-    fracs = [0.35, 0.5, 0.62, 0.75, 0.85]
-    angs = [math.pi / 6, math.pi / 4, math.pi / 3, math.pi / 2.5]
-    lens = [0.12, 0.16, 0.2, 0.26]
-    tips = ["dot", "vee", "cross", "none"]
-    spines = ["single", "double"]
-    for nb in (2, 3):
-        for tip in tips:
-            for spine in spines:
-                for ai, ang in enumerate(angs):
-                    for li, ln in enumerate(lens):
-                        # choose branch positions deterministically
-                        positions = fracs[:nb] if (i % 2 == 0) else fracs[-nb:]
-                        branches = [(f, ln * (1.0 if j % 2 == 0 else 0.7), ang) for j, f in enumerate(positions)]
-                        s = (24, 27, 29)[i % 3]
-                        col = SPAL[i % len(SPAL)]
-                        bg = SBG[i % len(SBG)]
-                        gens.append((f"Snowflake {i+1}", _snowflake((branches, tip, spine), s, col, bg),
-                                     ["snowflake", "crystal"]))
-                        i += 1
+    for sub in (True, False):
+        for pos in posn:
+            for tip in tips:
+                for center in centers:
+                    for pl in plate_sets:
+                        for ang in angs:
+                            for ln in lens:
+                                s = (27, 29, 32)[i % 3]
+                                col = SPAL[i % len(SPAL)]
+                                bg = SBG[i % len(SBG)]
+                                spec = (pos, ln, ang, sub, pl, tip, center)
+                                gens.append((f"Snowflake {i+1}", _snowflake(spec, s, col, bg),
+                                             ["snowflake", "crystal", "6fold"]))
+                                i += 1
     return _emit("snowflakes", gens, 200)
 
 
