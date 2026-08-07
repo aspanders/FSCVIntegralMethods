@@ -1330,7 +1330,7 @@ GENERATORS = {
     "rainbows": generate_rainbows,
     "space": generate_space,
     "emoji": generate_emoji,
-    "gems": generate_gems,
+    "gems": gen_unique.gems,             # overhauled: 126 structurally-unique
 }
 
 

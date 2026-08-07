@@ -878,10 +878,147 @@ def stars():
     return _emit("stars", gens, 200)
 
 
+# ── GEMS ─────────────────────────────────────────────────────────────────────
+
+GHUES = ["red", "hot_pink", "magenta", "purple", "dark_blue", "blue", "aqua",
+         "teal", "green", "orange", "yellow", "turquoise", "sky_blue"]
+GLIGHT = {"red": "blush", "hot_pink": "light_pink", "magenta": "light_pink",
+          "purple": "light_lavender", "dark_blue": "sky_blue", "blue": "light_blue",
+          "aqua": "toothpaste", "teal": "light_teal", "green": "light_green",
+          "orange": "peach", "yellow": "lemon", "turquoise": "toothpaste",
+          "sky_blue": "white"}
+
+
+def _cut_points(cut, cx, cy, s):
+    if cut == "round":
+        return reg_polygon(cx, cy, s * 0.42, 12, rot=0)
+    if cut == "oval":
+        return [(cx + s * 0.26 * math.cos(a), cy + s * 0.42 * math.sin(a)) for a in
+                [2 * math.pi * k / 16 for k in range(16)]]
+    if cut == "marquise":
+        return [(cx, cy - s * 0.44), (cx + s * 0.2, cy), (cx, cy + s * 0.44), (cx - s * 0.2, cy)]
+    if cut == "pear":
+        return [(cx, cy - s * 0.42), (cx + s * 0.26, cy + s * 0.1), (cx, cy + s * 0.42), (cx - s * 0.26, cy + s * 0.1)]
+    if cut == "emerald":
+        return [(cx - s * 0.26, cy - s * 0.34), (cx + s * 0.26, cy - s * 0.34),
+                (cx + s * 0.32, cy - s * 0.24), (cx + s * 0.32, cy + s * 0.24),
+                (cx + s * 0.26, cy + s * 0.34), (cx - s * 0.26, cy + s * 0.34),
+                (cx - s * 0.32, cy + s * 0.24), (cx - s * 0.32, cy - s * 0.24)]
+    if cut == "princess":
+        return reg_polygon(cx, cy, s * 0.44, 4, rot=0)
+    if cut == "heart":
+        return heart_points(cx, cy - 1, s * 0.9)
+    if cut == "trillion":
+        return reg_polygon(cx, cy + s * 0.05, s * 0.44, 3, rot=-math.pi / 2)
+    if cut == "cushion":
+        return reg_polygon(cx, cy, s * 0.4, 8, rot=math.pi / 8)
+    if cut == "kite":
+        return [(cx, cy - s * 0.44), (cx + s * 0.28, cy), (cx, cy + s * 0.3), (cx - s * 0.28, cy)]
+    if cut == "hexagon":
+        return reg_polygon(cx, cy, s * 0.42, 6, rot=0)
+    if cut == "baguette":
+        return [(cx - s * 0.16, cy - s * 0.44), (cx + s * 0.16, cy - s * 0.44),
+                (cx + s * 0.16, cy + s * 0.44), (cx - s * 0.16, cy + s * 0.44)]
+    return reg_polygon(cx, cy, s * 0.42, 6, rot=0)
+
+
+def gems():
+    S = 24
+    c = (S - 1) / 2
+    cuts = ["round", "oval", "marquise", "pear", "emerald", "princess", "heart",
+            "trillion", "cushion", "kite", "hexagon", "baguette"]
+    gens = []
+    hi = 0
+
+    def hue():
+        nonlocal hi
+        hi += 1
+        return GHUES[hi % len(GHUES)]
+
+    def spark(g, x, y):
+        for dx, dy in ((0, 0), (-1, 0), (1, 0), (0, -1), (0, 1)):
+            g.set(int(x + dx), int(y + dy), "white")
+
+    # each cut with several facet styles
+    for cut in cuts:
+        for facet in ("crown", "star", "cross", "radial", "table", "plain"):
+            col = hue(); lt = GLIGHT.get(col, "white")
+            g = Grid(S, S)
+            pts = _cut_points(cut, c, c, S)
+            g.poly(pts, col)
+            if facet == "crown":
+                g.poly(_cut_points(cut, c, c - S * 0.06, S * 0.55), lt)
+            elif facet == "star":
+                for k in range(8):
+                    a = 2 * math.pi * k / 8
+                    g.line(c, c, c + S * 0.4 * math.cos(a), c + S * 0.42 * math.sin(a), "white" if k % 2 else lt)
+            elif facet == "cross":
+                g.line(c - S * 0.4, c, c + S * 0.4, c, "white"); g.line(c, c - S * 0.42, c, c + S * 0.42, "white")
+            elif facet == "radial":
+                for k in range(6):
+                    a = 2 * math.pi * k / 6
+                    g.line(c, c, c + S * 0.38 * math.cos(a), c + S * 0.4 * math.sin(a), lt)
+            elif facet == "table":
+                g.poly(reg_polygon(c, c, S * 0.18, 6, rot=0), lt)
+            spark(g, c - S * 0.14, c - S * 0.16)
+            gens.append((f"{cut.title()} {facet}", g, ["gem", cut, facet]))
+    # gem clusters (3, 5, 7 small gems)
+    for m in (3, 5, 7):
+        for cut in ("round", "princess", "marquise", "pear"):
+            g = Grid(S, S)
+            g.poly(_cut_points(cut, c, c, S * 0.5), hue())
+            for k in range(m):
+                a = 2 * math.pi * k / m - math.pi / 2
+                col = hue()
+                g.poly(_cut_points(cut, c + S * 0.3 * math.cos(a), c + S * 0.3 * math.sin(a), S * 0.34), col)
+            gens.append((f"{cut.title()} Cluster {m}", g, ["gem", "cluster"]))
+    # gem ring (gem on a band)
+    for cut in ("round", "princess", "heart", "marquise", "oval", "pear"):
+        g = Grid(S, S)
+        g.ring(c, c + S * 0.12, S * 0.34, "cheddar", 2)
+        g.poly(_cut_points(cut, c, c - S * 0.12, S * 0.55), hue())
+        spark(g, c - 2, c - S * 0.2)
+        gens.append((f"{cut.title()} Ring", g, ["gem", "ring"]))
+    # pendant (gem + bail + chain)
+    for cut in ("round", "heart", "pear", "oval", "marquise", "emerald"):
+        g = Grid(S, S)
+        for x in range(int(c - 6), int(c + 6)):
+            g.set(x, int(c - S * 0.42 + abs(x - c) * 0.2), "cheddar")
+        g.ring(c, c - S * 0.32, S * 0.06, "cheddar", 1)
+        g.poly(_cut_points(cut, c, c + S * 0.06, S * 0.75), hue())
+        gens.append((f"{cut.title()} Pendant", g, ["gem", "pendant"]))
+    # gem grid
+    for sp in (6, 8):
+        for cut in ("round", "princess", "marquise"):
+            g = Grid(S, S)
+            col = hue()
+            for cy in range(sp // 2, S, sp):
+                for cx in range(sp // 2, S, sp):
+                    g.poly(_cut_points(cut, cx, cy, sp * 0.9), col)
+            gens.append((f"{cut.title()} Grid s{sp}", g, ["gem", "grid"]))
+    # patterned-fill gems (fill a big round/princess with a pattern)
+    for cut in ("round", "princess", "cushion", "hexagon"):
+        mg = Grid(S, S); mg.poly(_cut_points(cut, c, c, S), "M")
+        gm = {(x, y) for x, y, _ in mg.cells()}
+        xs = [x for x, _ in gm]; ys = [y for _, y in gm]
+        mx0, my0 = min(xs), min(ys)
+        A = hue(); Bc = "white"
+        for fname, ffn in [("Stripe", lambda x, y, w: (A, Bc)[(y // w) % 2]),
+                           ("Check", lambda x, y, w: (A, Bc)[((x // w) + (y // w)) % 2]),
+                           ("Ring", lambda x, y, w: (A, Bc)[int(math.hypot(x - (c - mx0), y - (c - my0)) // w) % 2])]:
+            for w in (2, 3):
+                g = Grid(S, S)
+                for (x, y) in gm:
+                    g.set(x, y, ffn(x - mx0, y - my0, w))
+                gens.append((f"{cut.title()} {fname} w{w}", g, ["gem", "pattern"]))
+    return _emit("gems", gens, 200)
+
+
 GENERATORS = {
     "geometric": geometric,
     "mandalas": mandalas,
     "snowflakes": snowflakes,
     "hearts": hearts,
     "stars": stars,
+    "gems": gems,
 }

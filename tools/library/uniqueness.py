@@ -38,5 +38,17 @@ def dedup(patterns):
     return out
 
 
+def colored_signature(p):
+    """Like signature but keyed on actual colors - for color-defined categories
+    (rainbows) where a different color arrangement IS a different design."""
+    cells = p.get("cells")
+    if cells is None:
+        cells = from_rows(p.get("rows", []), p["palette"])
+    w, h = p["grid"]["width"], p["grid"]["height"]
+    marks = tuple((c["x"], c["y"], c.get("colorId"))
+                  for c in sorted(cells, key=lambda c: (c["y"], c["x"])) if c.get("colorId"))
+    return (w, h, marks)
+
+
 def count_unique(patterns):
     return len({signature(p) for p in patterns})
