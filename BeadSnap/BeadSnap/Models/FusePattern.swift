@@ -160,7 +160,8 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .custom:     return "My Designs"
         }
     }
-    var emoji: String {
+    // Named `symbol`, not `emoji`, because one of the cases is itself `emoji`.
+    var symbol: String {
         switch self {
         case .geometric:  return "🔷"
         case .mandalas:   return "🌀"

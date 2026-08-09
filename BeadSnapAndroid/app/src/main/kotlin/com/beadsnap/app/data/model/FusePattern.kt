@@ -69,7 +69,9 @@ data class FusePattern(
 }
 
 @Serializable
-enum class PatternCategory(val displayName: String, val emoji: String) {
+// The icon property is named `symbol`, not `emoji`, because one of the entries
+// is itself called `emoji` and an entry cannot share a name with a property.
+enum class PatternCategory(val displayName: String, val symbol: String) {
     // 22 content categories (100 patterns each) + 3D specialty + user designs.
     geometric("Geometric", "🔷"),
     mandalas("Mandalas", "🌀"),

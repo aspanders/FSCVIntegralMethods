@@ -114,7 +114,7 @@ struct AIStudioView: View {
             Picker("Category", selection: $viewModel.selectedCategory) {
                 Text("Any").tag(Optional<PatternCategory>.none)
                 ForEach(PatternCategory.allCases) { cat in
-                    Text("\(cat.emoji) \(cat.displayName)").tag(Optional(cat))
+                    Text("\(cat.symbol) \(cat.displayName)").tag(Optional(cat))
                 }
             }
             Picker("Grid Size", selection: $viewModel.selectedGridSize) {

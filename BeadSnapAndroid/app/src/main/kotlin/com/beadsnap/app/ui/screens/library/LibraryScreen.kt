@@ -206,7 +206,7 @@ private fun CategoryChipsRow(
             FilterChip(
                 selected = selectedCategory == cat,
                 onClick = { onCategorySelected(cat) },
-                label = { Text("${cat.emoji} ${cat.displayName} ($count)") },
+                label = { Text("${cat.symbol} ${cat.displayName} ($count)") },
                 modifier = Modifier.semantics {
                     contentDescription = "${cat.displayName}, $count patterns"
                 }

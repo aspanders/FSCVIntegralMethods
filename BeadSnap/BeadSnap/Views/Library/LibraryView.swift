@@ -99,7 +99,7 @@ struct LibraryView: View {
             HStack(spacing: 8) {
                 chip(nil, label: "All")
                 ForEach(PatternCategory.allCases) { cat in
-                    chip(cat, label: "\(cat.emoji) \(cat.displayName) (\(viewModel.count(for: cat)))")
+                    chip(cat, label: "\(cat.symbol) \(cat.displayName) (\(viewModel.count(for: cat)))")
                 }
             }
             .padding(.horizontal, 16)

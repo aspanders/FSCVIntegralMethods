@@ -421,7 +421,7 @@ private fun CategoryChips(
             FilterChip(
                 selected = selected == cat,
                 onClick  = { if (enabled) onSelect(cat) },
-                label    = { Text("${cat.emoji} ${cat.displayName}") }
+                label    = { Text("${cat.symbol} ${cat.displayName}") }
             )
         }
     }
