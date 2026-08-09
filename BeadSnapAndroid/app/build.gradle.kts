@@ -9,11 +9,28 @@ plugins {
 }
 
 // Release signing is read from BeadSnapAndroid/keystore.properties, which is
-// gitignored and never committed. Without it (CI, a fresh clone, debug work)
-// the release build simply stays unsigned instead of failing configuration.
+// gitignored and never committed. It's optional for debug work (a fresh
+// clone or CI can still build/test the app), but a `release` build with no
+// signing config produces an unsigned .aab that Play Console silently
+// rejects with no useful error — so gradle.taskGraph below hard-fails any
+// release-flavored task when the file is missing, instead of building it.
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) load(FileInputStream(keystorePropertiesFile))
+}
+
+gradle.taskGraph.whenReady {
+    val runningRelease = allTasks.any {
+        it.path.contains(":app:") && it.name.contains("Release", ignoreCase = false)
+    }
+    if (runningRelease && !keystorePropertiesFile.exists()) {
+        throw GradleException(
+            "Cannot build a release variant: BeadSnapAndroid/keystore.properties is " +
+            "missing, so the .aab/.apk would be unsigned and Play Console will reject " +
+            "it. Copy keystore.properties.template to keystore.properties and fill in " +
+            "your real keystore path and passwords, then re-run."
+        )
+    }
 }
 
 android {
