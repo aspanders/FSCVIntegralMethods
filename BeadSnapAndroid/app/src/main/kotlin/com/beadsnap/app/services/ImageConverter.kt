@@ -237,6 +237,7 @@ object ImageConverter {
         val gb = options.whiteBalance[2].toDouble()
 
         val out = Array(rows) { arrayOfNulls<DoubleArray>(cols) }
+        val cell = DoubleArray(3)      // reused scratch: one per cell, not per pixel
         for (cy in 0 until rows) {
             val sy0 = (cy.toLong() * h / rows).toInt()
             val sy1 = (((cy + 1).toLong() * h / rows).toInt()).coerceAtLeast(sy0 + 1).coerceAtMost(h)
@@ -245,7 +246,8 @@ object ImageConverter {
                 val sx1 = (((cx + 1).toLong() * w / cols).toInt()).coerceAtLeast(sx0 + 1).coerceAtMost(w)
 
                 var rAcc = 0.0; var gAcc = 0.0; var bAcc = 0.0
-                var aAcc = 0.0; var n = 0
+                var aAcc = 0.0; var lAcc = 0.0; var n = 0
+                var lMin = Double.MAX_VALUE; var lMax = -Double.MAX_VALUE
                 for (sy in sy0 until sy1) {
                     var idx = sy * w + sx0
                     for (sx in sx0 until sx1) {
@@ -254,22 +256,56 @@ object ImageConverter {
                         n++
                         if (a == 0) continue
                         val wgt = a / 255.0
-                        aAcc += wgt
-                        rAcc += lin[(p shr 16) and 0xFF] * wgt
-                        gAcc += lin[(p shr 8) and 0xFF] * wgt
-                        bAcc += lin[p and 0xFF] * wgt
+                        val pr = lin[(p shr 16) and 0xFF].toDouble()
+                        val pg = lin[(p shr 8) and 0xFF].toDouble()
+                        val pb = lin[p and 0xFF].toDouble()
+                        val y = ColorMath.luma(pr, pg, pb)
+                        if (y < lMin) lMin = y
+                        if (y > lMax) lMax = y
+                        aAcc += wgt; lAcc += y * wgt
+                        rAcc += pr * wgt; gAcc += pg * wgt; bAcc += pb * wgt
                     }
                 }
                 // Mostly-transparent cells stay empty so background removal and
                 // non-square crops leave real holes instead of muddy edges.
                 if (n == 0 || aAcc / n < 0.35) continue
+
+                val mR = rAcc / aAcc; val mG = gAcc / aAcc; val mB = bAcc / aAcc
+                cell[0] = mR; cell[1] = mG; cell[2] = mB
+                if (lMax - lMin >= ColorMath.EDGE_MIN_LUMA_RANGE) {
+                    // Second pass, only where the cell could be straddling an
+                    // edge: split its pixels at their own mean luminance and
+                    // let ColorMath.resolveCell decide between averaging and
+                    // snapping to the dominant side.
+                    val midL = lAcc / aAcc
+                    var dr = 0.0; var dg = 0.0; var db = 0.0; var dw = 0.0
+                    var xr = 0.0; var xg = 0.0; var xb = 0.0; var xw = 0.0
+                    for (sy in sy0 until sy1) {
+                        var idx = sy * w + sx0
+                        for (sx in sx0 until sx1) {
+                            val p = pixels[idx++]
+                            val a = (p ushr 24) and 0xFF
+                            if (a == 0) continue
+                            val wgt = a / 255.0
+                            val pr = lin[(p shr 16) and 0xFF].toDouble()
+                            val pg = lin[(p shr 8) and 0xFF].toDouble()
+                            val pb = lin[p and 0xFF].toDouble()
+                            if (ColorMath.luma(pr, pg, pb) <= midL) {
+                                dr += pr * wgt; dg += pg * wgt; db += pb * wgt; dw += wgt
+                            } else {
+                                xr += pr * wgt; xg += pg * wgt; xb += pb * wgt; xw += wgt
+                            }
+                        }
+                    }
+                    ColorMath.resolveCell(cell, mR, mG, mB, dr, dg, db, dw, xr, xg, xb, xw)
+                }
                 // White balance is a scale in LINEAR light, so it commutes with
                 // the averaging above and can be applied once per cell rather
                 // than once per pixel.
                 val lab = ColorMath.linearRgbToLab(
-                    (rAcc / aAcc * gr).coerceIn(0.0, 1.0),
-                    (gAcc / aAcc * gg).coerceIn(0.0, 1.0),
-                    (bAcc / aAcc * gb).coerceIn(0.0, 1.0)
+                    (cell[0] * gr).coerceIn(0.0, 1.0),
+                    (cell[1] * gg).coerceIn(0.0, 1.0),
+                    (cell[2] * gb).coerceIn(0.0, 1.0)
                 )
                 out[cy][cx] = adjustLab(lab, options)
             }

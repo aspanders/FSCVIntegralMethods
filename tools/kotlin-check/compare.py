@@ -50,7 +50,9 @@ def convert(rgb, mask, crop, n, ncol, gains=(1, 1, 1), shape=None):
             cnt, acc_a = a.size, a.sum()
             if cnt == 0 or acc_a / cnt < 0.35:
                 continue
-            acc = (blk * a[..., None]).reshape(-1, 3).sum(axis=0) / acc_a
+            fw = a.ravel()
+            sel = fw > 0
+            acc = pt.resolve_cell(blk.reshape(-1, 3)[sel], fw[sel])
             acc = np.clip(acc * np.asarray(gains), 0, 1)
             out[cy, cx] = pt.linear_rgb_to_lab(acc[0], acc[1], acc[2])
     if shape == "circle":

@@ -96,6 +96,43 @@ def bead_distance(src_lab, pal_lab, chroma_weight=0.45):
     return base + chroma_weight * lost * (cs / (cs + 12.0))
 
 
+# ── Edge-aware cell resolution (ColorMath.resolveCell) ───────────────────────
+
+EDGE_SNAP_DE = 20.0
+EDGE_MIN_LUMA_RANGE = 0.02
+_LUMA = np.array([0.2126, 0.7152, 0.0722])
+
+
+def resolve_cell(px, w):
+    """Weighted mean, unless the cell straddles an edge: then the heavier side.
+
+    Mirrors ColorMath.resolveCell. Plain averaging is right for a shaded
+    surface and wrong at a boundary: a cell covering 60% yellow muzzle and 40%
+    black nose averages to a brown belonging to neither, which is how small
+    dark features vanish.
+    """
+    aA = w.sum()
+    mean = (px * w[:, None]).sum(0) / max(aA, 1e-9)
+    if len(px) == 0:
+        return mean
+    lum = px @ _LUMA
+    if lum.max() - lum.min() < EDGE_MIN_LUMA_RANGE:
+        return mean
+    mid = float((lum * w).sum() / max(aA, 1e-9))
+    dark = lum <= mid
+    dw = w[dark].sum()
+    lw = w[~dark].sum()
+    if dw <= 0 or lw <= 0:
+        return mean
+    c0 = (px[dark] * w[dark, None]).sum(0) / dw
+    c1 = (px[~dark] * w[~dark, None]).sum(0) / lw
+    l0 = linear_rgb_to_lab(*np.clip(c0, 0, 1))
+    l1 = linear_rgb_to_lab(*np.clip(c1, 0, 1))
+    if float(delta_e2000(np.asarray(l0)[None, :], np.asarray(l1)[None, :])[0, 0]) < EDGE_SNAP_DE:
+        return mean
+    return c0 if dw >= lw else c1
+
+
 # ── BitmapLoader ─────────────────────────────────────────────────────────────
 
 def decode_upright(path, max_dim=CONVERT_MAX_DIM):
@@ -147,9 +184,10 @@ def sample_cells_lab(im, cols, rows, crop=None, lift=1.0):
             # Matches the Kotlin: mostly-transparent cells stay empty.
             if n == 0 or aAcc / n < 0.35:
                 continue
-            wgt = a[..., None]
-            acc = (block * wgt).reshape(-1, 3).sum(axis=0) / aAcc
-            out[cy, cx] = linear_rgb_to_lab(acc[0], acc[1], acc[2])
+            flat_w = a.ravel()
+            sel = flat_w > 0
+            acc = resolve_cell(block.reshape(-1, 3)[sel], flat_w[sel])
+            out[cy, cx] = linear_rgb_to_lab(*np.clip(acc, 0, 1))
     out = np.where(np.isnan(out), out, chroma_lift(out, lift))
     return out
 

@@ -401,6 +401,7 @@ class PhotoStudio private constructor(
         val gr = options.whiteBalance[0]
         val gg = options.whiteBalance[1]
         val gb = options.whiteBalance[2]
+        val cell = DoubleArray(3)      // reused scratch: one per cell, not per pixel
 
         for (cy in 0 until rows) {
             val sy0 = (cy.toLong() * h / rows).toInt()
@@ -416,7 +417,8 @@ class PhotoStudio private constructor(
                 val sx1 = ((cx + 1).toLong() * w / cols).toInt().coerceAtLeast(sx0 + 1).coerceAtMost(w)
 
                 var rAcc = 0.0; var gAcc = 0.0; var bAcc = 0.0
-                var aAcc = 0.0; var n = 0
+                var aAcc = 0.0; var lAcc = 0.0; var n = 0
+                var lMin = Double.MAX_VALUE; var lMax = -Double.MAX_VALUE
                 for (sy in sy0 until sy1) {
                     val row = (y0 + sy) * width + x0
                     for (sx in sx0 until sx1) {
@@ -424,20 +426,50 @@ class PhotoStudio private constructor(
                         n++
                         // A dropped pixel contributes nothing, exactly as a
                         // transparent one does in the one-shot converter.
-                        val a = if (keep[pi]) srcAlpha[pi] else 0f
-                        if (a <= 0f) continue
+                        val a = if (keep[pi]) srcAlpha[pi].toDouble() else 0.0
+                        if (a <= 0.0) continue
                         val j = pi * 3
-                        aAcc += a
-                        rAcc += lin[j] * a
-                        gAcc += lin[j + 1] * a
-                        bAcc += lin[j + 2] * a
+                        val pr = lin[j].toDouble()
+                        val pg = lin[j + 1].toDouble()
+                        val pb = lin[j + 2].toDouble()
+                        val y = ColorMath.luma(pr, pg, pb)
+                        if (y < lMin) lMin = y
+                        if (y > lMax) lMax = y
+                        aAcc += a; lAcc += y * a
+                        rAcc += pr * a; gAcc += pg * a; bAcc += pb * a
                     }
                 }
                 if (n == 0 || aAcc / n < 0.35) { dist[idx] = null; continue }
+
+                val mR = rAcc / aAcc; val mG = gAcc / aAcc; val mB = bAcc / aAcc
+                cell[0] = mR; cell[1] = mG; cell[2] = mB
+                if (lMax - lMin >= ColorMath.EDGE_MIN_LUMA_RANGE) {
+                    val midL = lAcc / aAcc
+                    var dr = 0.0; var dg = 0.0; var db = 0.0; var dw = 0.0
+                    var xr = 0.0; var xg = 0.0; var xb = 0.0; var xw = 0.0
+                    for (sy in sy0 until sy1) {
+                        val row = (y0 + sy) * width + x0
+                        for (sx in sx0 until sx1) {
+                            val pi = row + sx
+                            val a = if (keep[pi]) srcAlpha[pi].toDouble() else 0.0
+                            if (a <= 0.0) continue
+                            val j = pi * 3
+                            val pr = lin[j].toDouble()
+                            val pg = lin[j + 1].toDouble()
+                            val pb = lin[j + 2].toDouble()
+                            if (ColorMath.luma(pr, pg, pb) <= midL) {
+                                dr += pr * a; dg += pg * a; db += pb * a; dw += a
+                            } else {
+                                xr += pr * a; xg += pg * a; xb += pb * a; xw += a
+                            }
+                        }
+                    }
+                    ColorMath.resolveCell(cell, mR, mG, mB, dr, dg, db, dw, xr, xg, xb, xw)
+                }
                 val lab = ColorMath.linearRgbToLab(
-                    (rAcc / aAcc * gr).coerceIn(0.0, 1.0),
-                    (gAcc / aAcc * gg).coerceIn(0.0, 1.0),
-                    (bAcc / aAcc * gb).coerceIn(0.0, 1.0)
+                    (cell[0] * gr).coerceIn(0.0, 1.0),
+                    (cell[1] * gg).coerceIn(0.0, 1.0),
+                    (cell[2] * gb).coerceIn(0.0, 1.0)
                 )
                 dist[idx] = ImageConverter.beadDistances(adjust(lab))
             }
