@@ -76,52 +76,41 @@ fun AppNavigation(
     var showTipJarSheet by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (useRail) {
-            // Tablet: NavigationRail on the left
-            Row(modifier = Modifier.fillMaxSize()) {
-                if (isTopLevel) {
-                    NavigationRail {
-                        topLevelDestinations.forEach { dest ->
-                            NavigationRailItem(
-                                selected = currentRoute == dest.route,
-                                onClick  = {
-                                    navController.navigate(dest.route) {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState    = true
-                                    }
-                                },
-                                icon  = { Icon(dest.icon, contentDescription = dest.label) },
-                                label = { Text(dest.label) }
-                            )
-                        }
+        // BeadSnapNavHost is deliberately called from exactly ONE place.
+        //
+        // It used to be called from inside both branches of `if (useRail)`. A
+        // composable's identity comes from its position in the composition, so
+        // rotating a phone (Compact -> Medium width flips useRail) moved the
+        // NavHost to the other branch and destroyed its whole subtree: every
+        // remember, the back stack's saveable state, and editorPattern below.
+        // The nav controller still said route "editor" while editorPattern was
+        // back to null, so the editor rendered nothing and neither nav bar was
+        // drawn - a totally blank screen. That was the rotation "glitch".
+        //
+        // Now the Row and Scaffold are always present and only the chrome
+        // inside them swaps, so the NavHost subtree survives the width change.
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (useRail && isTopLevel) {
+                NavigationRail {
+                    topLevelDestinations.forEach { dest ->
+                        NavigationRailItem(
+                            selected = currentRoute == dest.route,
+                            onClick  = { navigateTopLevel(navController, dest.route) },
+                            icon  = { Icon(dest.icon, contentDescription = dest.label) },
+                            label = { Text(dest.label) }
+                        )
                     }
                 }
-                BeadSnapNavHost(
-                    navController = navController,
-                    store         = store,
-                    aiService     = aiService,
-                    library       = library,
-                    onOpenTipJar  = { showTipJarSheet = true },
-                    modifier      = Modifier.fillMaxSize()
-                )
             }
-        } else {
-            // Phone: Bottom NavigationBar
             Scaffold(
+                modifier = Modifier.fillMaxSize(),
                 bottomBar = {
-                    if (isTopLevel) {
+                    if (!useRail && isTopLevel) {
                         NavigationBar {
                             topLevelDestinations.forEach { dest ->
                                 NavigationBarItem(
                                     selected = currentRoute == dest.route,
-                                    onClick  = {
-                                        navController.navigate(dest.route) {
-                                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState    = true
-                                        }
-                                    },
+                                    onClick  = { navigateTopLevel(navController, dest.route) },
                                     icon  = { Icon(dest.icon, contentDescription = dest.label) },
                                     label = { Text(dest.label) }
                                 )
@@ -162,6 +151,31 @@ fun AppNavigation(
     }
 }
 
+/** Navigate to a top-level tab, preserving each tab's own back stack. */
+private fun navigateTopLevel(navController: NavHostController, route: String) {
+    navController.navigate(route) {
+        popUpTo(navController.graph.startDestinationId) { saveState = true }
+        launchSingleTop = true
+        restoreState    = true
+    }
+}
+
+/** Builds a ViewModel from a lambda, so screens can be Activity-scoped. */
+private fun <T : ViewModel> vmFactory(build: () -> T) = object : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <VM : ViewModel> create(modelClass: Class<VM>): VM = build() as VM
+}
+
+/**
+ * Holds the pattern being edited. This lives in a ViewModel rather than a
+ * `remember` so it survives configuration changes, including a real Activity
+ * recreation (dark-mode toggle, "don't keep activities"), which `remember`
+ * does not.
+ */
+class NavStateViewModel : ViewModel() {
+    var editorPattern by mutableStateOf<FusePattern?>(null)
+}
+
 @Composable
 private fun BeadSnapNavHost(
     navController: NavHostController,
@@ -171,12 +185,18 @@ private fun BeadSnapNavHost(
     onOpenTipJar: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Shared ViewModel instances (survive recomposition, scoped to NavHost lifetime)
-    val libraryViewModel = remember { LibraryViewModel(store) }
-    val studioViewModel  = remember { StudioViewModel(aiService, store) }
-
-    // EditorViewModel is keyed per-pattern; recreated on navigation
-    var editorPattern by remember { mutableStateOf<FusePattern?>(null) }
+    // These are Activity-scoped via viewModel() rather than `remember`. As
+    // plain remembered objects they were never held by a ViewModelStore, so
+    // onCleared() never ran and viewModelScope was never cancelled: every
+    // rotation leaked the old StudioViewModel with its in-flight AI request
+    // still running, and silently reset search/category/sort.
+    val libraryViewModel = viewModel<LibraryViewModel>(
+        factory = remember(store) { vmFactory { LibraryViewModel(store) } }
+    )
+    val studioViewModel = viewModel<StudioViewModel>(
+        factory = remember(aiService, store) { vmFactory { StudioViewModel(aiService, store) } }
+    )
+    val navState = viewModel<NavStateViewModel>()
 
     NavHost(
         navController    = navController,
@@ -189,7 +209,7 @@ private fun BeadSnapNavHost(
                 store          = store,
                 library        = library,
                 onPatternClick = { pattern ->
-                    editorPattern = pattern
+                    navState.editorPattern = pattern
                     navController.navigate("editor")
                 },
                 onOpenTipJar   = onOpenTipJar
@@ -206,7 +226,7 @@ private fun BeadSnapNavHost(
                         val existing = store.userPatterns.value.count { it.title.startsWith("Imported Photo") }
                         if (existing > 0) p = p.copy(title = "Imported Photo ${existing + 1}")
                     }
-                    editorPattern = p
+                    navState.editorPattern = p
                     if (p.createdBy == com.beadsnap.app.data.model.CreatorType.user) {
                         store.save(p)
                     }
@@ -226,14 +246,14 @@ private fun BeadSnapNavHost(
             AIStudioScreen(
                 viewModel      = studioViewModel,
                 onEditPattern  = { pattern ->
-                    editorPattern = pattern
+                    navState.editorPattern = pattern
                     navController.navigate("editor")
                 }
             )
         }
 
         composable("editor") {
-            val pattern = editorPattern
+            val pattern = navState.editorPattern
             if (pattern != null) {
                 val factory = remember(pattern.id, store) {
                     object : ViewModelProvider.Factory {

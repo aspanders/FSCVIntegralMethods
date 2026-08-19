@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,6 +58,14 @@ fun LibraryScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var patternToDelete by remember { mutableStateOf<FusePattern?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val gridState = rememberLazyGridState()
+
+    // Switching category (or search/sort) swaps the whole list underneath the
+    // grid, which otherwise keeps its old scroll offset and drops the user
+    // into the middle of the new category. Jump back to the top instead.
+    LaunchedEffect(category, query, sort) {
+        gridState.scrollToItem(0)
+    }
 
     // Surface store errors (failed save/delete) as a snackbar
     LaunchedEffect(lastError) {
@@ -140,6 +149,7 @@ fun LibraryScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 140.dp),
+                    state = gridState,
                     contentPadding = PaddingValues(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),

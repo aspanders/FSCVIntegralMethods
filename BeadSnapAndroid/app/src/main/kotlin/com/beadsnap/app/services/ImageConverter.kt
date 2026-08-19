@@ -13,15 +13,34 @@ import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
 import java.util.UUID
 import kotlin.math.min
-import kotlin.math.pow
+
+/**
+ * Tunables for photo -> pattern conversion. Exposed so the editor can re-run a
+ * conversion live as the user drags a slider, rather than forcing every choice
+ * to be made up front.
+ *
+ * brightness/contrast/saturation are all -1..1, 0 meaning "leave alone", and are
+ * applied in CIELAB so they behave perceptually rather than clipping channels.
+ */
+data class ConvertOptions(
+    val maxColors: Int = 12,
+    val brightness: Float = 0f,
+    val contrast: Float = 0f,
+    val saturation: Float = 0f,
+    /** Source-pixel rect to use; null means the whole bitmap. */
+    val crop: android.graphics.Rect? = null,
+)
 
 object ImageConverter {
 
-    fun convert(bitmap: Bitmap, gridSize: GridSize, maxColors: Int = 12): FusePattern {
+    fun convert(bitmap: Bitmap, gridSize: GridSize, maxColors: Int = 12): FusePattern =
+        convert(bitmap, gridSize, ConvertOptions(maxColors = maxColors))
+
+    fun convert(bitmap: Bitmap, gridSize: GridSize, options: ConvertOptions): FusePattern {
         val cols = gridSize.width
         val rows = gridSize.height
-        val pixels = samplePixels(bitmap, cols, rows)
-        val (palette, assignments) = quantizeBeadSafe(pixels, cols, rows, min(maxColors, 16))
+        val cellLab = sampleCellsLab(bitmap, cols, rows, options)
+        val (palette, assignments) = quantizeBeadSafe(cellLab, cols, rows, min(options.maxColors, 16))
 
         val cells = mutableListOf<Cell>()
         for (y in 0 until rows) {
@@ -85,84 +104,167 @@ object ImageConverter {
         return bitmap
     }
 
-    // ─── Pixel Sampling ───────────────────────────────────────────────────────
+    // ─── Cell sampling ────────────────────────────────────────────────────────
 
-    private fun samplePixels(src: Bitmap, cols: Int, rows: Int): Array<Array<FloatArray>> {
-        val scaled = Bitmap.createScaledBitmap(src, cols, rows, true)
-        val result = Array(rows) { Array(cols) { FloatArray(4) } }
-        for (y in 0 until rows) {
-            for (x in 0 until cols) {
-                val pixel = scaled.getPixel(x, y)
-                val a = Color.alpha(pixel) / 255f
-                if (a < 0.15f) {
-                    result[y][x] = floatArrayOf(-1f, -1f, -1f, -1f)
-                } else {
-                    // getPixel returns straight (un-premultiplied) ARGB: no alpha division
-                    result[y][x] = floatArrayOf(
-                        Color.red(pixel) / 255f,
-                        Color.green(pixel) / 255f,
-                        Color.blue(pixel) / 255f,
-                        a
-                    )
+    /**
+     * Average every source pixel that falls under each bead, in LINEAR light,
+     * and return the result as CIELAB (null for cells that are mostly
+     * transparent).
+     *
+     * The old version handed the whole job to a single
+     * Bitmap.createScaledBitmap(src, cols, rows, true). Collapsing a
+     * multi-megapixel photo straight to ~29x29 that way does not box-average the
+     * source: the bilinear filter reads a tiny neighbourhood per output pixel
+     * and ignores the rest, so most of the photo never contributes at all. It
+     * also averaged gamma-encoded sRGB, which biases every blend dark and flat.
+     * Between them that was the main reason converted photos looked muddy.
+     */
+    private fun sampleCellsLab(
+        src: Bitmap, cols: Int, rows: Int, options: ConvertOptions
+    ): Array<Array<DoubleArray?>> {
+        val crop = options.crop
+        val x0 = crop?.left?.coerceIn(0, src.width - 1) ?: 0
+        val y0 = crop?.top?.coerceIn(0, src.height - 1) ?: 0
+        val w = (crop?.width() ?: src.width).coerceAtMost(src.width - x0).coerceAtLeast(1)
+        val h = (crop?.height() ?: src.height).coerceAtMost(src.height - y0).coerceAtLeast(1)
+
+        val pixels = IntArray(w * h)
+        src.getPixels(pixels, 0, w, x0, y0, w, h)
+
+        // Cache the 256 possible sRGB byte values -> linear, so the inner loop
+        // never repeats the pow().
+        val lin = FloatArray(256) { ColorMath.srgbToLinear(it / 255f) }
+
+        val out = Array(rows) { arrayOfNulls<DoubleArray>(cols) }
+        for (cy in 0 until rows) {
+            val sy0 = (cy.toLong() * h / rows).toInt()
+            val sy1 = (((cy + 1).toLong() * h / rows).toInt()).coerceAtLeast(sy0 + 1).coerceAtMost(h)
+            for (cx in 0 until cols) {
+                val sx0 = (cx.toLong() * w / cols).toInt()
+                val sx1 = (((cx + 1).toLong() * w / cols).toInt()).coerceAtLeast(sx0 + 1).coerceAtMost(w)
+
+                var rAcc = 0.0; var gAcc = 0.0; var bAcc = 0.0
+                var aAcc = 0.0; var n = 0
+                for (sy in sy0 until sy1) {
+                    var idx = sy * w + sx0
+                    for (sx in sx0 until sx1) {
+                        val p = pixels[idx++]
+                        val a = (p ushr 24) and 0xFF
+                        n++
+                        if (a == 0) continue
+                        val wgt = a / 255.0
+                        aAcc += wgt
+                        rAcc += lin[(p shr 16) and 0xFF] * wgt
+                        gAcc += lin[(p shr 8) and 0xFF] * wgt
+                        bAcc += lin[p and 0xFF] * wgt
+                    }
                 }
+                // Mostly-transparent cells stay empty so background removal and
+                // non-square crops leave real holes instead of muddy edges.
+                if (n == 0 || aAcc / n < 0.35) continue
+                val lab = ColorMath.linearRgbToLab(rAcc / aAcc, gAcc / aAcc, bAcc / aAcc)
+                out[cy][cx] = adjustLab(lab, options)
             }
         }
-        if (scaled != src) scaled.recycle()
-        return result
+        return out
+    }
+
+    /** Brightness/contrast/saturation applied perceptually, in CIELAB. */
+    private fun adjustLab(lab: DoubleArray, o: ConvertOptions): DoubleArray {
+        var l = lab[0]
+        var a = lab[1]
+        var b = lab[2]
+        if (o.brightness != 0f) l += o.brightness * 50.0
+        if (o.contrast != 0f) l = 50.0 + (l - 50.0) * (1.0 + o.contrast)
+        if (o.saturation != 0f) {
+            val s = (1.0 + o.saturation).coerceAtLeast(0.0)
+            a *= s
+            b *= s
+        }
+        return doubleArrayOf(l.coerceIn(0.0, 100.0), a, b)
     }
 
     // ─── Bead-safe nearest-colour quantization ────────────────────────────────
 
+    /**
+     * Choose which beads to use, then assign every cell to one of them.
+     *
+     * Selection is error-minimizing rather than frequency-based. The old code
+     * matched each cell against the full palette, kept the N most COMMON beads
+     * and reassigned the rest, which reliably threw away exactly the colours
+     * that carry an image: a red scarf covering 3% of the photo lost to three
+     * near-identical background greys. Here each additional bead is the one
+     * that most reduces total error across the whole image, so a small but
+     * distinct region keeps its colour.
+     */
     private fun quantizeBeadSafe(
-        pixels: Array<Array<FloatArray>>,
+        cellLab: Array<Array<DoubleArray?>>,
         cols: Int, rows: Int, maxColors: Int
     ): Pair<List<BeadColor>, Array<Array<String?>>> {
         val full = BeadColor.palette
         val fullLab = full.map { c ->
             val ac = c.androidColor
-            BeadColor.rgbToLab(Color.red(ac) / 255.0, Color.green(ac) / 255.0, Color.blue(ac) / 255.0)
+            ColorMath.srgbToLab(
+                Color.red(ac) / 255f, Color.green(ac) / 255f, Color.blue(ac) / 255f
+            )
         }
 
-        val assignments = Array(rows) { arrayOfNulls<String>(cols) }
-        val counts = mutableMapOf<String, Int>()
-
+        // Flatten the non-empty cells so selection works on a flat list.
+        val coords = ArrayList<Int>(cols * rows)
+        val labs = ArrayList<DoubleArray>(cols * rows)
         for (y in 0 until rows) {
             for (x in 0 until cols) {
-                val p = pixels[y][x]
-                if (p[3] < 0) continue
-                val lab = BeadColor.rgbToLab(p[0].toDouble(), p[1].toDouble(), p[2].toDouble())
-                var bestIdx = 0; var bestDist = Double.MAX_VALUE
-                fullLab.forEachIndexed { i, pLab ->
-                    val d = (lab.first-pLab.first).pow(2) + (lab.second-pLab.second).pow(2) + (lab.third-pLab.third).pow(2)
-                    if (d < bestDist) { bestDist = d; bestIdx = i }
-                }
-                val id = full[bestIdx].id
-                assignments[y][x] = id
-                counts[id] = (counts[id] ?: 0) + 1
+                val lab = cellLab[y][x] ?: continue
+                coords.add(y * cols + x)
+                labs.add(lab)
             }
         }
+        val assignments = Array(rows) { arrayOfNulls<String>(cols) }
+        if (labs.isEmpty()) return emptyList<BeadColor>() to assignments
 
-        if (counts.size > maxColors) {
-            val topIds = counts.entries.sortedByDescending { it.value }.take(maxColors).map { it.key }.toSet()
-            val topPalette = full.filter { it.id in topIds }
-            val topLab = topPalette.map { c ->
-                val ac = c.androidColor
-                BeadColor.rgbToLab(Color.red(ac) / 255.0, Color.green(ac) / 255.0, Color.blue(ac) / 255.0)
-            }
-            for (y in 0 until rows) {
-                for (x in 0 until cols) {
-                    val id = assignments[y][x] ?: continue
-                    if (id in topIds) continue
-                    val p = pixels[y][x]
-                    val lab = BeadColor.rgbToLab(p[0].toDouble(), p[1].toDouble(), p[2].toDouble())
-                    var bestIdx = 0; var bestDist = Double.MAX_VALUE
-                    topLab.forEachIndexed { i, pLab ->
-                        val d = (lab.first-pLab.first).pow(2) + (lab.second-pLab.second).pow(2) + (lab.third-pLab.third).pow(2)
-                        if (d < bestDist) { bestDist = d; bestIdx = i }
-                    }
-                    assignments[y][x] = topPalette[bestIdx].id
+        // Distance from every cell to every candidate bead, computed once.
+        val nCells = labs.size
+        val nPal = full.size
+        val dist = Array(nCells) { i ->
+            DoubleArray(nPal) { p -> ColorMath.beadDistance(labs[i], fullLab[p]) }
+        }
+
+        // Greedy: repeatedly add whichever bead most reduces the total error.
+        val chosen = ArrayList<Int>(maxColors)
+        val best = DoubleArray(nCells) { Double.MAX_VALUE }
+        val budget = maxColors.coerceAtLeast(1)
+        repeat(budget) {
+            var bestPal = -1
+            var bestTotal = Double.MAX_VALUE
+            for (p in 0 until nPal) {
+                if (p in chosen) continue
+                var total = 0.0
+                for (i in 0 until nCells) {
+                    val d = dist[i][p]
+                    total += if (d < best[i]) d else best[i]
+                    if (total >= bestTotal) break      // prune: cannot win
                 }
+                if (total < bestTotal) { bestTotal = total; bestPal = p }
             }
+            if (bestPal < 0) return@repeat
+            chosen.add(bestPal)
+            for (i in 0 until nCells) {
+                val d = dist[i][bestPal]
+                if (d < best[i]) best[i] = d
+            }
+        }
+        if (chosen.isEmpty()) chosen.add(0)
+
+        // Final assignment against the chosen set.
+        for (i in 0 until nCells) {
+            var bestPal = chosen[0]
+            var bestD = Double.MAX_VALUE
+            for (p in chosen) {
+                val d = dist[i][p]
+                if (d < bestD) { bestD = d; bestPal = p }
+            }
+            val flat = coords[i]
+            assignments[flat / cols][flat % cols] = full[bestPal].id
         }
 
         val usedIds = assignments.flatMap { it.toList() }.filterNotNull().toSet()

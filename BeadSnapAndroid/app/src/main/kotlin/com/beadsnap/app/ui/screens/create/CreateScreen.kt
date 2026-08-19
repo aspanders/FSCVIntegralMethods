@@ -244,9 +244,10 @@ fun CreateScreen(
                     isConverting = true
                     try {
                         val bitmap = maskedBitmap ?: withContext(Dispatchers.IO) {
-                            val stream = context.contentResolver.openInputStream(settingsUri)
-                                ?: throw Exception("Could not open image")
-                            android.graphics.BitmapFactory.decodeStream(stream)
+                            // decodeUpright applies EXIF orientation and bounds the
+                            // size; a raw decodeStream here returned sideways photos.
+                            com.beadsnap.app.services.BitmapLoader
+                                .decodeUpright(context, settingsUri)
                                 ?: throw Exception("Could not decode image")
                         }
                         val pattern = withContext(Dispatchers.Default) {

@@ -1,7 +1,6 @@
 package com.beadsnap.app.services
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
@@ -43,18 +42,15 @@ object BackgroundRemover {
 
     const val WORK_MAX_DIM = 512
 
-    /** Decode a content URI to a working bitmap no larger than WORK_MAX_DIM. */
+    /**
+     * Decode a content URI to an upright working bitmap no larger than
+     * WORK_MAX_DIM. Orientation matters here beyond looks: ML Kit is handed
+     * this bitmap with rotationDegrees 0, so a sideways image meant the
+     * segmenter was looking for an upright subject in a rotated frame.
+     */
     fun decodeWorkBitmap(open: () -> java.io.InputStream?): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        open()?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        var sample = 1
-        while (bounds.outWidth / (sample * 2) >= WORK_MAX_DIM ||
-               bounds.outHeight / (sample * 2) >= WORK_MAX_DIM) {
-            sample *= 2
-        }
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        return open()?.use { BitmapFactory.decodeStream(it, null, opts) }
+        val decoded = BitmapLoader.decodeSampled(open, WORK_MAX_DIM) ?: return null
+        return BitmapLoader.applyOrientation(decoded, BitmapLoader.readOrientation(open))
     }
 
     /**
