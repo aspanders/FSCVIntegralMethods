@@ -159,9 +159,12 @@ def f_target(size, run, bands):
     return cells, f"{run.title()} Target {bands}", ["target", "bullseye", run]
 
 
-def f_yinyang(size, run):
+def f_yinyang(size, run, variant=0):
+    """variant rotates the S and resizes the eyes, so the ten runs differ."""
     ids = _run(run)
     a, b = ids[0], ids[-1]
+    eye = 5.0 + (variant % 5)          # smaller divisor = bigger eye
+    flip = -1 if variant % 2 else 1
     cells = []
     c = size / 2.0
     rad = size / 2.0
@@ -169,6 +172,7 @@ def f_yinyang(size, run):
         dx = x + 0.5 - c
         dy = y + 0.5 - c
         # Two half-size lobes split the disc down the S curve.
+        dx *= flip
         top = math.hypot(dx, dy + rad / 2.0) <= rad / 2.0
         bot = math.hypot(dx, dy - rad / 2.0) <= rad / 2.0
         cid = a if dx < 0 else b
@@ -177,12 +181,12 @@ def f_yinyang(size, run):
         elif bot:
             cid = b
         # The two eyes.
-        if math.hypot(dx, dy + rad / 2.0) <= rad / 8.0:
+        if math.hypot(dx, dy + rad / 2.0) <= rad / eye:
             cid = b
-        elif math.hypot(dx, dy - rad / 2.0) <= rad / 8.0:
+        elif math.hypot(dx, dy - rad / 2.0) <= rad / eye:
             cid = a
         cells.append((x, y, cid))
-    return cells, f"{run.title()} Balance", ["yinyang", "balance", run]
+    return cells, f"{run.title()} Balance {variant + 1}", ["yinyang", "balance", run]
 
 
 def f_sunburst(size, run, rays):
@@ -198,11 +202,12 @@ def f_sunburst(size, run, rays):
     return cells, f"{run.title()} Sunburst {rays}", ["sunburst", "rays", run]
 
 
-def f_gradient(size, run):
+def f_gradient(size, run, bands=5):
     ids = _run(run)
     n = len(ids)
-    cells = [(x, y, ids[min(n - 1, int(r * n))]) for x, y, r, _ in _polar(size)]
-    return cells, f"{run.title()} Fade", ["gradient", "fade", run]
+    cells = [(x, y, ids[min(n - 1, int(r * bands) * n // max(1, bands))])
+             for x, y, r, _ in _polar(size)]
+    return cells, f"{run.title()} Fade {bands}", ["gradient", "fade", run]
 
 
 def generate():
@@ -212,19 +217,27 @@ def generate():
         i = RUN_NAMES.index(run)
         size = SIZES[i % len(SIZES)]
         big = SIZES[-1]
+        # Every family takes a parameter that varies across ALL ten runs, not
+        # a few. The first cut used i % 3 and i % 4 for most families and no
+        # parameter at all for Balance and Fade, so the ten colour runs
+        # collapsed onto three or four distinct boards and the category came
+        # out only 36% structurally unique - exactly the recolour problem this
+        # library is trying to get rid of.
         specs = [
-            f_rings(big, run, 4 + i % 4),
-            f_wedges(size, run, 1 + i % 3),
-            f_checker(big, run, 4 + i % 3),
-            f_spiral(big, run, 3 + i % 4),
-            f_rosette(big, run, 6 + (i % 3) * 2),
-            f_star(size, run, 5 + i % 4),
-            f_target(size, run, 5 + i % 3),
-            f_yinyang(big, run),
-            f_sunburst(big, run, 8 + (i % 3) * 4),
-            f_gradient(size, run),
+            f_rings(big, run, 3 + i),
+            f_wedges(size, run, 1 + i % 4),
+            f_checker(big, run, 3 + i),
+            f_spiral(big, run, 2 + i),
+            f_rosette(big, run, 5 + i),
+            f_star(size, run, 5 + i),
+            f_target(size, run, 4 + i),
+            f_yinyang(big, run, i),
+            f_sunburst(big, run, 5 + i),
+            f_gradient(size, run, 3 + i),
         ]
         boards = [big, size, big, big, big, size, size, big, big, size]
+        # sizes rotate with the run too, so families whose parameter space is
+        # narrower than ten still land on ten distinct boards.
         for (cells, title, tags), side in zip(specs, boards):
             out.append(make_pattern(
                 stable_id("circles", title),

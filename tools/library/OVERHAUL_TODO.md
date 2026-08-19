@@ -19,6 +19,16 @@ recolors. Worst: birds 6 unique/100, fish 8, gems/mandalas/bugs/trees 11.
   guess it, rate clarity 1-5, suggest a fix. (Run per category.)
 - `render.numbered_montage` — blind numbered montages for the audit.
 
+## Audit
+
+`python audit.py` measures both halves of this and prints failures;
+`python audit.py --montage <category>` renders a contact sheet to eyeball.
+Two numbers matter per category: **unique %** (colour-blind distinct designs)
+and **exactDup** (byte-identical boards, the indefensible case).
+
+Baseline v9: 2790 patterns, 59.0% distinct, 1145 exact duplicates.
+After v11:   2777 patterns, 74.2% distinct,  250 exact duplicates.
+
 ## DONE (overhauled, wired, shipped)
 | category | unique | notes |
 |---|---|---|
@@ -29,8 +39,33 @@ recolors. Worst: birds 6 unique/100, fish 8, gems/mandalas/bugs/trees 11.
 | hearts | 133 | internal patterns + monograms + arrangements (silhouette-capped) |
 | stars | 120 | n-point, star-polygons, bursts, wreaths, patterned fills |
 | gems | 126 | cuts x facets + clusters/rings/pendants |
+| birds | 100 | 20 species as PROPORTIONS (neck/leg/beak/tail) x 5 poses |
+| fish | 100 | 20 species x body/tail/fin/marking, tail scaled to body |
+| bugs | 87 | 20 species x 5 plans (beetle/flier/walker/crawler/spider/snail) |
+| trees | 100 | 20 species x crown plan (round/conifer/column/weep/palm/...) |
+| circles | 100 | was 36% - every family now varies across all ten runs |
 
-## TODO — remaining categories (still 100, recolor-heavy)
+Shared machinery in `gen_creatures.py` worth reusing for the rest:
+`_frame` draws on a roomy canvas then centres the ink on the board (no more
+clipped tails, no more subjects adrift), `_pick_bg` chooses the background
+furthest from the body colour (no more silver fish on grey water), `_outline`
+gives every subject a one-bead dark edge.
+
+## TODO — remaining categories (recolour-heavy; unique % from audit.py)
+
+Worst first: sports 12%, holidays 12%, vehicles 13%, food 16%, videogame 18%,
+flowers 21%, sweets 24%, rainbows 44%, animals 50%, icons 80%.
+
+sports/food/holidays/videogame also carry 80/85/30/28 EXACT duplicates - the
+same board shipped many times over - so they are the first thing a user
+scrolling a category actually notices.
+
+One option worth putting to the user before more generator work: cap each
+category at its distinct-design count. That drops the library to ~2060
+patterns but removes every duplicate immediately, and 2060 real designs is a
+better product than 2777 with 717 repeats.
+
+## TODO detail — remaining categories (still 100, recolor-heavy)
 Overhaul each in `gen_unique.py`, wire into the right GENERATORS dict
 (`gen_library.py` for the first 10, `gen_library2.py` for the rest), then
 rebuild + bump version + seeds + commit.

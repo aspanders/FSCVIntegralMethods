@@ -1,6 +1,6 @@
 {
-  "version": 9,
-  "count": 2790,
+  "version": 11,
+  "count": 2777,
   "perCategory": {
     "geometric": 200,
     "mandalas": 200,
@@ -15,7 +15,7 @@
     "animals": 100,
     "birds": 100,
     "fish": 100,
-    "bugs": 100,
+    "bugs": 87,
     "food": 100,
     "sweets": 100,
     "trees": 100,

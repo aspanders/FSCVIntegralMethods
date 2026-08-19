@@ -24,6 +24,7 @@ import shutil
 import gen_icons
 import gen_3d
 import gen_circles
+import gen_creatures
 import gen_library
 import gen_library2
 import compact
@@ -50,6 +51,14 @@ def collect():
     patterns += gen_icons.generate()     # icons: letters, digits, symbols
     patterns += gen_3d.generate()        # threeD builds with guides
     patterns += gen_circles.generate()   # round-pegboard designs (shape=circle)
+    # Silhouette categories rebuilt from parametric parts REPLACE the
+    # recolour-heavy originals outright. Filtering by category rather than by
+    # id matters: stable_id gives old and new the same "<category>-" prefix, so
+    # an id-based filter shipped both and doubled the category.
+    rebuilt = set(gen_creatures.GENERATORS)
+    patterns = [p for p in patterns if p["category"] not in rebuilt]
+    for fn in gen_creatures.GENERATORS.values():
+        patterns += fn()
     if os.path.exists(INCOMING):
         patterns += json.load(open(INCOMING))
     # de-dup by id (later wins)
