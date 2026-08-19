@@ -78,7 +78,7 @@ class PhotoProjectStore private constructor(context: Context) {
 
     private suspend fun load() {
         _projects.value = withContext(Dispatchers.IO) {
-            if (!indexFile.exists()) return@withContext emptyList()
+            if (!indexFile.exists()) return@withContext emptyList<PhotoProject>()
             try { json.decodeFromString<List<PhotoProject>>(indexFile.readText()) }
             catch (_: Exception) { emptyList() }
         }.sortedByDescending { it.createdAt }
