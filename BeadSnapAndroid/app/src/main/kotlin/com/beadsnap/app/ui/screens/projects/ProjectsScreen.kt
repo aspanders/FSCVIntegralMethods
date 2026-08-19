@@ -160,8 +160,11 @@ fun ProjectsScreen(
             source = source,
             initialGridSize = com.beadsnap.app.data.model.GridSize.large,
             initialMaxColors = 12,
+            // Starting from the stored cut-out means the subject is already
+            // alone on a transparent field; there is nothing left to segment.
+            autoSegment = !tuneCutout,
             onCancel = { tuneSource = null; tuneProject = null },
-            onDone = { pattern, _, _ ->
+            onDone = { pattern, _, _, _ ->
                 val titled = pattern.copy(
                     title = "${project.title} v${project.variants.size + 1}"
                 )

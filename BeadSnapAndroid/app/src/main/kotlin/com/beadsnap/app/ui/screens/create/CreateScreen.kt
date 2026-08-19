@@ -29,7 +29,6 @@ import com.beadsnap.app.data.model.PegboardShape
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.data.store.PhotoProjectStore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
@@ -41,23 +40,19 @@ fun CreateScreen(
     onOpenAIStudio: () -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val projectStore = remember { PhotoProjectStore.getInstance(context) }
 
     var showBlankDialog    by remember { mutableStateOf(false) }
-    var showPhotoSettings  by remember { mutableStateOf(false) }
     var pendingImageUri    by remember { mutableStateOf<Uri?>(null) }
     var isConverting       by remember { mutableStateOf(false) }
     var conversionError    by remember { mutableStateOf<String?>(null) }
 
-    // The photo waiting to be tuned into a pattern. Non-null means the live
-    // tuning screen is up. The ORIGINAL is kept alongside the cut-out even
-    // when background removal was used, because the project stores both: a
-    // cut-out cannot be un-cut, and "different background removals" is one of
-    // the things later variants are meant to be able to differ in.
-    var tuneBitmap   by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var tuneOriginal by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var tuneCutout   by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    // The photo waiting to be tuned into a pattern. Non-null means the studio
+    // is up. This is always the UNCUT original: the studio owns the mask, and
+    // the project stores the original alongside whatever cut-out came back,
+    // because a cut-out cannot be un-cut and "different background removals"
+    // is one of the things later variants are meant to differ in.
+    var tuneBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     // Photo conversion settings: only the starting point now - the real choice
     // happens in PhotoTuneScreen, and what the user lands on is remembered here
@@ -73,10 +68,7 @@ fun CreateScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
     ) { uri ->
-        if (uri != null) {
-            pendingImageUri = uri
-            showPhotoSettings = true
-        }
+        if (uri != null) pendingImageUri = uri
     }
 
     // Camera: captures go to a private cache file (never the user's gallery)
@@ -87,7 +79,6 @@ fun CreateScreen(
     ) { success ->
         if (success && cameraImageUri != null) {
             pendingImageUri = cameraImageUri
-            showPhotoSettings = true
         } else {
             cameraImageFile?.delete()
             cameraImageFile = null
@@ -246,41 +237,29 @@ fun CreateScreen(
         )
     }
 
-    // Step 1: what part of the photo becomes beads
+    // Photo picked: decode it upright and open the studio. There is no
+    // settings sheet in front of it any more - board size, colours and the
+    // background cut-out are all decisions best made with the beads visible,
+    // which is exactly what the studio shows.
     val settingsUri = pendingImageUri
-    if (showPhotoSettings && settingsUri != null) {
-        PhotoSettingsSheet(
-            imageUri = settingsUri,
-            onNext = { maskedBitmap ->
-                showPhotoSettings = false
-                scope.launch {
-                    isConverting = true
-                    try {
-                        // decodeUpright applies EXIF orientation and bounds the
-                        // size; a raw decodeStream here returned sideways photos.
-                        val original = withContext(Dispatchers.IO) {
-                            com.beadsnap.app.services.BitmapLoader
-                                .decodeUpright(context, settingsUri)
-                                ?: throw Exception("Could not decode image")
-                        }
-                        tuneOriginal = original
-                        tuneCutout = maskedBitmap
-                        tuneBitmap = maskedBitmap ?: original
-                    } catch (e: Exception) {
-                        conversionError = e.message ?: "Conversion failed"
-                    } finally {
-                        isConverting = false
-                        pendingImageUri = null
-                        cleanUpCameraCapture()
-                    }
-                }
-            },
-            onDismiss = {
-                showPhotoSettings = false
-                pendingImageUri = null
-                cleanUpCameraCapture()
+    LaunchedEffect(settingsUri) {
+        val uri = settingsUri ?: return@LaunchedEffect
+        isConverting = true
+        try {
+            // decodeUpright applies EXIF orientation and bounds the size; a raw
+            // decodeStream here returned sideways photos.
+            tuneBitmap = withContext(Dispatchers.IO) {
+                com.beadsnap.app.services.BitmapLoader
+                    .decodeUpright(context, uri)
+                    ?: throw Exception("Could not decode image")
             }
-        )
+        } catch (e: Exception) {
+            conversionError = e.message ?: "Could not open that photo"
+        } finally {
+            isConverting = false
+            pendingImageUri = null
+            cleanUpCameraCapture()
+        }
     }
 
     // Live tuning: pattern and controls on screen together. The source bitmap
@@ -291,8 +270,8 @@ fun CreateScreen(
             source = source,
             initialGridSize = photoGridSize,
             initialMaxColors = photoMaxColors,
-            onCancel = { tuneBitmap = null; tuneOriginal = null; tuneCutout = null },
-            onDone = { pattern, gridSize, colors ->
+            onCancel = { tuneBitmap = null },
+            onDone = { pattern, gridSize, colors, cutout ->
                 photoGridSize = gridSize
                 photoMaxColors = colors
                 // Keep the PHOTO, not just this one conversion of it. Before
@@ -302,17 +281,15 @@ fun CreateScreen(
                 // entry in My Designs with no memory of where it came from.
                 val project = projectStore.createProject(
                     title  = "Photo ${projectStore.projects.value.size + 1}",
-                    source = tuneOriginal ?: source,
-                    cutout = tuneCutout
+                    source = source,
+                    cutout = cutout
                 )
                 val titled = pattern.copy(title = "${project.title} v1")
                 projectStore.addVariant(
                     project.id, titled.id,
-                    PhotoProjectStore.labelFor(titled, cutout = tuneCutout != null)
+                    PhotoProjectStore.labelFor(titled, cutout = cutout != null)
                 )
                 tuneBitmap = null
-                tuneOriginal = null
-                tuneCutout = null
                 onPatternReady(titled)
             }
         )

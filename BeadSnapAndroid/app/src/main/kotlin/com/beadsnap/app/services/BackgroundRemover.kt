@@ -1,62 +1,30 @@
 package com.beadsnap.app.services
 
 import android.graphics.Bitmap
-import android.graphics.Color
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
-import kotlin.math.roundToInt
 
 /**
- * Pure mask state: true = keep (foreground). Kept free of android.graphics
- * so the brush math is unit-testable.
+ * On-device subject segmentation.
+ *
+ * This is only ever the STARTING point for a cut-out. Everything that follows -
+ * the touch-up brush, the preview compositing, the mask itself - lives in
+ * PhotoStudio, so a segmenter that is unavailable or simply wrong costs the
+ * user a few brush strokes rather than the whole feature.
  */
-class MaskModel(val width: Int, val height: Int) {
-    val keep = BooleanArray(width * height) { true }
-
-    fun setAll(values: BooleanArray) {
-        require(values.size == keep.size)
-        values.copyInto(keep)
-    }
-
-    /** Paint a filled circle of `keepValue` into the mask, clipped to bounds. */
-    fun brush(cx: Int, cy: Int, radius: Int, keepValue: Boolean) {
-        val r2 = radius * radius
-        val x0 = (cx - radius).coerceAtLeast(0)
-        val x1 = (cx + radius).coerceAtMost(width - 1)
-        val y0 = (cy - radius).coerceAtLeast(0)
-        val y1 = (cy + radius).coerceAtMost(height - 1)
-        for (y in y0..y1) {
-            for (x in x0..x1) {
-                val dx = x - cx
-                val dy = y - cy
-                if (dx * dx + dy * dy <= r2) keep[y * width + x] = keepValue
-            }
-        }
-    }
-}
-
 object BackgroundRemover {
 
-    const val WORK_MAX_DIM = 512
-
     /**
-     * Decode a content URI to an upright working bitmap no larger than
-     * WORK_MAX_DIM. Orientation matters here beyond looks: ML Kit is handed
-     * this bitmap with rotationDegrees 0, so a sideways image meant the
-     * segmenter was looking for an upright subject in a rotated frame.
-     */
-    fun decodeWorkBitmap(open: () -> java.io.InputStream?): Bitmap? {
-        val decoded = BitmapLoader.decodeSampled(open, WORK_MAX_DIM) ?: return null
-        return BitmapLoader.applyOrientation(decoded, BitmapLoader.readOrientation(open))
-    }
-
-    /**
-     * On-device subject segmentation via ML Kit. Returns a keep-mask sized
-     * bitmap.width × bitmap.height, or null when the model is unavailable
-     * (the caller falls back to keep-everything + manual brushing).
+     * Returns a keep-mask sized bitmap.width x bitmap.height, or null when the
+     * model is unavailable (the caller falls back to keep-everything and manual
+     * brushing).
+     *
+     * The bitmap is handed over with rotationDegrees 0, so it must already be
+     * upright: a sideways image means the segmenter is looking for an upright
+     * subject in a rotated frame.
      */
     suspend fun subjectMask(bitmap: Bitmap): BooleanArray? =
         suspendCancellableCoroutine { cont ->
@@ -87,25 +55,4 @@ object BackgroundRemover {
                     cont.resume(null)
                 }
         }
-
-    /** Preview composite: background pixels faded to `fadeAlpha` (0..1). */
-    fun composite(src: Bitmap, mask: MaskModel, fadeAlpha: Float): Bitmap {
-        val w = src.width
-        val h = src.height
-        val pixels = IntArray(w * h)
-        src.getPixels(pixels, 0, w, 0, 0, w, h)
-        val fade = (fadeAlpha * 255).roundToInt().coerceIn(0, 255)
-        for (i in pixels.indices) {
-            if (!mask.keep[i]) {
-                val p = pixels[i]
-                val a = (Color.alpha(p) * fade) / 255
-                pixels[i] = Color.argb(a, Color.red(p), Color.green(p), Color.blue(p))
-            }
-        }
-        return Bitmap.createBitmap(pixels, w, h, Bitmap.Config.ARGB_8888)
-    }
-
-    /** Final image for conversion: background fully transparent. */
-    fun maskedForConversion(src: Bitmap, mask: MaskModel): Bitmap =
-        composite(src, mask, fadeAlpha = 0f)
 }

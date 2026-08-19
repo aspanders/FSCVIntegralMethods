@@ -13,7 +13,6 @@ import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.model.PegboardShape
 import java.util.UUID
-import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -44,9 +43,78 @@ data class ConvertOptions(
     val crop: android.graphics.Rect? = null,
     /** Square pegboard, or the square lattice clipped to a round board. */
     val shape: PegboardShape = PegboardShape.square,
-)
+    /**
+     * Per-channel linear-light gains, applied before anything else.
+     *
+     * This is the only control that can undo a colour CAST, as opposed to a
+     * loss of saturation. Measured on a real test photo of a blue toy shot
+     * under warm indoor light against wood: the toy's body came out at chroma
+     * 4.3 with its hue still correct at 231 degrees, and handing the quantizer
+     * the ENTIRE 55-bead palette with no budget cap still produced only 2.8%
+     * cool beads. The blue was not in the file. chromaLift cannot fix that -
+     * it is multiplicative, so it amplifies a hue that is present but cannot
+     * put back a channel the camera's white balance crushed.
+     */
+    val whiteBalance: FloatArray = NEUTRAL_GAINS,
+) {
+    // FloatArray breaks data-class equality (identity, not contents), and the
+    // live studio re-runs whenever the options change, so compare by value.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ConvertOptions) return false
+        return maxColors == other.maxColors && brightness == other.brightness &&
+            contrast == other.contrast && saturation == other.saturation &&
+            chromaLift == other.chromaLift && crop == other.crop &&
+            shape == other.shape && whiteBalance.contentEquals(other.whiteBalance)
+    }
+
+    override fun hashCode(): Int {
+        var r = maxColors
+        r = 31 * r + brightness.hashCode()
+        r = 31 * r + contrast.hashCode()
+        r = 31 * r + saturation.hashCode()
+        r = 31 * r + chromaLift.hashCode()
+        r = 31 * r + (crop?.hashCode() ?: 0)
+        r = 31 * r + shape.hashCode()
+        r = 31 * r + whiteBalance.contentHashCode()
+        return r
+    }
+
+    val hasWhiteBalance: Boolean
+        get() = whiteBalance[0] != 1f || whiteBalance[1] != 1f || whiteBalance[2] != 1f
+
+    companion object {
+        val NEUTRAL_GAINS = floatArrayOf(1f, 1f, 1f)
+    }
+}
 
 object ImageConverter {
+
+    /**
+     * The beads a photo conversion is allowed to choose from.
+     *
+     * "Clear" is excluded. It is a translucent bead whose stand-in hex
+     * (#E8F4F8) is a pale cool white, so it competes directly with White for
+     * every highlight - on the test photo it took 3.3% of the beads, none of
+     * which look like that once fused. It stays in the editor palette for
+     * anyone who wants to place it deliberately.
+     */
+    val autoPalette: List<BeadColor> by lazy {
+        BeadColor.palette.filter { it.id != "clear" }
+    }
+
+    private val autoPaletteLab: List<DoubleArray> by lazy {
+        autoPalette.map { c ->
+            val ac = c.androidColor
+            ColorMath.srgbToLab(
+                Color.red(ac) / 255f, Color.green(ac) / 255f, Color.blue(ac) / 255f
+            )
+        }
+    }
+
+    /** Distance from one cell colour to every selectable bead. */
+    fun beadDistances(lab: DoubleArray): DoubleArray =
+        DoubleArray(autoPaletteLab.size) { p -> ColorMath.beadDistance(lab, autoPaletteLab[p]) }
 
     fun convert(bitmap: Bitmap, gridSize: GridSize, maxColors: Int = 12): FusePattern =
         convert(bitmap, gridSize, ConvertOptions(maxColors = maxColors))
@@ -62,7 +130,10 @@ object ImageConverter {
                 if (!options.shape.contains(x, y, cols, rows)) cellLab[y][x] = null
             }
         }
-        val (palette, assignments) = quantizeBeadSafe(cellLab, cols, rows, min(options.maxColors, 16))
+        // The old cap of 16 silently ignored anything the colour slider set
+        // above it, so asking for 24 quietly gave you 16.
+        val (palette, assignments) =
+            quantizeBeadSafe(cellLab, cols, rows, options.maxColors.coerceIn(1, 32))
 
         val cells = mutableListOf<Cell>()
         for (y in 0 until rows) {
@@ -161,6 +232,9 @@ object ImageConverter {
         // Cache the 256 possible sRGB byte values -> linear, so the inner loop
         // never repeats the pow().
         val lin = FloatArray(256) { ColorMath.srgbToLinear(it / 255f) }
+        val gr = options.whiteBalance[0].toDouble()
+        val gg = options.whiteBalance[1].toDouble()
+        val gb = options.whiteBalance[2].toDouble()
 
         val out = Array(rows) { arrayOfNulls<DoubleArray>(cols) }
         for (cy in 0 until rows) {
@@ -189,7 +263,14 @@ object ImageConverter {
                 // Mostly-transparent cells stay empty so background removal and
                 // non-square crops leave real holes instead of muddy edges.
                 if (n == 0 || aAcc / n < 0.35) continue
-                val lab = ColorMath.linearRgbToLab(rAcc / aAcc, gAcc / aAcc, bAcc / aAcc)
+                // White balance is a scale in LINEAR light, so it commutes with
+                // the averaging above and can be applied once per cell rather
+                // than once per pixel.
+                val lab = ColorMath.linearRgbToLab(
+                    (rAcc / aAcc * gr).coerceIn(0.0, 1.0),
+                    (gAcc / aAcc * gg).coerceIn(0.0, 1.0),
+                    (bAcc / aAcc * gb).coerceIn(0.0, 1.0)
+                )
                 out[cy][cx] = adjustLab(lab, options)
             }
         }
@@ -280,33 +361,54 @@ object ImageConverter {
         cellLab: Array<Array<DoubleArray?>>,
         cols: Int, rows: Int, maxColors: Int
     ): Pair<List<BeadColor>, Array<Array<String?>>> {
-        val full = BeadColor.palette
-        val fullLab = full.map { c ->
-            val ac = c.androidColor
-            ColorMath.srgbToLab(
-                Color.red(ac) / 255f, Color.green(ac) / 255f, Color.blue(ac) / 255f
-            )
-        }
-
-        // Flatten the non-empty cells so selection works on a flat list.
-        val coords = ArrayList<Int>(cols * rows)
-        val labs = ArrayList<DoubleArray>(cols * rows)
+        val dist = arrayOfNulls<DoubleArray>(cols * rows)
         for (y in 0 until rows) {
             for (x in 0 until cols) {
                 val lab = cellLab[y][x] ?: continue
-                coords.add(y * cols + x)
-                labs.add(lab)
+                dist[y * cols + x] = beadDistances(lab)
             }
         }
-        val assignments = Array(rows) { arrayOfNulls<String>(cols) }
-        if (labs.isEmpty()) return emptyList<BeadColor>() to assignments
+        return chooseAndAssign(dist, cols, rows, maxColors)
+    }
 
-        // Distance from every cell to every candidate bead, computed once.
-        val nCells = labs.size
-        val nPal = full.size
-        val dist = Array(nCells) { i ->
-            DoubleArray(nPal) { p -> ColorMath.beadDistance(labs[i], fullLab[p]) }
+    /**
+     * Choose which beads to use, then assign every cell to one of them.
+     *
+     * Takes the per-cell distance rows rather than the cell colours, because
+     * the live studio keeps those rows cached: brushing the mask only changes
+     * the cells the brush touched, so only those rows are recomputed, while
+     * this selection still runs over the whole board exactly as a one-shot
+     * conversion would. Sharing this function is what keeps the live preview
+     * and the committed pattern from drifting apart.
+     *
+     * A null row means "no bead here" - transparent, or off a round board.
+     *
+     * Selection is error-minimizing rather than frequency-based. The old code
+     * matched each cell against the full palette, kept the N most COMMON beads
+     * and reassigned the rest, which reliably threw away exactly the colours
+     * that carry an image: a red scarf covering 3% of the photo lost to three
+     * near-identical background greys. Here each additional bead is the one
+     * that most reduces total error across the whole image, so a small but
+     * distinct region keeps its colour.
+     */
+    fun chooseAndAssign(
+        dist: Array<DoubleArray?>,
+        cols: Int, rows: Int, maxColors: Int
+    ): Pair<List<BeadColor>, Array<Array<String?>>> {
+        val assignments = Array(rows) { arrayOfNulls<String>(cols) }
+
+        // Flatten the live cells so selection works on a dense list.
+        val coords = ArrayList<Int>(cols * rows)
+        val live = ArrayList<DoubleArray>(cols * rows)
+        for (i in 0 until cols * rows) {
+            val row = dist[i] ?: continue
+            coords.add(i)
+            live.add(row)
         }
+        if (live.isEmpty()) return emptyList<BeadColor>() to assignments
+
+        val nCells = live.size
+        val nPal = autoPalette.size
 
         // Greedy: repeatedly add whichever bead most reduces the total error.
         val chosen = ArrayList<Int>(maxColors)
@@ -319,7 +421,7 @@ object ImageConverter {
                 if (p in chosen) continue
                 var total = 0.0
                 for (i in 0 until nCells) {
-                    val d = dist[i][p]
+                    val d = live[i][p]
                     total += if (d < best[i]) d else best[i]
                     if (total >= bestTotal) break      // prune: cannot win
                 }
@@ -328,26 +430,28 @@ object ImageConverter {
             if (bestPal < 0) return@repeat
             chosen.add(bestPal)
             for (i in 0 until nCells) {
-                val d = dist[i][bestPal]
+                val d = live[i][bestPal]
                 if (d < best[i]) best[i] = d
             }
         }
         if (chosen.isEmpty()) chosen.add(0)
 
         // Final assignment against the chosen set.
+        val usedIds = HashSet<String>(chosen.size * 2)
         for (i in 0 until nCells) {
             var bestPal = chosen[0]
             var bestD = Double.MAX_VALUE
             for (p in chosen) {
-                val d = dist[i][p]
+                val d = live[i][p]
                 if (d < bestD) { bestD = d; bestPal = p }
             }
             val flat = coords[i]
-            assignments[flat / cols][flat % cols] = full[bestPal].id
+            val id = autoPalette[bestPal].id
+            usedIds.add(id)
+            assignments[flat / cols][flat % cols] = id
         }
 
-        val usedIds = assignments.flatMap { it.toList() }.filterNotNull().toSet()
-        val palette = full.filter { it.id in usedIds }
+        val palette = autoPalette.filter { it.id in usedIds }
         return palette to assignments
     }
 }
