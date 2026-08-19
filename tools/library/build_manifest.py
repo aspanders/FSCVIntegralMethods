@@ -68,6 +68,16 @@ def collect():
     return _interleave(list(by_id.values()))
 
 
+VARIANT_WORDS = {
+    # Suffixes the generators append to mark a variant of one design.
+    "Small", "Large", "Wide", "Tall", "Bold", "Fine", "Compact", "Long", "Big",
+    "Wheels", "Cub", "Standing", "Crouching", "Young", "Sleek", "Finned",
+    "Winged", "Slender", "Perched", "Calling", "Fledgling", "Alert", "Sapling",
+    "Old", "Squat", "Bud", "Full", "Double", "Simple", "Tile", "Knockout",
+    "Shadow",
+}
+
+
 def _interleave(patterns):
     """Round-robin each category across its design families.
 
@@ -86,10 +96,15 @@ def _interleave(patterns):
     for cat, lst in by_cat.items():
         fams = OrderedDict()
         for p in lst:
-            # The family is the title with its trailing variant words removed:
+            # The family is the title with its trailing VARIANT words removed:
             # "Wren Perched" and "Wren Calling" are one family, "Robin" another.
-            key = p["title"].split()[0]
-            fams.setdefault(key, []).append(p)
+            # Taking the first word instead collapsed every letter into a single
+            # "Letter" family, so the icons category opened with one letter and
+            # then thirteen symbols.
+            words = p["title"].split()
+            while len(words) > 1 and words[-1] in VARIANT_WORDS:
+                words.pop()
+            fams.setdefault(" ".join(words), []).append(p)
         order = list(fams.values())
         i = 0
         while any(order):
