@@ -62,6 +62,7 @@ struct BeadGridView: View {
     private var gridContent: some View {
         let cols = viewModel.pattern.grid.width
         let rows = viewModel.pattern.grid.height
+        let shape = viewModel.pattern.shape
 
         return ZStack(alignment: .topLeading) {
             LazyVGrid(
@@ -71,12 +72,20 @@ struct BeadGridView: View {
                 ForEach(0..<(cols * rows), id: \.self) { idx in
                     let x = idx % cols
                     let y = idx / cols
-                    BeadCellView(
-                        color: viewModel.color(at: x, y: y)?.swiftUIColor,
-                        size: cellSize
-                    )
-                    .equatable()
-                    .frame(width: cellSize, height: cellSize)
+                    // Off a round board there is no peg, so nothing is drawn:
+                    // the board reads as a circle instead of a square with a
+                    // circle painted on it. The slot still occupies its place
+                    // in the grid so the layout stays a simple fixed lattice.
+                    if shape.contains(x: x, y: y, cols: cols, rows: rows) {
+                        BeadCellView(
+                            color: viewModel.color(at: x, y: y)?.swiftUIColor,
+                            size: cellSize
+                        )
+                        .equatable()
+                        .frame(width: cellSize, height: cellSize)
+                    } else {
+                        Color.clear.frame(width: cellSize, height: cellSize)
+                    }
                 }
             }
 
@@ -93,7 +102,7 @@ struct BeadGridView: View {
                                 guard !isZooming else { return }
                                 let x = Int(value.location.x / step)
                                 let y = Int(value.location.y / step)
-                                guard x >= 0, x < cols, y >= 0, y < rows else { return }
+                                guard shape.contains(x: x, y: y, cols: cols, rows: rows) else { return }
 
                                 // Nothing is painted until the finger leaves the
                                 // starting cell: a tap resolves in onEnded, and a

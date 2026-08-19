@@ -103,6 +103,33 @@ class EditorViewModel(
         scheduleAutosave()
     }
 
+    /**
+     * Select-all-of-a-colour, then recolour: every bead currently using [from]
+     * becomes [to], as a single undo entry. [to] joins the pattern palette if it
+     * is not already there, so a colour can be swapped for one the pattern has
+     * never used.
+     */
+    fun replaceColor(from: BeadColor, to: BeadColor) {
+        if (from.id == to.id) return
+        if (_cellMap.value.none { it.value == from.id }) return
+        pushUndo()
+        _cellMap.value = _cellMap.value.mapValues { (_, id) -> if (id == from.id) to.id else id }
+        if (_pattern.value.palette.none { it.id == to.id }) {
+            _pattern.update { it.copy(palette = it.palette + to) }
+        }
+        commitCells()
+        scheduleAutosave()
+    }
+
+    /** Select-all-of-a-colour, then delete: clears every bead using [color]. */
+    fun removeColor(color: BeadColor) {
+        if (_cellMap.value.none { it.value == color.id }) return
+        pushUndo()
+        _cellMap.value = _cellMap.value.filterValues { it != color.id }
+        commitCells()
+        scheduleAutosave()
+    }
+
     fun undo() {
         val prev = undoStack.removeLastOrNull() ?: return
         _cellMap.value = prev

@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -24,7 +23,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.services.BackgroundRemover
 import com.beadsnap.app.services.MaskModel
 import kotlinx.coroutines.Dispatchers
@@ -35,23 +33,23 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Photo-to-beads settings: grid size, max colors, and optional background
- * removal with a faded preview and a Remove / Add back touch-up brush.
+ * Step one of the photo flow: decide what part of the photo becomes beads.
+ *
+ * Board size, colour count and the colour controls deliberately do NOT live
+ * here any more - they are tuned in PhotoTuneScreen with the finished pattern
+ * visible, instead of being guessed before a single bead has been seen.
+ * Background removal stays here because it needs the photo itself, not the
+ * pattern, to brush against.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PhotoSettingsSheet(
     imageUri: Uri,
-    gridSize: GridSize,
-    maxColors: Int,
-    onGridSizeChanged: (GridSize) -> Unit,
-    onMaxColorsChanged: (Int) -> Unit,
-    onConvert: (maskedBitmap: Bitmap?) -> Unit,
+    onNext: (maskedBitmap: Bitmap?) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sizes = listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
 
     var removeBackground by remember { mutableStateOf(false) }
     var workBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -132,6 +130,12 @@ fun PhotoSettingsSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text("Photo to Beads", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Choose what to keep. Board size and colours come next, with the " +
+                "pattern in front of you.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             // ── Background removal ────────────────────────────────────────────
             Row(
@@ -260,29 +264,6 @@ fun PhotoSettingsSheet(
 
             HorizontalDivider()
 
-            // ── Grid size ─────────────────────────────────────────────────────
-            Text("Grid Size", style = MaterialTheme.typography.labelLarge)
-            sizes.forEach { gs ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable { onGridSizeChanged(gs) }.padding(vertical = 2.dp)
-                ) {
-                    RadioButton(selected = gridSize == gs, onClick = { onGridSizeChanged(gs) })
-                    Spacer(Modifier.width(8.dp))
-                    Text(gs.displayName, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-
-            HorizontalDivider()
-
-            Text("Max bead colors: $maxColors", style = MaterialTheme.typography.bodyMedium)
-            Slider(
-                value = maxColors.toFloat(),
-                onValueChange = { onMaxColorsChanged(it.roundToInt()) },
-                valueRange = 4f..24f,
-                steps = 19
-            )
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -297,12 +278,12 @@ fun PhotoSettingsSheet(
                             val m = mask
                             if (src != null && m != null) BackgroundRemover.maskedForConversion(src, m) else null
                         } else null
-                        onConvert(masked)
+                        onNext(masked)
                     },
                     enabled = !isSegmenting,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Convert")
+                    Text("Next")
                 }
             }
         }

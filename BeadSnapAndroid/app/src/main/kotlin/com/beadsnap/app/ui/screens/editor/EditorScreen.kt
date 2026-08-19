@@ -34,6 +34,7 @@ import androidx.core.content.FileProvider
 import com.beadsnap.app.data.model.BeadColor
 import com.beadsnap.app.data.model.CreatorType
 import com.beadsnap.app.data.model.FusePattern
+import com.beadsnap.app.data.model.PegboardShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -279,6 +280,7 @@ fun EditorScreen(
                     cellSizePx  = cellSizePx,
                     scrollMode  = scrollMode,
                     isErasing   = isErasing,
+                    shape       = pattern.shape,
                     onZoom      = { factor ->
                         cellSize = (cellSize * factor)
                             .coerceIn(MIN_CELL_PX.toFloat(), MAX_CELL_PX.toFloat())
@@ -360,7 +362,9 @@ fun EditorScreen(
             counts    = viewModel.colorCounts,
             total     = viewModel.totalBeads,
             onDismiss = { showColorList = false },
-            onShare   = { scope.launch { shareShoppingList(context, viewModel.colorCounts, pattern.title) } }
+            onShare   = { scope.launch { shareShoppingList(context, viewModel.colorCounts, pattern.title) } },
+            onReplace = { from, to -> viewModel.replaceColor(from, to) },
+            onRemove  = { viewModel.removeColor(it) }
         )
     }
 
@@ -393,6 +397,7 @@ private fun BeadGridCanvas(
     cellSizePx: Int,
     scrollMode: Boolean,
     isErasing: Boolean,
+    shape: PegboardShape,
     onZoom: (Float) -> Unit
 ) {
     val density    = LocalDensity.current
@@ -424,7 +429,7 @@ private fun BeadGridCanvas(
         Canvas(
             modifier = Modifier
                 .size(totalW, totalH)
-                .pointerInput(cellSizePx, cols, rows, scrollMode, isErasing) {
+                .pointerInput(cellSizePx, cols, rows, scrollMode, isErasing, shape) {
                     if (scrollMode) return@pointerInput
                     awaitEachGesture {
                         // Positions are in full-canvas coordinates, so painting
@@ -434,7 +439,8 @@ private fun BeadGridCanvas(
                             if (pos.x < gutter || pos.y < gutter) return null
                             val x = ((pos.x - gutter) / step).toInt()
                             val y = ((pos.y - gutter) / step).toInt()
-                            return if (x in 0 until cols && y in 0 until rows) x to y else null
+                            // Off a round board there is no peg to paint.
+                            return if (shape.contains(x, y, cols, rows)) x to y else null
                         }
                         fun apply(cell: Pair<Int, Int>) {
                             if (isErasing) viewModel.strokeErase(cell.first, cell.second)
@@ -498,7 +504,7 @@ private fun BeadGridCanvas(
                     }
                 }
         ) {
-            drawBeadGrid(cellMap, colorLookup, cols, rows, step, gutter, emptyColor, gridColor, labelArgb)
+            drawBeadGrid(cellMap, colorLookup, cols, rows, step, gutter, emptyColor, gridColor, labelArgb, shape)
         }
     }
 }
@@ -512,11 +518,16 @@ private fun DrawScope.drawBeadGrid(
     gutter: Float,
     emptyColor: Color,
     gridColor: Color,
-    labelArgb: Int
+    labelArgb: Int,
+    shape: PegboardShape
 ) {
     val holeR = step * 0.17f
     for (row in 0 until rows) {
         for (col in 0 until cols) {
+            // A round board is the square lattice clipped to a disc: cells
+            // outside it are not drawn at all, so the board reads as a circle
+            // rather than a square with a circle painted on it.
+            if (!shape.contains(col, row, cols, rows)) continue
             val key    = "$col,$row"
             val filled = cellMap[key]?.let { colorLookup[it] }
             val color  = filled ?: emptyColor
@@ -695,8 +706,16 @@ private fun BeadCountSheet(
     counts: List<Pair<BeadColor, Int>>,
     total: Int,
     onDismiss: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onReplace: (BeadColor, BeadColor) -> Unit,
+    onRemove: (BeadColor) -> Unit
 ) {
+    // Tapping a row is "select all beads of this colour": it opens the swap
+    // controls for that colour alone. Only one row is ever open, so the sheet
+    // stays short even on a 20-colour pattern.
+    var openId by remember { mutableStateOf<String?>(null) }
+    var confirmRemove by remember { mutableStateOf<BeadColor?>(null) }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -715,12 +734,24 @@ private fun BeadCountSheet(
                     Icon(Icons.Default.Share, contentDescription = "Share shopping list")
                 }
             }
+            Text(
+                "Tap a colour to change or remove every bead using it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(12.dp))
             counts.forEach { (color, count) ->
+                val open = openId == color.id
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { openId = if (open) null else color.id }
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                        .semantics {
+                            contentDescription =
+                                "${color.name}, $count beads, tap to select all and change"
+                        },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -733,9 +764,73 @@ private fun BeadCountSheet(
                     Text(color.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     Text("$count", style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(
+                        if (open) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (open) {
+                    Text(
+                        "Swap all $count ${color.name} beads for:",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                    // The whole bead palette, not just the colours already in the
+                    // pattern — the point is to reach a colour the photo never
+                    // picked. The replacement is one undo entry.
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                    ) {
+                        items(BeadColor.palette, key = { it.id }) { swap ->
+                            if (swap.id != color.id) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(swap.composeColor)
+                                        .clickable {
+                                            onReplace(color, swap)
+                                            openId = null
+                                        }
+                                        .semantics { contentDescription = "Swap to ${swap.name}" }
+                                )
+                            }
+                        }
+                    }
+                    TextButton(
+                        onClick = { confirmRemove = color },
+                        modifier = Modifier.padding(start = 4.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = null,
+                            modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Remove all $count", color = MaterialTheme.colorScheme.error)
+                    }
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 }
             }
         }
+    }
+
+    confirmRemove?.let { color ->
+        AlertDialog(
+            onDismissRequest = { confirmRemove = null },
+            title = { Text("Remove all ${color.name}?") },
+            text = { Text("Every bead using ${color.name} is cleared. You can undo immediately after.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemove(color)
+                    confirmRemove = null
+                    openId = null
+                }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRemove = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 

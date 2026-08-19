@@ -25,8 +25,8 @@ import com.beadsnap.app.data.model.CreatorType
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
+import com.beadsnap.app.data.model.PegboardShape
 import com.beadsnap.app.data.store.PatternStore
-import com.beadsnap.app.services.ImageConverter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,12 +48,19 @@ fun CreateScreen(
     var isConverting       by remember { mutableStateOf(false) }
     var conversionError    by remember { mutableStateOf<String?>(null) }
 
-    // Photo conversion settings
+    // The photo, upright and background-masked, waiting to be tuned into a
+    // pattern. Non-null means the live tuning screen is up.
+    var tuneBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    // Photo conversion settings: only the starting point now - the real choice
+    // happens in PhotoTuneScreen, and what the user lands on is remembered here
+    // as the default for the next photo.
     var photoGridSize  by remember { mutableStateOf(GridSize.large) }
     var photoMaxColors by remember { mutableIntStateOf(12) }
 
     // Remembered across dialog opens, matching iOS
-    var blankGridSize by remember { mutableStateOf(GridSize.large) }
+    var blankGridSize  by remember { mutableStateOf(GridSize.large) }
+    var blankShape     by remember { mutableStateOf(PegboardShape.square) }
 
     // Photo picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -210,8 +217,10 @@ fun CreateScreen(
     if (showBlankDialog) {
         BlankCanvasDialog(
             initialGridSize = blankGridSize,
-            onConfirm = { title, gridSize ->
+            initialShape = blankShape,
+            onConfirm = { title, gridSize, shape ->
                 blankGridSize = gridSize
+                blankShape = shape
                 val pattern = FusePattern(
                     id = UUID.randomUUID().toString(),
                     title = title.trim().ifBlank { "My Design" },
@@ -220,6 +229,7 @@ fun CreateScreen(
                     grid = gridSize,
                     palette = BeadColor.defaultPalette,
                     difficulty = com.beadsnap.app.data.model.Difficulty.easy,
+                    shape = shape,
                     version = 1
                 )
                 onPatternReady(pattern)
@@ -229,32 +239,23 @@ fun CreateScreen(
         )
     }
 
-    // Photo conversion settings (grid, colors, background removal)
+    // Step 1: what part of the photo becomes beads
     val settingsUri = pendingImageUri
     if (showPhotoSettings && settingsUri != null) {
         PhotoSettingsSheet(
             imageUri = settingsUri,
-            gridSize = photoGridSize,
-            maxColors = photoMaxColors,
-            onGridSizeChanged = { photoGridSize = it },
-            onMaxColorsChanged = { photoMaxColors = it },
-            onConvert = { maskedBitmap ->
+            onNext = { maskedBitmap ->
                 showPhotoSettings = false
                 scope.launch {
                     isConverting = true
                     try {
-                        val bitmap = maskedBitmap ?: withContext(Dispatchers.IO) {
-                            // decodeUpright applies EXIF orientation and bounds the
-                            // size; a raw decodeStream here returned sideways photos.
+                        // decodeUpright applies EXIF orientation and bounds the
+                        // size; a raw decodeStream here returned sideways photos.
+                        tuneBitmap = maskedBitmap ?: withContext(Dispatchers.IO) {
                             com.beadsnap.app.services.BitmapLoader
                                 .decodeUpright(context, settingsUri)
                                 ?: throw Exception("Could not decode image")
                         }
-                        val pattern = withContext(Dispatchers.Default) {
-                            ImageConverter.convert(bitmap, photoGridSize, photoMaxColors)
-                        }
-                        bitmap.recycle()
-                        onPatternReady(pattern)
                     } catch (e: Exception) {
                         conversionError = e.message ?: "Conversion failed"
                     } finally {
@@ -268,6 +269,24 @@ fun CreateScreen(
                 showPhotoSettings = false
                 pendingImageUri = null
                 cleanUpCameraCapture()
+            }
+        )
+    }
+
+    // Live tuning: pattern and controls on screen together. The source bitmap
+    // is dropped rather than recycled on the way out - a conversion cancelled
+    // mid-getPixels would crash on a recycled bitmap, and the GC handles it.
+    tuneBitmap?.let { source ->
+        PhotoTuneScreen(
+            source = source,
+            initialGridSize = photoGridSize,
+            initialMaxColors = photoMaxColors,
+            onCancel = { tuneBitmap = null },
+            onDone = { pattern, gridSize, colors ->
+                photoGridSize = gridSize
+                photoMaxColors = colors
+                tuneBitmap = null
+                onPatternReady(pattern)
             }
         )
     }
@@ -325,11 +344,13 @@ private fun OptionRow(
 @Composable
 private fun BlankCanvasDialog(
     initialGridSize: GridSize,
-    onConfirm: (String, GridSize) -> Unit,
+    initialShape: PegboardShape,
+    onConfirm: (String, GridSize, PegboardShape) -> Unit,
     onDismiss: () -> Unit
 ) {
     var title    by remember { mutableStateOf("My Design") }
     var gridSize by remember { mutableStateOf(initialGridSize) }
+    var shape    by remember { mutableStateOf(initialShape) }
     val sizes = listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
 
     AlertDialog(
@@ -344,6 +365,16 @@ private fun BlankCanvasDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Text("Pegboard", style = MaterialTheme.typography.labelLarge)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PegboardShape.entries.forEach { s ->
+                        FilterChip(
+                            selected = shape == s,
+                            onClick = { shape = s },
+                            label = { Text(s.displayName) }
+                        )
+                    }
+                }
                 Text("Grid Size", style = MaterialTheme.typography.labelLarge)
                 sizes.forEach { gs ->
                     Row(
@@ -364,7 +395,7 @@ private fun BlankCanvasDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(title, gridSize) }) { Text("Create") }
+            TextButton(onClick = { onConfirm(title, gridSize, shape) }) { Text("Create") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

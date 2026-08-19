@@ -23,6 +23,7 @@ import shutil
 
 import gen_icons
 import gen_3d
+import gen_circles
 import gen_library
 import gen_library2
 import compact
@@ -48,6 +49,7 @@ def collect():
     patterns += gen_library2.generate()  # 12 more categories x 100 procedural patterns
     patterns += gen_icons.generate()     # icons: letters, digits, symbols
     patterns += gen_3d.generate()        # threeD builds with guides
+    patterns += gen_circles.generate()   # round-pegboard designs (shape=circle)
     if os.path.exists(INCOMING):
         patterns += json.load(open(INCOMING))
     # de-dup by id (later wins)

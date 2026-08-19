@@ -11,6 +11,7 @@ import com.beadsnap.app.data.model.Difficulty
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
+import com.beadsnap.app.data.model.PegboardShape
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.pow
@@ -41,6 +42,8 @@ data class ConvertOptions(
     val chromaLift: Float = 1.0f,
     /** Source-pixel rect to use; null means the whole bitmap. */
     val crop: android.graphics.Rect? = null,
+    /** Square pegboard, or the square lattice clipped to a round board. */
+    val shape: PegboardShape = PegboardShape.square,
 )
 
 object ImageConverter {
@@ -52,6 +55,13 @@ object ImageConverter {
         val cols = gridSize.width
         val rows = gridSize.height
         val cellLab = sampleCellsLab(bitmap, cols, rows, options)
+        // Cells off a round board are not beads at all, so they never reach
+        // palette selection - the disc's corners must not spend colour budget.
+        if (options.shape != PegboardShape.square) {
+            for (y in 0 until rows) for (x in 0 until cols) {
+                if (!options.shape.contains(x, y, cols, rows)) cellLab[y][x] = null
+            }
+        }
         val (palette, assignments) = quantizeBeadSafe(cellLab, cols, rows, min(options.maxColors, 16))
 
         val cells = mutableListOf<Cell>()
@@ -75,6 +85,7 @@ object ImageConverter {
             cells = cells,
             difficulty = difficulty,
             tags = listOf("photo", "imported"),
+            shape = options.shape,
             version = 1
         )
     }

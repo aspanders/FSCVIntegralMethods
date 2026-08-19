@@ -45,4 +45,8 @@ def compact_pattern(p):
     for k in ("sourcePrompt", "buildGuide", "assemblyGuide"):
         if q.get(k) is None:
             q.pop(k, None)
+    # "square" is the decoder default on both platforms, so writing it 2690
+    # times would only bloat the download.
+    if q.get("shape") in (None, "square"):
+        q.pop("shape", None)
     return q

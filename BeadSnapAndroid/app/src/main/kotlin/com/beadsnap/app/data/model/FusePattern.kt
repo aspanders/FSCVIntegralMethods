@@ -22,6 +22,10 @@ data class FusePattern(
     // ('.' = empty). Present only in the shipped library; expanded to `cells`
     // on load via materialized(). Kept out of the in-memory pattern afterward.
     val rows: List<String>? = null,
+    // Which pegboard the pattern is built on. Defaults to `square`, so every
+    // pattern written before this field existed (including the whole shipped
+    // library/patterns.json) decodes unchanged.
+    val shape: PegboardShape = PegboardShape.square,
     var version: Int = 1
 ) {
     val totalBeads: Int get() = cells.count { it.colorId != null }
@@ -72,7 +76,7 @@ data class FusePattern(
 // The icon property is named `symbol`, not `emoji`, because one of the entries
 // is itself called `emoji` and an entry cannot share a name with a property.
 enum class PatternCategory(val displayName: String, val symbol: String) {
-    // 22 content categories (100 patterns each) + 3D specialty + user designs.
+    // 23 content categories (100 patterns each) + 3D specialty + user designs.
     geometric("Geometric", "🔷"),
     mandalas("Mandalas", "🌀"),
     hearts("Hearts", "💗"),
@@ -95,8 +99,38 @@ enum class PatternCategory(val displayName: String, val symbol: String) {
     holidays("Holidays", "🎁"),
     videogame("Video Game", "🎮"),
     sports("Sports", "⚽"),
+    circles("Circles", "⭕"),
     threeD("3D", "🧊"),
     custom("My Designs", "✏️")
+}
+
+/**
+ * The physical pegboard a pattern is pegged out on.
+ *
+ * A round pegboard is not a different lattice - the pegs still sit on the same
+ * square pitch - it is the square lattice clipped to a disc, which is why this
+ * is a mask over the existing grid rather than a second coordinate system.
+ * Cells outside the disc simply do not exist: they are not drawn, not painted,
+ * not sampled from the photo, and not exported.
+ */
+@Serializable
+enum class PegboardShape(val displayName: String) {
+    square("Square"),
+    circle("Circle");
+
+    /** Is cell (x, y) a real peg on a [cols] x [rows] board of this shape? */
+    fun contains(x: Int, y: Int, cols: Int, rows: Int): Boolean = when (this) {
+        square -> x in 0 until cols && y in 0 until rows
+        circle -> {
+            if (x !in 0 until cols || y !in 0 until rows) false
+            else {
+                val r = minOf(cols, rows) / 2.0
+                val dx = x + 0.5 - cols / 2.0
+                val dy = y + 0.5 - rows / 2.0
+                dx * dx + dy * dy <= r * r
+            }
+        }
+    }
 }
 
 @Serializable

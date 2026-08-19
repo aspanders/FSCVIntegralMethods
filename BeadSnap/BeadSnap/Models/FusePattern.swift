@@ -21,6 +21,9 @@ struct FusePattern: Identifiable, Codable, Hashable {
     // ('.' = empty). Present only in the shipped library; expanded to `cells`
     // when decoded. Defaults to nil so the explicit init below need not set it.
     var rows: [String]? = nil
+    // Which pegboard the pattern is built on. Defaults to .square, so every
+    // pattern written before this field existed decodes unchanged.
+    var shape: PegboardShape = .square
     var version: Int
 
     var hasInstructions: Bool {
@@ -57,6 +60,7 @@ struct FusePattern: Identifiable, Codable, Hashable {
         sourcePrompt: String? = nil,
         buildGuide: String? = nil,
         assemblyGuide: String? = nil,
+        shape: PegboardShape = .square,
         version: Int
     ) {
         self.id = id
@@ -71,6 +75,7 @@ struct FusePattern: Identifiable, Codable, Hashable {
         self.sourcePrompt = sourcePrompt
         self.buildGuide = buildGuide
         self.assemblyGuide = assemblyGuide
+        self.shape = shape
         self.version = version
     }
 
@@ -96,6 +101,7 @@ struct FusePattern: Identifiable, Codable, Hashable {
         sourcePrompt = try c.decodeIfPresent(String.self, forKey: .sourcePrompt)
         buildGuide    = try c.decodeIfPresent(String.self, forKey: .buildGuide)
         assemblyGuide = try c.decodeIfPresent(String.self, forKey: .assemblyGuide)
+        shape        = try c.decodeIfPresent(PegboardShape.self, forKey: .shape) ?? .square
         version      = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
     }
 
@@ -127,10 +133,10 @@ struct FusePattern: Identifiable, Codable, Hashable {
 // MARK: - Supporting Types
 
 enum PatternCategory: String, Codable, CaseIterable, Identifiable {
-    // 22 content categories (100 patterns each) + 3D specialty + user designs.
+    // 23 content categories (100 patterns each) + 3D specialty + user designs.
     case geometric, mandalas, hearts, stars, flowers, rainbows, space, emoji,
          gems, icons, animals, birds, fish, bugs, food, sweets, trees, vehicles,
-         snowflakes, holidays, videogame, sports, threeD, custom
+         snowflakes, holidays, videogame, sports, circles, threeD, custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
@@ -156,6 +162,7 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .holidays:   return "Holidays"
         case .videogame:  return "Video Game"
         case .sports:     return "Sports"
+        case .circles:    return "Circles"
         case .threeD:     return "3D"
         case .custom:     return "My Designs"
         }
@@ -185,8 +192,42 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .holidays:   return "🎁"
         case .videogame:  return "🎮"
         case .sports:     return "⚽"
+        case .circles:    return "⭕"
         case .threeD:     return "🧊"
         case .custom:     return "✏️"
+        }
+    }
+}
+
+/// The physical pegboard a pattern is pegged out on.
+///
+/// A round pegboard is not a different lattice - the pegs still sit on the same
+/// square pitch - it is the square lattice clipped to a disc, which is why this
+/// is a mask over the existing grid rather than a second coordinate system.
+/// Cells outside the disc simply do not exist: not drawn, not painted, not
+/// sampled from a photo, not exported.
+/// Keep in sync with PegboardShape on Android.
+enum PegboardShape: String, Codable, CaseIterable, Identifiable {
+    case square, circle
+    var id: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .square: return "Square"
+        case .circle: return "Circle"
+        }
+    }
+
+    /// Is cell (x, y) a real peg on a `cols` x `rows` board of this shape?
+    func contains(x: Int, y: Int, cols: Int, rows: Int) -> Bool {
+        guard x >= 0, x < cols, y >= 0, y < rows else { return false }
+        switch self {
+        case .square:
+            return true
+        case .circle:
+            let r = Double(min(cols, rows)) / 2.0
+            let dx = Double(x) + 0.5 - Double(cols) / 2.0
+            let dy = Double(y) + 0.5 - Double(rows) / 2.0
+            return dx * dx + dy * dy <= r * r
         }
     }
 }

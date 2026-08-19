@@ -19,6 +19,7 @@ CATEGORIES = ["geometric", "mandalas", "hearts", "stars", "flowers",
               "animals", "birds", "fish", "bugs", "food",
               "sweets", "trees", "vehicles", "snowflakes", "holidays",
               "videogame", "sports",
+              "circles",
               "threeD"]
 
 # ── Palette ────────────────────────────────────────────────────────────────
@@ -66,12 +67,14 @@ def nearest_color_id(r, g, b):
 
 def make_pattern(pattern_id, title, category, width, height, cells, tags,
                  difficulty=None, source_prompt=None,
-                 build_guide=None, assembly_guide=None):
+                 build_guide=None, assembly_guide=None, shape="square"):
     """Build a FusePattern dict matching the app's model.
 
     `cells` is a list of (x, y, color_id). Palette is derived from the colors
     actually used, in the app's canonical order. `build_guide`/`assembly_guide`
-    are used by 3D constructions and stay null for flat patterns.
+    are used by 3D constructions and stay null for flat patterns. `shape` is
+    "square" or "circle" - a round board is the same peg pitch clipped to a
+    disc, so it changes which cells exist, not how they are stored.
     """
     assert category in CATEGORIES, f"bad category {category}"
     used = []
@@ -101,6 +104,7 @@ def make_pattern(pattern_id, title, category, width, height, cells, tags,
         "cells": cell_list,
         "difficulty": difficulty,
         "tags": tags,
+        "shape": shape,
         "sourcePrompt": source_prompt,
         "buildGuide": build_guide,
         "assemblyGuide": assembly_guide,
