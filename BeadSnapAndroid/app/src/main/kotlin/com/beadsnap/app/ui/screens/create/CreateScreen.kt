@@ -27,6 +27,7 @@ import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.model.PegboardShape
 import com.beadsnap.app.data.store.PatternStore
+import com.beadsnap.app.data.store.PhotoProjectStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,6 +42,7 @@ fun CreateScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val projectStore = remember { PhotoProjectStore.getInstance(context) }
 
     var showBlankDialog    by remember { mutableStateOf(false) }
     var showPhotoSettings  by remember { mutableStateOf(false) }
@@ -48,9 +50,14 @@ fun CreateScreen(
     var isConverting       by remember { mutableStateOf(false) }
     var conversionError    by remember { mutableStateOf<String?>(null) }
 
-    // The photo, upright and background-masked, waiting to be tuned into a
-    // pattern. Non-null means the live tuning screen is up.
-    var tuneBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    // The photo waiting to be tuned into a pattern. Non-null means the live
+    // tuning screen is up. The ORIGINAL is kept alongside the cut-out even
+    // when background removal was used, because the project stores both: a
+    // cut-out cannot be un-cut, and "different background removals" is one of
+    // the things later variants are meant to be able to differ in.
+    var tuneBitmap   by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var tuneOriginal by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var tuneCutout   by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     // Photo conversion settings: only the starting point now - the real choice
     // happens in PhotoTuneScreen, and what the user lands on is remembered here
@@ -251,11 +258,14 @@ fun CreateScreen(
                     try {
                         // decodeUpright applies EXIF orientation and bounds the
                         // size; a raw decodeStream here returned sideways photos.
-                        tuneBitmap = maskedBitmap ?: withContext(Dispatchers.IO) {
+                        val original = withContext(Dispatchers.IO) {
                             com.beadsnap.app.services.BitmapLoader
                                 .decodeUpright(context, settingsUri)
                                 ?: throw Exception("Could not decode image")
                         }
+                        tuneOriginal = original
+                        tuneCutout = maskedBitmap
+                        tuneBitmap = maskedBitmap ?: original
                     } catch (e: Exception) {
                         conversionError = e.message ?: "Conversion failed"
                     } finally {
@@ -281,12 +291,29 @@ fun CreateScreen(
             source = source,
             initialGridSize = photoGridSize,
             initialMaxColors = photoMaxColors,
-            onCancel = { tuneBitmap = null },
+            onCancel = { tuneBitmap = null; tuneOriginal = null; tuneCutout = null },
             onDone = { pattern, gridSize, colors ->
                 photoGridSize = gridSize
                 photoMaxColors = colors
+                // Keep the PHOTO, not just this one conversion of it. Before
+                // this the source was decoded, converted and dropped, so
+                // trying a different board size meant hunting the picture down
+                // in the gallery again and the earlier attempt was a loose
+                // entry in My Designs with no memory of where it came from.
+                val project = projectStore.createProject(
+                    title  = "Photo ${projectStore.projects.value.size + 1}",
+                    source = tuneOriginal ?: source,
+                    cutout = tuneCutout
+                )
+                val titled = pattern.copy(title = "${project.title} v1")
+                projectStore.addVariant(
+                    project.id, titled.id,
+                    PhotoProjectStore.labelFor(titled, cutout = tuneCutout != null)
+                )
                 tuneBitmap = null
-                onPatternReady(pattern)
+                tuneOriginal = null
+                tuneCutout = null
+                onPatternReady(titled)
             }
         )
     }

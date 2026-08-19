@@ -38,6 +38,7 @@ import com.beadsnap.app.ui.screens.editor.EditorScreen
 import com.beadsnap.app.ui.screens.editor.EditorViewModel
 import com.beadsnap.app.ui.screens.library.LibraryScreen
 import com.beadsnap.app.ui.screens.library.LibraryViewModel
+import com.beadsnap.app.ui.screens.projects.ProjectsScreen
 import com.beadsnap.app.ui.screens.studio.AIStudioScreen
 import com.beadsnap.app.ui.screens.studio.StudioViewModel
 
@@ -48,12 +49,14 @@ private sealed class Destination(
 ) {
     data object Library : Destination("library", "Library", Icons.Default.GridView)
     data object Create  : Destination("create",  "Create",  Icons.Default.Add)
+    data object Photos  : Destination("photos",  "Photos",  Icons.Default.PhotoLibrary)
     data object Studio  : Destination("studio",  "Studio",  Icons.Default.AutoFixHigh)
 }
 
 private val topLevelDestinations = listOf(
     Destination.Library,
     Destination.Create,
+    Destination.Photos,
     Destination.Studio
 )
 
@@ -238,6 +241,16 @@ private fun BeadSnapNavHost(
                         launchSingleTop = true
                         restoreState    = true
                     }
+                }
+            )
+        }
+
+        composable(Destination.Photos.route) {
+            ProjectsScreen(
+                store         = store,
+                onOpenPattern = { pattern ->
+                    navState.editorPattern = pattern
+                    navController.navigate("editor")
                 }
             )
         }
