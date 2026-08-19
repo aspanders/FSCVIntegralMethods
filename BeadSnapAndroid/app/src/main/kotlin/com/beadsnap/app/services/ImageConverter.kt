@@ -13,6 +13,8 @@ import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.data.model.PatternCategory
 import java.util.UUID
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sqrt
 
 /**
  * Tunables for photo -> pattern conversion. Exposed so the editor can re-run a
@@ -27,6 +29,15 @@ data class ConvertOptions(
     val brightness: Float = 0f,
     val contrast: Float = 0f,
     val saturation: Float = 0f,
+    /**
+     * Rescues washed-out pastels. Photographed plastic under indoor light is
+     * systematically desaturated: a pale blue toy body measured on a real test
+     * photo came out at chroma 6.3, so the nearest bead was correctly but
+     * unhelpfully Silver rather than Light Blue. This lifts low-chroma colours
+     * back toward their hue. See applyChromaLift for why it is not a flat
+     * saturation boost. 0 disables it.
+     */
+    val chromaLift: Float = 1.0f,
     /** Source-pixel rect to use; null means the whole bitmap. */
     val crop: android.graphics.Rect? = null,
 )
@@ -176,12 +187,40 @@ object ImageConverter {
         var b = lab[2]
         if (o.brightness != 0f) l += o.brightness * 50.0
         if (o.contrast != 0f) l = 50.0 + (l - 50.0) * (1.0 + o.contrast)
+        if (o.chromaLift > 0f) {
+            val lifted = applyChromaLift(a, b, o.chromaLift.toDouble())
+            a = lifted[0]; b = lifted[1]
+        }
+        // The user's own saturation slider rides on top of the photographic
+        // correction above.
         if (o.saturation != 0f) {
             val s = (1.0 + o.saturation).coerceAtLeast(0.0)
             a *= s
             b *= s
         }
         return doubleArrayOf(l.coerceIn(0.0, 100.0), a, b)
+    }
+
+    /**
+     * Scale chroma by 1 + amount * (K/(C+K))^2.
+     *
+     * A FLAT saturation boost cannot do this job: measured on a real photo,
+     * the boost needed to move a pale blue body (chroma 6.3) off Silver and
+     * onto Light Blue was also enough to push a vivid pink past Hot Pink and
+     * into Magenta. The squared falloff concentrates the correction where it
+     * is needed - at chroma 6 the lift is ~1.5x, by chroma 64 it is ~1.04x -
+     * so pastels regain their hue and saturated colours stay put.
+     *
+     * Because it is multiplicative it can only amplify a hue that is already
+     * present: a true neutral (chroma 0) stays exactly neutral rather than
+     * having a colour invented for it.
+     */
+    private fun applyChromaLift(a: Double, b: Double, amount: Double): DoubleArray {
+        val c = sqrt(a * a + b * b)
+        if (c <= 0.0) return doubleArrayOf(a, b)
+        val k = 16.0
+        val s = 1.0 + amount * (k / (c + k)).pow(2.0)
+        return doubleArrayOf(a * s, b * s)
     }
 
     // ─── Bead-safe nearest-colour quantization ────────────────────────────────
