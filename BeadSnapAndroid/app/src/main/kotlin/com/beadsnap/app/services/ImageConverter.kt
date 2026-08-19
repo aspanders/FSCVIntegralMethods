@@ -14,6 +14,7 @@ import com.beadsnap.app.data.model.PatternCategory
 import java.util.UUID
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -133,11 +134,15 @@ object ImageConverter {
     private fun sampleCellsLab(
         src: Bitmap, cols: Int, rows: Int, options: ConvertOptions
     ): Array<Array<DoubleArray?>> {
-        val crop = options.crop
-        val x0 = crop?.left?.coerceIn(0, src.width - 1) ?: 0
-        val y0 = crop?.top?.coerceIn(0, src.height - 1) ?: 0
-        val w = (crop?.width() ?: src.width).coerceAtMost(src.width - x0).coerceAtLeast(1)
-        val h = (crop?.height() ?: src.height).coerceAtMost(src.height - y0).coerceAtLeast(1)
+        // With no explicit crop, take the largest centred rect matching the
+        // grid's aspect ratio rather than stretching the whole frame onto it.
+        // Every grid is square, so a 3:4 phone photo used to be squeezed
+        // horizontally: subjects came out short and wide.
+        val crop = options.crop ?: aspectCrop(src.width, src.height, cols, rows)
+        val x0 = crop.left.coerceIn(0, src.width - 1)
+        val y0 = crop.top.coerceIn(0, src.height - 1)
+        val w = crop.width().coerceAtMost(src.width - x0).coerceAtLeast(1)
+        val h = crop.height().coerceAtMost(src.height - y0).coerceAtLeast(1)
 
         val pixels = IntArray(w * h)
         src.getPixels(pixels, 0, w, x0, y0, w, h)
@@ -178,6 +183,30 @@ object ImageConverter {
             }
         }
         return out
+    }
+
+    /**
+     * The largest centred rect of [srcW] x [srcH] whose aspect ratio matches a
+     * cols x rows grid. Used as the default crop so photos keep their
+     * proportions instead of being stretched onto a square board.
+     */
+    fun aspectCrop(srcW: Int, srcH: Int, cols: Int, rows: Int): android.graphics.Rect {
+        if (srcW <= 0 || srcH <= 0 || cols <= 0 || rows <= 0) {
+            return android.graphics.Rect(0, 0, srcW.coerceAtLeast(1), srcH.coerceAtLeast(1))
+        }
+        val target = cols.toDouble() / rows
+        val current = srcW.toDouble() / srcH
+        return if (current > target) {
+            // Too wide: trim the sides.
+            val w = (srcH * target).roundToInt().coerceIn(1, srcW)
+            val left = (srcW - w) / 2
+            android.graphics.Rect(left, 0, left + w, srcH)
+        } else {
+            // Too tall: trim top and bottom.
+            val h = (srcW / target).roundToInt().coerceIn(1, srcH)
+            val top = (srcH - h) / 2
+            android.graphics.Rect(0, top, srcW, top + h)
+        }
     }
 
     /** Brightness/contrast/saturation applied perceptually, in CIELAB. */

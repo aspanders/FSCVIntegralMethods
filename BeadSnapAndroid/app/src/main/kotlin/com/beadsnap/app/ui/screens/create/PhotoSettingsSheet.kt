@@ -28,6 +28,7 @@ import com.beadsnap.app.data.model.GridSize
 import com.beadsnap.app.services.BackgroundRemover
 import com.beadsnap.app.services.MaskModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
@@ -49,6 +50,7 @@ fun PhotoSettingsSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val sizes = listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
 
     var removeBackground by remember { mutableStateOf(false) }
@@ -58,6 +60,9 @@ fun PhotoSettingsSheet(
     var isSegmenting by remember { mutableStateOf(false) }
     var autoUnavailable by remember { mutableStateOf(false) }
     var brushAddsBack by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var brushScale by remember { mutableFloatStateOf(0.05f) }
+    var autoAttempt by remember { mutableIntStateOf(0) }
 
     suspend fun recomposite() {
         val src = workBitmap ?: return
@@ -67,22 +72,51 @@ fun PhotoSettingsSheet(
         }
     }
 
-    // Load the working image + auto mask when removal is first enabled
-    LaunchedEffect(removeBackground) {
-        if (!removeBackground || workBitmap != null) return@LaunchedEffect
+    // Load the working image and try the automatic mask when removal is first
+    // enabled, or when the user asks to retry.
+    //
+    // Every failure path here used to leave previewBitmap null while the UI
+    // below only had branches for "segmenting" and "preview ready", so a photo
+    // that could not be decoded rendered NOTHING AT ALL: the switch went on and
+    // the sheet just sat there. The manual brush was unreachable too, because it
+    // needs workBitmap, which was only ever set on the happy path. Now the
+    // bitmap loads independently of segmentation, so manual mode always works
+    // even when the automatic pass is unavailable, and every failure is named.
+    LaunchedEffect(removeBackground, autoAttempt) {
+        if (!removeBackground) return@LaunchedEffect
+        if (workBitmap != null && autoAttempt == 0) return@LaunchedEffect
         isSegmenting = true
+        loadError = null
+        autoUnavailable = false
         try {
-            val bmp = withContext(Dispatchers.IO) {
+            val bmp = workBitmap ?: withContext(Dispatchers.IO) {
                 BackgroundRemover.decodeWorkBitmap {
                     context.contentResolver.openInputStream(imageUri)
                 }
-            } ?: run { autoUnavailable = true; return@LaunchedEffect }
+            }
+            if (bmp == null) {
+                loadError = "Could not open this photo for editing. Try picking it again."
+                return@LaunchedEffect
+            }
             workBitmap = bmp
             val m = MaskModel(bmp.width, bmp.height)
             val auto = BackgroundRemover.subjectMask(bmp)
-            if (auto != null) m.setAll(auto) else autoUnavailable = true
+            if (auto == null) {
+                autoUnavailable = true
+            } else {
+                // A mask that keeps everything, or nothing, is not a usable
+                // result even though ML Kit "succeeded" - treat it as a miss so
+                // the user is told to paint rather than left wondering why the
+                // preview looks untouched.
+                val kept = auto.count { it }
+                if (kept == 0 || kept == auto.size) autoUnavailable = true else m.setAll(auto)
+            }
             mask = m
             recomposite()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e   // the sheet closed or the effect restarted; not a failure
+        } catch (e: Exception) {
+            loadError = "Background removal failed: ${e.message ?: "unknown error"}"
         } finally {
             isSegmenting = false
         }
@@ -128,12 +162,20 @@ fun PhotoSettingsSheet(
                             Text("Finding the subject…", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
+                    loadError != null -> {
+                        Text(
+                            loadError!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        TextButton(onClick = { autoAttempt++ }) { Text("Try again") }
+                    }
                     previewBitmap != null -> {
                         MaskEditPreview(
                             preview = previewBitmap!!,
                             onBrush = { nx, ny ->
                                 val m = mask ?: return@MaskEditPreview
-                                val radius = max(6, (max(m.width, m.height) * 0.05f).roundToInt())
+                                val radius = max(4, (max(m.width, m.height) * brushScale).roundToInt())
                                 m.brush(
                                     (nx * m.width).roundToInt(),
                                     (ny * m.height).roundToInt(),
@@ -143,6 +185,9 @@ fun PhotoSettingsSheet(
                             },
                             onBrushEnd = { recomposite() }
                         )
+
+                        // Manual mode, PowerPoint style: paint what to drop and
+                        // what to bring back.
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(
                                 selected = !brushAddsBack,
@@ -156,17 +201,59 @@ fun PhotoSettingsSheet(
                             )
                         }
                         Text(
+                            "Brush size",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = brushScale,
+                            onValueChange = { brushScale = it },
+                            valueRange = 0.02f..0.18f
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { autoAttempt++ }) { Text("Auto again") }
+                            TextButton(onClick = {
+                                val m = mask
+                                if (m != null) {
+                                    m.setAll(BooleanArray(m.width * m.height) { true })
+                                    scope.launch { recomposite() }
+                                }
+                            }) { Text("Keep all") }
+                            TextButton(onClick = {
+                                val m = mask
+                                if (m != null) {
+                                    m.setAll(BooleanArray(m.width * m.height) { false })
+                                    scope.launch { recomposite() }
+                                }
+                            }) { Text("Clear all") }
+                        }
+
+                        Text(
                             "Drag on the photo to adjust. Faded areas are left out of the pattern.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         if (autoUnavailable) {
                             Text(
-                                "Automatic selection isn't available on this device. Use Remove to paint over the background.",
+                                "Automatic selection didn't find a subject on this device, so nothing " +
+                                "has been removed yet. Paint over the background with Remove, or start " +
+                                "from Clear all and paint the subject back in with Add back.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
+                    }
+                    else -> {
+                        // Reachable if the bitmap loaded but the first composite
+                        // has not landed yet. Previously this case rendered
+                        // nothing at all, which is what "not functioning" looked
+                        // like on device.
+                        Text(
+                            "Preparing the photo…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
