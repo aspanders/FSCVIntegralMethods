@@ -1013,11 +1013,19 @@ def generate_space():
         g.fill("navy" if j % 2 else "dark_blue")
         cc = (s - 1) / 2
         col = ["yellow", "cheddar", "orange", "banana"][j % 4]
-        rays = 12 + 2 * (j % 3)
+        # Ray count, ray length, core size and phase all step with j. Cycling
+        # only the colour and 3 ray counts made eight suns that were really
+        # three, which the colour-blind uniqueness check duly caught.
+        rays = 8 + j
+        reach = 0.34 + 0.035 * (j % 4)
+        core = 0.14 + 0.028 * (j % 5)
+        phase = (j % 2) * math.pi / rays
         for k in range(rays):
-            a = 2 * math.pi * k / rays
-            g.line(cc, cc, cc + s * 0.44 * math.cos(a), cc + s * 0.44 * math.sin(a), col)
-        g.disc(cc, cc, s * 0.2, col)
+            a = phase + 2 * math.pi * k / rays
+            g.line(cc, cc, cc + s * reach * math.cos(a), cc + s * reach * math.sin(a), col)
+            if j % 3 == 2:
+                g.disc(cc + s * reach * math.cos(a), cc + s * reach * math.sin(a), 1.2, col)
+        g.disc(cc, cc, s * core, col)
         out.append(_finish("space", f"Sun {len(out)+1}", g, ["space", "sun"], f"sunstar-{j}"))
         j += 1
     return out[:100]

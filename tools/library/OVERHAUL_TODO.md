@@ -51,6 +51,54 @@ clipped tails, no more subjects adrift), `_pick_bg` chooses the background
 furthest from the body colour (no more silver fish on grey water), `_outline`
 gives every subject a one-bead dark edge.
 
+## STATUS: complete
+
+Every category is now 100% structurally unique with zero exact duplicates.
+
+| | baseline v9 | v16 |
+|---|---|---|
+| patterns | 2790 | 2778 |
+| distinct designs | 59.0% | **100.0%** |
+| exact duplicates | 1145 | **0** |
+| categories under 80% unique | 10 | **0** |
+
+Rebuilt from parametric parts (`gen_creatures.py`, `gen_objects.py`):
+birds, fish, bugs, trees, animals, vehicles, flowers, food, sweets, sports,
+holidays, videogame, rainbows, icons. Plus circles and the `space` suns fixed
+in place.
+
+### Machinery worth reusing
+
+- `_frame` draws on a roomy canvas, scales UP to fill the board, then centres
+  the ink. Filling the board is most of what makes a 28x28 icon readable, and
+  auto-centring means composed subjects never clip.
+- `_pick_bg` picks the background furthest from the subject's body colour.
+- `_outline` gives every subject a one-bead dark edge.
+- `_run_ops` interprets a shape recipe - a list of primitives in a -10..10 box
+  with colours by index - so an object category is a table of drawings rather
+  than twenty bespoke functions. `("clip", r)` erases outside a radius, which
+  is how ball seams drawn as outside-centred rings stop leaving fragments.
+- `_interleave` in build_manifest deals each category round-robin across its
+  design families, so a category does not open with twelve variations of one
+  idea.
+
+### Traps this hit, worth not repeating
+
+- **Spec order matters.** `_emit` caps at the target, so species-major spec
+  generation silently drops the tail of the species list - vehicles shipped
+  with no boats, planes or rockets while still reporting 100 unique patterns.
+  Generate pose-major.
+- **Variants must change the drawing.** A "Winged" spider is still a spider;
+  variants that a plan ignores collapse into duplicates.
+- **Thin appendages fight the auto-scaler.** A long one-bead tail makes the
+  bounding box wide, so the whole animal shrinks to fit it.
+- **`Grid.set` ignores None**, so nothing can be erased by drawing over it in
+  the background colour; `_erase_below` and the `clip` op exist for that.
+- **Uniqueness numbers can look fine while a category reads as repetitive** -
+  that is what `_interleave` fixes, and no metric catches it. Look at the
+  contact sheets.
+
+## Historical TODO — remaining categories
 ## TODO — remaining categories (recolour-heavy; unique % from audit.py)
 
 Worst first: sports 12%, holidays 12%, vehicles 13%, food 16%, videogame 18%,

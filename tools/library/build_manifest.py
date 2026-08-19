@@ -25,6 +25,7 @@ import gen_icons
 import gen_3d
 import gen_circles
 import gen_creatures
+import gen_objects
 import gen_library
 import gen_library2
 import compact
@@ -55,15 +56,49 @@ def collect():
     # recolour-heavy originals outright. Filtering by category rather than by
     # id matters: stable_id gives old and new the same "<category>-" prefix, so
     # an id-based filter shipped both and doubled the category.
-    rebuilt = set(gen_creatures.GENERATORS)
+    rebuilt = dict(gen_creatures.GENERATORS)
+    rebuilt.update(gen_objects.GENERATORS)
     patterns = [p for p in patterns if p["category"] not in rebuilt]
-    for fn in gen_creatures.GENERATORS.values():
+    for fn in rebuilt.values():
         patterns += fn()
     if os.path.exists(INCOMING):
         patterns += json.load(open(INCOMING))
     # de-dup by id (later wins)
     by_id = {p["id"]: p for p in patterns}
-    return list(by_id.values())
+    return _interleave(list(by_id.values()))
+
+
+def _interleave(patterns):
+    """Round-robin each category across its design families.
+
+    Generators emit family by family, so a category opened at the top showed a
+    dozen variations of one idea before reaching the second - geometric led
+    with twelve stripe patterns. Every one of those is a distinct design, so
+    the uniqueness numbers looked fine while the category still read as
+    repetitive. Dealing every family in turn puts twelve DIFFERENT ideas on the
+    first screen.
+    """
+    from collections import OrderedDict, defaultdict
+    out = []
+    by_cat = OrderedDict()
+    for p in patterns:
+        by_cat.setdefault(p["category"], []).append(p)
+    for cat, lst in by_cat.items():
+        fams = OrderedDict()
+        for p in lst:
+            # The family is the title with its trailing variant words removed:
+            # "Wren Perched" and "Wren Calling" are one family, "Robin" another.
+            key = p["title"].split()[0]
+            fams.setdefault(key, []).append(p)
+        order = list(fams.values())
+        i = 0
+        while any(order):
+            for f in order:
+                if i < len(f):
+                    out.append(f[i])
+            order = [f for f in order if len(f) > i + 1]
+            i += 1
+    return out
 
 def main():
     ap = argparse.ArgumentParser()

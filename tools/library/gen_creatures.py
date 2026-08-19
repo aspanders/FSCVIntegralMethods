@@ -24,7 +24,13 @@ S = 28          # board side for every design here
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _emit(cat, specs, build, target=100):
-    """Build each spec, drop structural duplicates, keep `target`."""
+    """Build each spec, drop structural duplicates, keep `target`.
+
+    Callers must generate specs POSE-major (every species at pose 0, then
+    every species at pose 1, ...). Species-major order plus this cap silently
+    drops the tail of the species list: vehicles lost every boat, plane and
+    rocket that way, and the category still reported 100 unique patterns.
+    """
     out, seen = [], set()
     for i, spec in enumerate(specs):
         g = build(spec)
@@ -53,8 +59,12 @@ def _frame(draw, spec, bg, size=S, margin=1):
     afterwards means every design is centred and whole, and a subject too large
     for the board is redrawn smaller rather than cropped.
     """
-    for attempt in range(6):
-        scale = 1.0 - attempt * 0.10
+    # Search DOWN from oversized, and take the largest scale that still fits.
+    # Only shrinking left small subjects (a mouse, a sapling) marooned in the
+    # middle of a big board at a size where nothing is identifiable; filling the
+    # board is most of what makes a 28x28 icon readable.
+    for attempt in range(14):
+        scale = 1.7 - attempt * 0.10
         g = Grid(BIG, BIG)
         g.fill(None)
         draw(g, spec, BIG / 2.0, BIG / 2.0, scale)
@@ -265,8 +275,8 @@ def birds():
     specs = []
     poses = [("", {}), (" Perched", {"legs": +1}), (" Calling", {"head": +0.6}),
              (" Fledgling", {"scale": 0.78}), (" Alert", {"neck": +2.0})]
-    for si, (name, body, neck, head, beak, tail, legs, crest, wing) in enumerate(BIRD_SPECIES):
-        for pi, (suffix, tweak) in enumerate(poses):
+    for pi, (suffix, tweak) in enumerate(poses):
+        for si, (name, body, neck, head, beak, tail, legs, crest, wing) in enumerate(BIRD_SPECIES):
             sc = tweak.get("scale", 1.0)
             parts = ((body[0] * sc, body[1] * sc),
                      max(0.0, neck * sc + tweak.get("neck", 0)),
@@ -387,8 +397,8 @@ def fish():
     poses = [("", 1.0, {}), (" Young", 0.76, {}), (" Large", 1.14, {}),
              (" Finned", 1.0, {"dorsal": 0.9, "ventral": 0.8}),
              (" Sleek", 1.0, {"dorsal": -0.35, "ventral": -0.3})]
-    for si, (name, body, tail, dor, ven, snout, stripe) in enumerate(FISH_SPECIES):
-        for pi, (suffix, sc, tw) in enumerate(poses):
+    for pi, (suffix, sc, tw) in enumerate(poses):
+        for si, (name, body, tail, dor, ven, snout, stripe) in enumerate(FISH_SPECIES):
             specs.append(dict(
                 name=f"{name}{suffix}",
                 parts=((body[0], body[1]),
@@ -534,8 +544,8 @@ def bugs():
     poses = [("", 1.0, {}), (" Small", 0.74, {}), (" Large", 1.18, {}),
              (" Long", 1.0, {"segs": +2, "legs": +2}),
              (" Slender", 0.9, {"segs": +1, "legs": -2})]
-    for si, (name, plan, wings, legs, segs, ants, extra) in enumerate(BUG_SPECIES):
-        for pi, (suffix, sc, tw) in enumerate(poses):
+    for pi, (suffix, sc, tw) in enumerate(poses):
+        for si, (name, plan, wings, legs, segs, ants, extra) in enumerate(BUG_SPECIES):
             w2 = wings + tw.get("wings", 0) if plan == "flier" else wings
             specs.append(dict(
                 name=f"{name}{suffix}",
@@ -678,8 +688,8 @@ def trees():
     specs = []
     poses = [("", 1.0, {}), (" Sapling", 0.7, {}), (" Old", 1.16, {}),
              (" Tall", 1.0, {"trunk": 1.5}), (" Squat", 1.0, {"trunk": 0.6})]
-    for si, (name, crown, tiers, trunk, branch, extra) in enumerate(TREE_SPECIES):
-        for pi, (suffix, sc, tw) in enumerate(poses):
+    for pi, (suffix, sc, tw) in enumerate(poses):
+        for si, (name, crown, tiers, trunk, branch, extra) in enumerate(TREE_SPECIES):
             tr = (trunk[0], trunk[1] * tw.get("trunk", 1.0))
             specs.append(dict(
                 name=f"{name}{suffix}", parts=(crown, tiers, tr, branch, extra),
@@ -699,3 +709,211 @@ if __name__ == "__main__":
         ps = fn()
         print(f"{cat:8s} {len(ps):3d} patterns, "
               f"{len({signature(p) for p in ps}):3d} structurally unique")
+
+
+# ── ANIMALS ──────────────────────────────────────────────────────────────────
+# Land animals, side view. Body proportion + neck + ears + snout + tail is
+# what separates a giraffe from a hippo; nothing here is a recolour.
+
+ANIMAL_SPECIES = [
+    # name        body        neck  head ear      snout  tail      legs mark
+    ("Cat",       (6.2, 4.0), 1.2, 3.0, "point",  "flat", "curl",   4.0, "stripe"),
+    ("Dog",       (6.6, 4.2), 1.4, 3.2, "flop",   "long", "up",     4.2, "patch"),
+    ("Fox",       (6.4, 3.6), 1.2, 3.0, "point",  "long", "bushy",  3.8, "tip"),
+    ("Wolf",      (7.0, 4.2), 1.6, 3.4, "point",  "long", "bushy",  4.6, "none"),
+    ("Bear",      (7.6, 5.4), 0.8, 3.8, "round",  "flat", "stub",   3.4, "none"),
+    ("Panda",     (7.4, 5.4), 0.8, 3.8, "round",  "flat", "stub",   3.4, "panda"),
+    ("Rabbit",    (5.0, 4.0), 0.6, 3.0, "long",   "flat", "puff",   2.6, "none"),
+    ("Mouse",     (4.2, 3.0), 0.4, 2.4, "round",  "point","thin",   1.8, "none"),
+    ("Squirrel",  (4.4, 3.4), 0.8, 2.6, "point",  "point","plume",  2.2, "none"),
+    ("Hedgehog",  (5.4, 3.4), 0.4, 2.4, "round",  "point","stub",   1.6, "spines"),
+    ("Pig",       (6.4, 4.4), 0.6, 3.0, "point",  "snub", "curl",   2.6, "none"),
+    ("Sheep",     (6.4, 4.6), 1.0, 2.8, "flop",   "flat", "stub",   3.2, "wool"),
+    ("Cow",       (7.6, 4.8), 1.2, 3.4, "round",  "flat", "tuft",   4.2, "patch"),
+    ("Horse",     (7.6, 4.4), 3.0, 3.0, "point",  "long", "plume",  6.0, "none"),
+    ("Zebra",     (7.4, 4.4), 3.0, 3.0, "point",  "long", "tuft",   6.0, "stripe"),
+    ("Giraffe",   (6.4, 4.0), 8.5, 2.6, "point",  "long", "tuft",   7.5, "patch"),
+    ("Deer",      (6.4, 4.0), 3.2, 2.8, "point",  "long", "stub",   6.0, "antler"),
+    ("Elephant",  (8.4, 5.6), 0.8, 4.0, "wide",   "trunk","thin",   4.4, "none"),
+    ("Hippo",     (8.4, 4.8), 0.6, 4.2, "round",  "snub", "stub",   2.6, "none"),
+    ("Rhino",     (8.0, 4.8), 0.8, 3.6, "round",  "horn", "tuft",   3.0, "none"),
+    ("Lion",      (7.0, 4.4), 1.2, 3.2, "round",  "flat", "tuft",   4.0, "mane"),
+    ("Tiger",     (7.2, 4.2), 1.4, 3.2, "round",  "flat", "thin",   4.0, "stripe"),
+    ("Monkey",    (4.8, 4.2), 1.0, 3.0, "round",  "flat", "hook",   3.0, "none"),
+    ("Koala",     (5.2, 4.6), 0.4, 3.4, "fluff",  "snub", "stub",   2.4, "none"),
+    ("Raccoon",   (5.8, 3.8), 1.0, 3.0, "round",  "point","ringed", 2.8, "mask"),
+]
+
+ANIMAL_COLOURS = [
+    ("brown", "cream", "dark_brown"), ("dark_gray", "light_gray", "black"),
+    ("orange", "cream", "dark_brown"), ("tan", "ivory", "brown"),
+    ("black", "white", "dark_gray"), ("white", "light_gray", "dark_gray"),
+    ("caramel", "cream", "rust"), ("silver", "white", "dark_gray"),
+    ("rust", "peach", "dark_brown"), ("olive", "cream", "army_green"),
+]
+FIELD = ["light_green", "cream", "ivory", "sky_blue", "light_gray",
+         "toothpaste", "banana", "light_lavender"]
+
+
+def _draw_animal(g, spec, cx, cy, scale):
+    (rx, ry), neck, head, ear, snout, tail, legs, mark = spec["parts"]
+    main, belly, dark = spec["cols"]
+    u = scale
+    rx *= u; ry *= u; neck *= u; head *= u; legs *= u
+
+    base = cy + ry + legs
+    for i, lx in enumerate((-0.62, -0.34, 0.34, 0.62)):
+        g.rect(cx + rx * lx - 1.1 * u, cy + ry * 0.4, cx + rx * lx + 1.1 * u, base,
+               main if i % 2 else dark)
+    g.ellipse(cx, cy, rx, ry, main)
+    g.ellipse(cx, cy + ry * 0.42, rx * 0.72, ry * 0.42, belly)
+
+    # The head has to clear the body. Placing it at the body's edge buried it,
+    # and a buried head plus a snout drawn from the head centre produced
+    # animals that read as headless lumps.
+    hx = cx + rx * 0.9 + head * 0.75 + neck * 0.30
+    hy = cy - ry * 0.55 - neck
+    if neck > 0.8 * u:
+        g.line(cx + rx * 0.55, cy - ry * 0.45, hx, hy + head * 0.6, main,
+               t=max(1, head * 0.45))
+    else:
+        g.line(cx + rx * 0.5, cy - ry * 0.4, hx, hy, main, t=max(1, head * 0.55))
+    g.disc(hx, hy, head, main)
+
+    if snout == "long":
+        g.ellipse(hx + head * 0.75, hy + head * 0.35, head * 0.62, head * 0.42, main)
+        g.disc(hx + head * 1.25, hy + head * 0.35, head * 0.22, dark)
+    elif snout == "point":
+        g.poly([(hx + head * 0.3, hy - head * 0.3), (hx + head * 1.7, hy + head * 0.4),
+                (hx + head * 0.3, hy + head * 0.7)], main)
+        g.set(hx + head * 1.5, hy + head * 0.4, dark)
+    elif snout == "snub":
+        g.disc(hx + head * 0.8, hy + head * 0.35, head * 0.42, belly)
+        g.set(hx + head * 0.9, hy + head * 0.3, dark)
+    elif snout == "trunk":
+        for k in range(9):
+            t = k / 8.0
+            g.disc(hx + head * (0.85 + 0.55 * t * t), hy + head * (0.1 + 2.3 * t),
+                   head * (0.40 - 0.20 * t), main)
+    elif snout == "horn":
+        g.ellipse(hx + head * 0.7, hy + head * 0.35, head * 0.55, head * 0.4, main)
+        g.poly([(hx + head * 1.1, hy + head * 0.1), (hx + head * 1.5, hy - head * 1.1),
+                (hx + head * 1.45, hy + head * 0.3)], belly)
+    else:   # flat
+        g.disc(hx + head * 0.7, hy + head * 0.4, head * 0.34, belly)
+        g.set(hx + head * 0.8, hy + head * 0.3, dark)
+
+    # Ears sit ON the skull, one behind the other, at a spacing that scales
+    # with the head - the first version put both at almost the same point.
+    for sgn in (-1, 1):
+        ex = hx + sgn * head * 0.48
+        ey = hy - head * 0.72
+        if ear == "point":
+            g.poly([(ex - head * 0.42, ey + head * 0.42), (ex, ey - head * 0.85),
+                    (ex + head * 0.42, ey + head * 0.42)], main)
+        elif ear == "long":
+            g.ellipse(ex + sgn * head * 0.12, ey - head * 0.85, head * 0.5, head * 1.25, main)
+            g.ellipse(ex + sgn * head * 0.12, ey - head * 0.85, head * 0.26, head * 0.85, belly)
+        elif ear == "flop":
+            g.ellipse(ex, ey + head * 0.65, head * 0.42, head * 0.9, dark)
+        elif ear == "round":
+            g.disc(ex, ey, head * 0.5, main)
+        elif ear == "wide":
+            g.ellipse(hx - head * 0.55, hy, head * 0.9, head * 1.15, main)
+            break
+        elif ear == "fluff":
+            g.disc(ex, ey + head * 0.25, head * 0.62, belly)
+
+    bx = cx - rx
+    if tail == "curl":
+        for k in range(5):
+            a = -0.6 - k * 0.7
+            g.disc(bx - 1.4 * u + math.cos(a) * 2.6 * u, cy - 1 * u + math.sin(a) * 2.6 * u,
+                   1.0 * u, main)
+    elif tail == "up":
+        g.line(bx, cy - 1 * u, bx - 2.4 * u, cy - 6 * u, main, t=1)
+    elif tail == "bushy":
+        g.ellipse(bx - 3 * u, cy + 0.6 * u, 3.4 * u, 2.1 * u, main)
+        g.ellipse(bx - 4.8 * u, cy + 0.6 * u, 1.6 * u, 1.4 * u, belly)
+    elif tail == "plume":
+        # A squirrel's tail is a fat comma standing up behind it, not a slab.
+        for k in range(6):
+            a = 2.5 - k * 0.42
+            g.disc(bx - 1.4 * u + math.cos(a) * 3.2 * u,
+                   cy - 1.4 * u + math.sin(a) * 3.4 * u, (2.0 - k * 0.15) * u, main)
+    elif tail == "puff":
+        g.disc(bx - 1.6 * u, cy + 0.6 * u, 2.0 * u, belly)
+    elif tail == "thin":
+        g.line(bx, cy, bx - 3.4 * u, cy - 2.6 * u, dark, t=0)
+    elif tail == "tuft":
+        g.line(bx, cy - 1 * u, bx - 3.4 * u, cy + 3.4 * u, dark)
+        g.disc(bx - 3.8 * u, cy + 3.8 * u, 1.3 * u, dark)
+    elif tail == "hook":
+        for k in range(7):
+            a = -1.4 + k * 0.5
+            g.set(bx - 1 * u - math.cos(a) * 4 * u, cy - 2 * u + math.sin(a) * 4 * u, main)
+    elif tail == "ringed":
+        for k in range(4):
+            g.disc(bx - (1.4 + k * 1.7) * u, cy - k * 0.9 * u, 1.5 * u,
+                   main if k % 2 == 0 else dark)
+    elif tail == "stub":
+        g.disc(bx - 0.8 * u, cy - 0.4 * u, 1.4 * u, main)
+
+    if mark == "stripe":
+        for k in range(-2, 3):
+            g.rect(cx + rx * k * 0.28 - 0.7 * u, cy - ry, cx + rx * k * 0.28 + 0.7 * u,
+                   cy + ry * 0.2, dark)
+    elif mark == "patch":
+        g.ellipse(cx - rx * 0.35, cy - ry * 0.25, rx * 0.3, ry * 0.4, dark)
+        g.ellipse(cx + rx * 0.3, cy + ry * 0.2, rx * 0.24, ry * 0.3, dark)
+    elif mark == "panda":
+        g.ellipse(cx - rx * 0.2, cy, rx * 0.55, ry * 0.9, dark)
+        g.disc(hx - head * 0.3, hy - head * 0.1, head * 0.32, dark)
+    elif mark == "spines":
+        # Only over the back. Radiating them all the way round made a sun.
+        for k in range(9):
+            a = math.pi + k * math.pi / 10
+            g.line(cx + math.cos(a) * rx * 0.75, cy + math.sin(a) * ry * 0.75,
+                   cx + math.cos(a) * (rx + 2.4 * u), cy + math.sin(a) * (ry + 2.4 * u),
+                   dark, t=0)
+    elif mark == "wool":
+        for k in range(7):
+            a = math.pi + k * math.pi / 6
+            g.disc(cx + math.cos(a) * rx * 0.85, cy + math.sin(a) * ry * 0.85, 1.6 * u, belly)
+    elif mark == "mane":
+        g.ring(hx, hy, head + 2.2 * u, dark, t=2.2 * u)
+    elif mark == "antler":
+        for sgn in (-1, 1):
+            g.line(hx - head * 0.2, hy - head, hx + sgn * head * 0.8, hy - head * 2.6, belly)
+            g.line(hx + sgn * head * 0.8, hy - head * 2.6, hx + sgn * head * 1.5,
+                   hy - head * 2.1, belly)
+    elif mark == "mask":
+        g.rect(hx - head * 0.4, hy - head * 0.35, hx + head * 0.9, hy + head * 0.15, dark)
+    elif mark == "tip":
+        g.disc(bx - 4.8 * u, cy + 0.6 * u, 1.5 * u, belly)
+
+    _outline(g, "black" if main != "black" else "dark_gray", None)
+    g.set(hx + head * 0.25, hy - head * 0.3, "white")
+    g.set(hx + head * 0.25 + 1, hy - head * 0.3, "black")
+
+
+def animals():
+    specs = []
+    poses = [("", 1.0, {}), (" Cub", 0.72, {}), (" Big", 1.16, {}),
+             (" Standing", 1.0, {"legs": 1.7}), (" Crouching", 1.0, {"legs": 0.45})]
+    for pi, (suffix, sc, tw) in enumerate(poses):
+        for si, (name, body, neck, head, ear, snout, tail, legs, mark) in enumerate(ANIMAL_SPECIES):
+            specs.append(dict(
+                name=f"{name}{suffix}",
+                parts=(body, neck, head, ear, snout, tail,
+                       legs * tw.get("legs", 1.0), mark),
+                cols=ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)],
+                bg=_pick_bg(ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)][0],
+                            FIELD, si + pi),
+                tags=["animal", name.lower()], scale=sc))
+    return _emit("animals", specs,
+                 lambda sp: _frame(lambda g, s, x, y, k: _draw_animal(g, s, x, y, k * s["scale"]),
+                                   sp, sp["bg"]), 100)
+
+
+GENERATORS["animals"] = animals

@@ -203,9 +203,16 @@ def f_sunburst(size, run, rays):
 
 
 def f_gradient(size, run, bands=5):
+    """Equal-AREA bands, not equal-width ones.
+
+    A linear radial ramp is the same quantisation Rings uses, so at matching
+    band counts the two families produced byte-identical boards. Stepping on
+    sqrt(r) gives every band the same number of beads, which both looks more
+    like a fade and cannot coincide with Rings.
+    """
     ids = _run(run)
     n = len(ids)
-    cells = [(x, y, ids[min(n - 1, int(r * bands) * n // max(1, bands))])
+    cells = [(x, y, ids[min(n - 1, int(math.sqrt(r) * bands) * n // max(1, bands))])
              for x, y, r, _ in _polar(size)]
     return cells, f"{run.title()} Fade {bands}", ["gradient", "fade", run]
 
