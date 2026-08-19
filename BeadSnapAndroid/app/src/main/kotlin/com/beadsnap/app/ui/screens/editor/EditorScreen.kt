@@ -46,7 +46,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalConfiguration
 import com.beadsnap.app.services.ImageConverter
+import kotlin.math.roundToInt
 
 private const val MIN_CELL_PX = 18
 private const val MAX_CELL_PX = 120
@@ -66,7 +69,20 @@ fun EditorScreen(
     val cellMap     by viewModel.cellMap.collectAsState()
     val colorLookup = remember(pattern.version) { viewModel.colorLookup() }
 
-    var cellSizePx  by remember { mutableIntStateOf(36) }
+    // Open at a zoom that fits the whole pattern on screen. This used to be a
+    // fixed 36px, which made a 32x32 pattern 1152px wide on a 1080px phone and
+    // a 48x48 one 1728px: a freshly converted photo opened already clipped,
+    // anchored top-left, with panning off by default. That is what "shows up
+    // zoomed in" was. Kept as a Float so pinch-to-zoom can scale it smoothly
+    // without integer truncation stalling small gestures.
+    val configuration = LocalConfiguration.current
+    val screenDensity = LocalDensity.current
+    var cellSize by remember(pattern.grid.width, pattern.grid.height) {
+        val screenWpx = with(screenDensity) { configuration.screenWidthDp.dp.toPx() }
+        val fit = screenWpx * 0.94f / pattern.grid.width.coerceAtLeast(1)
+        mutableFloatStateOf(fit.coerceIn(MIN_CELL_PX.toFloat(), MAX_CELL_PX.toFloat()))
+    }
+    val cellSizePx = cellSize.roundToInt()
     var scrollMode  by remember { mutableStateOf(false) }
     var isErasing   by remember { mutableStateOf(false) }
 
@@ -200,7 +216,7 @@ fun EditorScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 IconButton(
-                    onClick = { cellSizePx = (cellSizePx - CELL_STEP).coerceAtLeast(MIN_CELL_PX) },
+                    onClick = { cellSize = (cellSize - CELL_STEP).coerceAtLeast(MIN_CELL_PX.toFloat()) },
                     enabled = cellSizePx > MIN_CELL_PX
                 ) {
                     Icon(Icons.Default.ZoomOut, contentDescription = "Zoom out")
@@ -212,7 +228,7 @@ fun EditorScreen(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 IconButton(
-                    onClick = { cellSizePx = (cellSizePx + CELL_STEP).coerceAtMost(MAX_CELL_PX) },
+                    onClick = { cellSize = (cellSize + CELL_STEP).coerceAtMost(MAX_CELL_PX.toFloat()) },
                     enabled = cellSizePx < MAX_CELL_PX
                 ) {
                     Icon(Icons.Default.ZoomIn, contentDescription = "Zoom in")
@@ -262,7 +278,11 @@ fun EditorScreen(
                     colorLookup = colorLookup,
                     cellSizePx  = cellSizePx,
                     scrollMode  = scrollMode,
-                    isErasing   = isErasing
+                    isErasing   = isErasing,
+                    onZoom      = { factor ->
+                        cellSize = (cellSize * factor)
+                            .coerceIn(MIN_CELL_PX.toFloat(), MAX_CELL_PX.toFloat())
+                    }
                 )
                 if (showHint) {
                     Surface(
@@ -372,16 +392,23 @@ private fun BeadGridCanvas(
     colorLookup: Map<String, Color>,
     cellSizePx: Int,
     scrollMode: Boolean,
-    isErasing: Boolean
+    isErasing: Boolean,
+    onZoom: (Float) -> Unit
 ) {
     val density    = LocalDensity.current
     val cols       = viewModel.gridWidth
     val rows       = viewModel.gridHeight
+    val step       = cellSizePx.toFloat()
+    // Gutter along the top and left holding the row/column numbers.
+    val gutter     = (step * 0.85f).coerceIn(16f, 40f)
     val cellDp: Dp = with(density) { cellSizePx.toDp() }
-    val totalW     = cellDp * cols
-    val totalH     = cellDp * rows
+    val gutterDp   = with(density) { gutter.toDp() }
+    val totalW     = cellDp * cols + gutterDp
+    val totalH     = cellDp * rows + gutterDp
     val gridColor  = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
     val emptyColor = MaterialTheme.colorScheme.surfaceVariant
+    // Deliberately faint: a counting aid, not part of the artwork.
+    val labelArgb  = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f).toArgb()
 
     // One pair of scroll states for BOTH modes: the offset persists when the
     // user toggles to paint mode, so every cell of a large grid stays reachable.
@@ -404,8 +431,9 @@ private fun BeadGridCanvas(
                         // works at any scroll offset. Taps toggle; drags paint
                         // set-only with a single undo entry per stroke.
                         fun cellAt(pos: Offset): Pair<Int, Int>? {
-                            val x = (pos.x / cellSizePx).toInt()
-                            val y = (pos.y / cellSizePx).toInt()
+                            if (pos.x < gutter || pos.y < gutter) return null
+                            val x = ((pos.x - gutter) / step).toInt()
+                            val y = ((pos.y - gutter) / step).toInt()
                             return if (x in 0 until cols && y in 0 until rows) x to y else null
                         }
                         fun apply(cell: Pair<Int, Int>) {
@@ -417,11 +445,34 @@ private fun BeadGridCanvas(
                         val downCell = cellAt(down.position)
                         var strokeActive = false
                         var lastCell = downCell
+                        var pinching = false
+                        var lastSpan = 0f
 
                         var stillPressed = true
                         while (stillPressed) {
                             val event = awaitPointerEvent()
                             stillPressed = event.changes.any { it.pressed }
+                            val pressed = event.changes.filter { it.pressed }
+
+                            if (pressed.size >= 2) {
+                                // Second finger down: treat the whole gesture as
+                                // a zoom. strokeActive is forced true so the tap
+                                // fallback below cannot fire when fingers lift.
+                                pinching = true
+                                strokeActive = true
+                                val span = (pressed[0].position - pressed[1].position).getDistance()
+                                if (lastSpan > 0f && span > 0f) onZoom(span / lastSpan)
+                                lastSpan = span
+                                pressed.forEach { it.consume() }
+                                continue
+                            }
+                            if (pinching) {
+                                // Stay in zoom mode until every finger is up, so
+                                // lifting one finger does not resume painting.
+                                pressed.forEach { it.consume() }
+                                continue
+                            }
+
                             event.changes.forEach { change ->
                                 if (!change.pressed) return@forEach
                                 change.consume()
@@ -447,7 +498,7 @@ private fun BeadGridCanvas(
                     }
                 }
         ) {
-            drawBeadGrid(cellMap, colorLookup, cols, rows, cellSizePx.toFloat(), emptyColor, gridColor)
+            drawBeadGrid(cellMap, colorLookup, cols, rows, step, gutter, emptyColor, gridColor, labelArgb)
         }
     }
 }
@@ -458,8 +509,10 @@ private fun DrawScope.drawBeadGrid(
     cols: Int,
     rows: Int,
     step: Float,
+    gutter: Float,
     emptyColor: Color,
-    gridColor: Color
+    gridColor: Color,
+    labelArgb: Int
 ) {
     val holeR = step * 0.17f
     for (row in 0 until rows) {
@@ -467,7 +520,7 @@ private fun DrawScope.drawBeadGrid(
             val key    = "$col,$row"
             val filled = cellMap[key]?.let { colorLookup[it] }
             val color  = filled ?: emptyColor
-            val center = Offset(col * step + step / 2f, row * step + step / 2f)
+            val center = Offset(gutter + col * step + step / 2f, gutter + row * step + step / 2f)
             // Bead radius = half the pitch, so fused beads touch their neighbors.
             drawCircle(color = color, radius = step / 2f, center = center)
             // Faint center hole gives filled beads the fused-bead look.
@@ -477,9 +530,44 @@ private fun DrawScope.drawBeadGrid(
             // subtle grid lines
             drawRect(
                 color    = gridColor,
-                topLeft  = Offset(col * step, row * step),
+                topLeft  = Offset(gutter + col * step, gutter + row * step),
                 size     = Size(step, step),
                 style    = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.5f)
+            )
+        }
+    }
+
+    // Row and column numbers along the top and left gutters, to make counting
+    // beads off the pattern easier. Thinned out as the beads get smaller so the
+    // guide stays legible instead of collapsing into a smear of digits.
+    val textPaint = android.graphics.Paint().apply {
+        isAntiAlias = true
+        color = labelArgb
+        textSize = (step * 0.44f).coerceIn(9f, 20f)
+    }
+    val everyN = when {
+        step >= 30f -> 1
+        step >= 20f -> 2
+        else        -> 5
+    }
+    fun shown(n: Int, last: Int) = n == 1 || n == last || n % everyN == 0
+
+    drawContext.canvas.nativeCanvas.apply {
+        textPaint.textAlign = android.graphics.Paint.Align.CENTER
+        for (col in 0 until cols) {
+            val n = col + 1
+            if (!shown(n, cols)) continue
+            drawText(n.toString(), gutter + col * step + step / 2f, gutter - step * 0.20f, textPaint)
+        }
+        textPaint.textAlign = android.graphics.Paint.Align.RIGHT
+        for (row in 0 until rows) {
+            val n = row + 1
+            if (!shown(n, rows)) continue
+            drawText(
+                n.toString(),
+                gutter - step * 0.18f,
+                gutter + row * step + step / 2f + textPaint.textSize * 0.35f,
+                textPaint
             )
         }
     }
