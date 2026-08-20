@@ -163,7 +163,14 @@ def _add_sizes(patterns):
         nobg = not connectivity.has_background(p)
         sizes = {}
         idx = {c["id"]: i for i, c in enumerate(p["palette"])}
-        for name, (sg, sw, sh) in scaling.variants(g, w, h, nobg).items():
+        # A generator may hand-draw a board for a size the reducer cannot do
+        # justice to - a face has no margin for a bead going missing - and
+        # those win over the reduction.
+        drawn = p.pop("sizeArt", None) or {}
+        boards = scaling.variants(g, w, h, nobg)
+        for name, art in drawn.items():
+            boards[name] = (art, len(art[0]), len(art))
+        for name, (sg, sw, sh) in boards.items():
             sizes[name] = {
                 "width": sw, "height": sh,
                 "rows": ["".join(compact.EMPTY if c is None

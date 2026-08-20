@@ -183,6 +183,39 @@ def wheel():
     return _grid(g)
 
 
+# ── the small board, drawn rather than reduced ──────────────────────────────
+#
+# The box-majority reduction is right for 2,600 patterns and wrong for this
+# one. At 15x15 the grin is three beads long: the resampler kept the two turned
+# up corners, lost the bar between them, and what was left read as a frown. A
+# face has no margin for a bead going missing, so the hero board is drawn at
+# the small size too.
+#
+#   K black   C cream (the face)   . empty
+HEAD_SMALL = [
+    "...............",
+    ".KKK.......KKK.",
+    ".KKKKK...KKKKK.",
+    ".KKKKK...KKKKK.",
+    "..KKKKKKKKKKK..",
+    "..KKCCCCCCCKK..",
+    "..KCCKCCCKCCK..",
+    "..KCCKCCCKCCK..",
+    "..KCCCCCCCCCK..",
+    "..KCCCKKKCCCK..",
+    "...CCCCCCCCC...",
+    "...CKCCCCCKC...",
+    "...CCKKKKKCC...",
+    "....CCCCCCC....",
+    "...............",
+]
+
+
+def _art_grid(art):
+    paint = {"K": INK, "C": PALE}
+    return [[paint.get(ch) for ch in row] for row in art]
+
+
 DESIGNS = [
     ("Steamboat Willie", head, ["mouse", "cartoon", "retro"]),
     ("Willie's Steamboat", boat, ["boat", "cartoon", "retro"]),
@@ -190,10 +223,19 @@ DESIGNS = [
 ]
 
 
+# Hand-drawn boards for sizes the reducer cannot do justice to. build_manifest
+# uses these verbatim and reduces everything else as usual.
+HAND_SIZES = {"Steamboat Willie": {"small": HEAD_SMALL}}
+
+
 def generate(category="videogame"):
     out = []
     for name, build, tags in DESIGNS:
         g = build()
-        out.append(make_pattern(stable_id(category, name), name, category,
-                                g.w, g.h, g.cells(), tags + [category]))
+        p = make_pattern(stable_id(category, name), name, category,
+                         g.w, g.h, g.cells(), tags + [category])
+        art = HAND_SIZES.get(name)
+        if art:
+            p["sizeArt"] = {k: _art_grid(v) for k, v in art.items()}
+        out.append(p)
     return out
