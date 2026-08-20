@@ -1,0 +1,218 @@
+"""One named test per bug found in the QC pass, so none of them can come back.
+
+Each test states the SYMPTOM first: what shipped, and what a user saw. Run with
+    python test_regressions.py
+"""
+import json
+import os
+import sys
+
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from audit import PATTERNS, measure, near_duplicates            # noqa: E402
+from compact import from_rows                                    # noqa: E402
+from uniqueness import cell_map, family_of, select_distinct      # noqa: E402
+
+SHIPPED = json.load(open(PATTERNS))["patterns"]
+BY_CAT = {}
+for _p in SHIPPED:
+    BY_CAT.setdefault(_p["category"], []).append(_p)
+
+FAILURES = []
+
+
+def check(name, ok, detail=""):
+    print(f"  {'PASS' if ok else 'FAIL'}  {name}")
+    if not ok:
+        FAILURES.append((name, detail))
+        if detail:
+            print(f"        {detail}")
+
+
+# ── 1. auto-fit cancelled every scale variant ────────────────────────────────
+# Symptom: "Grapes" and "Grapes Large" were 99.9% identical. _frame scales a
+# subject up to fill the board, so a spec asking for 0.76 and one asking for
+# 1.18 both came out full size.
+def test_fill_changes_the_board():
+    import gen_creatures as gc
+    from canvas import Grid
+
+    def draw(g, spec, cx, cy, k):
+        g.disc(cx, cy, 6 * k, "red")
+
+    spec = {"fill": 0.72}
+    small = gc._frame(draw, spec, "white", fill=0.72)
+    large = gc._frame(draw, spec, "white", fill=0.96)
+    a = np.array([1 if c == "red" else 0 for row in small.g for c in row])
+    b = np.array([1 if c == "red" else 0 for row in large.g for c in row])
+    ratio = a.sum() / max(b.sum(), 1)
+    check("1. fill= actually changes the drawn size",
+          0.35 < ratio < 0.85, f"small/large bead ratio {ratio:.2f}, expected ~0.55")
+
+
+# ── 2. shrinking makes different subjects converge ───────────────────────────
+# Symptom: at 0.54 fill "Wasp Small" and "Firefly Small" were 99.7% identical,
+# and 90% of the board was background.
+def test_small_variants_do_not_converge():
+    """Two different subjects shrunk to the same size must stay different.
+
+    A blanket "fill >= 0.70" rule would be the wrong invariant: the Framed
+    variants use 0.62 and are fine, because the border occupies the margin the
+    subject gives up (their dominant-colour share runs 0.36-0.70, and none is
+    near-blank). What actually matters is the outcome.
+    """
+    SHRINK = (" Small", " Cub", " Bud", " Sapling", " Compact")
+    bad = []
+    for cat, lst in BY_CAT.items():
+        if cat == "icons":
+            continue
+        shrunk = [p for p in lst if p["title"].endswith(SHRINK)]
+        if len(shrunk) < 2:
+            continue
+        for score, a, b, _same in near_duplicates(shrunk):
+            bad.append(f"{cat}: {100*score:.1f}% {a} == {b}")
+    check("2. shrunk variants of different subjects stay distinct",
+          not bad, "; ".join(bad[:4]))
+
+
+# ── 3. _emit only deduped EXACT matches ──────────────────────────────────────
+# Symptom: mandalas 225 and 243 shared 99.8% of their cells and both shipped.
+def test_emit_rejects_lookalikes():
+    import gen_creatures as gc
+    from canvas import Grid
+
+    def build(spec):
+        g = Grid(28, 28)
+        g.fill("white")
+        g.disc(14, 14, 9, "red")
+        # one bead of difference between successive specs
+        g.set(spec["i"], 0, "blue")
+        return g
+
+    specs = [{"name": f"x{i}", "i": i, "tags": []} for i in range(10)]
+    out = gc._emit("geometric", specs, build, target=10)
+    check("3. _emit drops boards that differ by a bead", len(out) == 1,
+          f"kept {len(out)} of 10 near-identical boards")
+
+
+# ── 4. family_of missed sequence and parameter suffixes ──────────────────────
+# Symptom: "Planet 4" became its own family, so round-robin over 75 one-member
+# families reproduced the original order and space opened with 16 planets.
+def test_family_of_strips_suffixes():
+    cases = {"Planet 4": "Planet", "Vert Stripes w1": "Vert Stripes",
+             "Mandala 10-fold 225": "Mandala 10-fold", "Wren Perched": "Wren",
+             "4-Point r0.46 z0.47": "4-Point", "Letter A Tile": "Letter A",
+             "Grapes Large": "Grapes"}
+    bad = [f"{k}->{family_of(k)}" for k, v in cases.items() if family_of(k) != v]
+    check("4a. family_of strips variant, sequence and parameter suffixes",
+          not bad, ", ".join(bad))
+
+    worst = []
+    for cat, lst in BY_CAT.items():
+        if cat == "icons":
+            continue          # letters resemble letters; see test 8
+        head = lst[:12]
+        if len(head) < 4:
+            continue
+        M = np.stack([cell_map(p) for p in head
+                      if (p["grid"]["width"], p["grid"]["height"]) ==
+                         (head[0]["grid"]["width"], head[0]["grid"]["height"])])
+        if len(M) < 4:
+            continue
+        sims = [(M[i] == M[j]).mean()
+                for i in range(len(M)) for j in range(i + 1, len(M))]
+        if max(sims) >= 0.95:
+            worst.append(f"{cat}: two of the first 12 are "
+                         f"{100*max(sims):.0f}% identical")
+    check("4b. the first screen of every category is visibly varied",
+          not worst, "; ".join(worst))
+
+
+# ── 5. the 3D nets erased themselves ─────────────────────────────────────────
+# Symptom: _place wrote the overlay's transparent marker through as a colour,
+# so the dice net was a scatter of pips with no faces at all.
+def test_3d_nets_have_faces_and_folds():
+    import gen_3d
+    nets = {p["title"]: p for p in gen_3d.generate()}
+    dice = nets["Dice (Cube)"]
+    w, h = dice["grid"]["width"], dice["grid"]["height"]
+    ids = [c["colorId"] for c in dice["cells"]]
+    from collections import Counter
+    n = Counter(ids)
+    # six 5x5 faces = 150 cells; pips and fold lines are drawn within them
+    check("5a. dice net draws all six faces, not just the pips",
+          len(dice["cells"]) == 150, f"{len(dice['cells'])} beads, expected 150")
+    check("5b. dice net has visible fold lines",
+          n.get("light_gray", 0) > 40, f"{n.get('light_gray', 0)} edge beads")
+    pips = n.get("black", 0)
+    check("5c. corner pips survive the fold lines",
+          pips == 21, f"{pips} pips, expected 1+2+3+4+5+6 = 21")
+    gift = nets["Gift Box"]
+    check("5d. gift box net keeps all six faces (nothing erased)",
+          len(gift["cells"]) == 6 * 6 * 6,
+          f"{len(gift['cells'])} beads, expected 216 for six 6x6 faces")
+
+
+# ── 6. the near-blank measure compared against PLACED beads ──────────────────
+# Symptom: a one-colour star silhouette on an empty board scored 100% dominant
+# and was flagged; 57 of 105 flags were exactly that.
+def test_near_blank_measures_the_board():
+    star = {"grid": {"width": 20, "height": 20},
+            "palette": [{"id": "red", "name": "Red", "hex": "#FF0000"}],
+            "cells": [{"x": x, "y": y, "colorId": "red"}
+                      for y in range(20) for x in range(20)
+                      if abs(x - 10) + abs(y - 10) < 6]}
+    m = measure(star)
+    check("6. a sparse one-colour silhouette is not called near-blank",
+          m["dom"] < 0.5, f"dominant share {m['dom']:.2f} of the board")
+
+
+# ── 7. a genuinely blank board shipped ───────────────────────────────────────
+# Symptom: "Square Grid s4" was one colour edge to edge.
+def test_no_blank_boards_ship():
+    blank = [(p["category"], p["title"]) for p in SHIPPED
+             if measure(p)["dom"] >= 0.995]
+    check("7. no shipped board is a single flat colour", not blank,
+          str(blank[:5]))
+
+
+# ── the property all seven were symptoms of ──────────────────────────────────
+def test_shipped_library_has_no_lookalikes():
+    offenders = []
+    for cat, lst in BY_CAT.items():
+        if cat == "icons":
+            continue          # deliberately exempt: an alphabet needs all of it
+        near = near_duplicates(lst)
+        if near:
+            offenders.append(f"{cat}: {len(near)} pairs, worst "
+                             f"{100*near[0][0]:.1f}% {near[0][1]} == {near[0][2]}")
+    check("8. no category outside icons ships a lookalike pair",
+          not offenders, "; ".join(offenders[:3]))
+
+    dropped = [f"{cat} {len(lst)}->{len(select_distinct(lst))}"
+               for cat, lst in BY_CAT.items()
+               if cat != "icons" and len(select_distinct(lst)) < len(lst)]
+    check("9. the distinctness backstop has nothing left to drop",
+          not dropped, "; ".join(dropped[:4]))
+
+
+def main():
+    print(f"regressions against {len(SHIPPED)} shipped patterns\n")
+    for fn in (test_fill_changes_the_board, test_small_variants_do_not_converge,
+               test_emit_rejects_lookalikes, test_family_of_strips_suffixes,
+               test_3d_nets_have_faces_and_folds,
+               test_near_blank_measures_the_board, test_no_blank_boards_ship,
+               test_shipped_library_has_no_lookalikes):
+        fn()
+    print()
+    if FAILURES:
+        print(f"{len(FAILURES)} FAILED")
+        return 1
+    print("all regression checks pass")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

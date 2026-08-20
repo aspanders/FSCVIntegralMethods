@@ -53,3 +53,6 @@ fi
 
 echo "==> python reference"
 python3 "$HERE/compare.py" "$WORK"
+
+echo "==> library regressions"
+python3 "$REPO/tools/library/test_regressions.py"

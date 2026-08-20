@@ -63,8 +63,15 @@ def cell_map(p, w=None, h=None):
 
     A recolour collapses onto its original, exactly as `signature` intends -
     but unlike `signature` this supports comparing two boards that are ALMOST
-    the same, which is the failure `signature` cannot see. Two patterns can
-    differ by one bead and both count as unique while looking identical.
+    the same, which is the failure `signature` cannot see.
+
+    Indices are assigned by FREQUENCY RANK, not by first appearance. First
+    appearance makes the map depend on which colour happens to occupy the
+    top-left cell: two boards differing by a single bead, where that bead is
+    the first cell, came out 5.6% similar instead of 97%, so the lookalike
+    check silently missed them. Ranking by cell count is stable under exactly
+    the small edits this is meant to detect; ties fall back to first
+    appearance so the result stays deterministic.
     """
     import numpy as np
     cells = p.get("cells")
@@ -72,14 +79,20 @@ def cell_map(p, w=None, h=None):
         cells = from_rows(p.get("rows", []), p["palette"])
     w = w or p["grid"]["width"]
     h = h or p["grid"]["height"]
-    g = np.zeros(w * h, dtype=np.int16)
-    idx = {}
+    counts, first = {}, {}
     for c in cells:
         cid = c.get("colorId")
         if cid is None:
             continue
-        if cid not in idx:
-            idx[cid] = len(idx) + 1
+        counts[cid] = counts.get(cid, 0) + 1
+        first.setdefault(cid, c["y"] * w + c["x"])
+    order = sorted(counts, key=lambda cid: (-counts[cid], first[cid]))
+    idx = {cid: i + 1 for i, cid in enumerate(order)}
+    g = np.zeros(w * h, dtype=np.int16)
+    for c in cells:
+        cid = c.get("colorId")
+        if cid is None:
+            continue
         x, y = c["x"], c["y"]
         if 0 <= x < w and 0 <= y < h:
             g[y * w + x] = idx[cid]

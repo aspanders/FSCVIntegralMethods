@@ -78,6 +78,12 @@ The 251 remaining are letters resembling letters - M and N, O and 0. `icons`
 is deliberately exempt: a category defined by COMPLETENESS is worse for
 missing D, F, N and 8 than for containing near-neighbours.
 
+## Regression tests
+
+`python test_regressions.py` has one named test per bug below, each stating the
+SYMPTOM first. They run against the shipped patterns.json, so a regression in a
+generator is caught by the artefact rather than by the code that made it.
+
 ## The bugs this pass found
 
 Each of these passed every check that existed at the time.
@@ -108,6 +114,14 @@ Each of these passed every check that existed at the time.
    of 105 flags were that. It measures against the whole board now.
 7. **One genuinely blank board** shipped: "Square Grid s4", where the grid
    spacing made the squares meet. `_is_blank` drops those.
+8. **The lookalike detector itself was wrong.** `cell_map` numbered colours by
+   FIRST APPEARANCE, so the map depended on which colour happened to occupy
+   the top-left cell: two boards differing by a single bead, where that bead
+   was the first cell, scored 5.6% similar instead of 94%. Indices are ranked
+   by cell count now. Fixing it surfaced 34 more lookalikes in space alone,
+   plus pairs like "Bear Cub == Panda Cub" that had been passing.
+9. **The audit had its own copy of that map**, so the audit and the generators
+   disagreed about what a lookalike is. There is one implementation now.
 
 ## Machinery worth reusing
 

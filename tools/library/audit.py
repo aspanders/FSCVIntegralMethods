@@ -26,7 +26,7 @@ from collections import Counter, defaultdict
 
 from beadlib import REPO
 from compact import from_rows
-from uniqueness import family_of, signature
+from uniqueness import cell_map, family_of, signature
 
 PATTERNS = os.path.join(REPO, "library", "patterns.json")
 
@@ -90,20 +90,10 @@ def near_duplicates(patterns, threshold=NEAR_DUP):
     for (w, h), group in by_size.items():
         if len(group) < 2:
             continue
-        rows = []
-        for p in group:
-            cells = p.get("cells") or from_rows(p.get("rows", []), p["palette"])
-            g = np.zeros(w * h, dtype=np.int16)
-            idx = {}
-            for c in cells:
-                cid = c.get("colorId")
-                if cid is None:
-                    continue
-                if cid not in idx:
-                    idx[cid] = len(idx) + 1
-                g[c["y"] * w + c["x"]] = idx[cid]
-            rows.append(g)
-        M = np.stack(rows)
+        # One implementation of the index map, shared with select_distinct.
+        # This function used to build its own with first-appearance ordering,
+        # so the audit and the generators disagreed about what a lookalike is.
+        M = np.stack([cell_map(p) for p in group])
         for i in range(len(group)):
             same = (M[i + 1:] == M[i]).mean(axis=1)
             for j in np.nonzero(same >= threshold)[0]:
