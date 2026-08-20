@@ -294,15 +294,51 @@ def strip_background(g, w, h, colour=None):
     return colour
 
 
-def weak_necks(g, w, h, min_load=6):
-    """One-bead joins that carry real weight.
+def stranded_mass(g, w, h, x, y, min_load=10):
+    """Beads that fall off if the bead at (x, y) breaks - 0 if nothing does.
 
-    Not every articulation point matters. Every bead along a one-bead-wide
-    lace ring is one, and a fused strand of that kind holds perfectly well -
-    ironing melts edge-touching beads into a solid run. What breaks is a
-    SUBSTANTIAL part hanging off the body by a single bead: a cherry on a stem,
-    a pom-pom on a hat, a wheel under a frame. So a neck counts only when
-    removing it would strand at least `min_load` beads.
+    The distinction the rule turns on: does the side that comes loose ENLARGE
+    again into a mass, or is it a strand? A leg, an antenna, a whisker or a
+    lace ring stays one bead wide along its whole length. It fuses into a solid
+    run, it holds, and thickening it turns an insect into a crab. What actually
+    snaps is a mass hanging off a mass by one weld, because the far mass has
+    leverage on a single point of plastic. So the loose side has to be both big
+    (>= min_load) and thick - it must contain at least one bead with all four
+    orthogonal neighbours filled, which no one-bead-wide strand ever does.
+    """
+    keep = g[y][x]
+    if keep is None:
+        return 0
+    g[y][x] = None
+    parts = components(g, w, h)
+    g[y][x] = keep
+    if len(parts) < 2:
+        return 0
+    side = parts[-1]                          # the smallest separated piece
+    if len(side) < min_load:
+        return 0
+    cells = set(side)
+    thick = any(
+        all((sx + dx, sy + dy) in cells
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+        for sx, sy in side)
+    return len(side) if thick else 0
+
+
+def weak_necks(g, w, h, min_load=10):
+    """Single-bead waists BETWEEN TWO LARGE MASSES.
+
+    A one-bead appendage is not a defect. A bug's leg, an antenna, a whisker,
+    a dangling stem - these are one bead wide along their whole length, they
+    fuse into a solid strand, and they are what makes the subject readable.
+    Thickening them turns an insect into a crab.
+
+    What actually breaks is a shape that NARROWS to a single bead and then
+    ENLARGES again: two substantial masses joined by one weld, where the
+    leverage of the far mass acts on a single point of plastic. So a neck
+    counts only when BOTH sides of it are at least `min_load` beads. A 40-bead
+    body joined to a 3-bead foot is fine; a 40-bead body joined to a 40-bead
+    head by one bead is not.
 
     Stranded sizes come from the DFS subtree sizes in the same pass that finds
     the articulation points. Re-running a component scan per candidate is
@@ -374,27 +410,71 @@ def weak_necks(g, w, h, min_load=6):
             if sides:
                 found[comp_root] = max(found.get(comp_root, 0),
                                        total - 1 - max(sides))
-    out = [(rev[i][0], rev[i][1], s) for i, s in found.items() if s >= min_load]
+    total = len(idx)
+    out = []
+    for i, small in found.items():
+        other = total - 1 - small
+        if small < min_load or other < min_load:
+            continue
+        # Both sides are big enough to matter. The exact test is in
+        # stranded_mass(), which is also what the repair pass re-checks after
+        # every patch.
+        x, y = rev[i]
+        load = stranded_mass(g, w, h, x, y, min_load)
+        if load:
+            out.append((x, y, load))
     out.sort(key=lambda t: -t[2])
     return out
 
 
-def thicken_necks(g, w, h, min_load=6, passes=3):
-    """Widen every load-bearing one-bead join into a solid block.
+def thicken_necks(g, w, h, min_load=10, passes=3, mirror=False, axis2=None):
+    """Give every load-bearing one-bead join a second independent path.
 
-    Fills the empty cells around the neck, which gives the join a second
-    independent path and turns a single weld into a fused corner. Two earlier
-    attempts were too clever and did not work:
+    Minimally. An earlier version filled the whole 3x3 around the neck, which
+    buys the second path but costs up to eight beads and bulges the silhouette
+    outward in every direction - across the library that was 16k beads of fat
+    on shapes that mostly did not need it. What a neck actually needs is the
+    missing corner of a 2x2: one bead, placed where it touches the most
+    existing ones, turning a single weld into a fused block. Only if no single
+    bead will do does it try a pair, and only if no pair will do does it fall
+    back to filling the neighbourhood - which happens on lace necks where three
+    strands meet, and is still better than shipping a piece that snaps.
 
-    - Widening only the neck moves the break one bead along a one-bead-wide
-      strand. Strands are fixed at the source now (canvas.Grid.limb), not here.
-    - Handling only necks with exactly two orthogonal neighbours skipped most
-      real cases: the worst mandala neck has THREE, because it sits where a
-      ring meets its weld, and that shape is the common one.
+    Every candidate is re-tested after each patch, because patching one neck
+    routinely cures its neighbour and the second fix would be pure padding.
 
-    Anything still weak after `passes` is left alone rather than mangled - it
-    is connected, just slender.
+    With `mirror` on, every bead placed is placed at its reflection too, so a
+    bilaterally symmetric subject stays symmetric. Patching one wing and not
+    the other is exactly the wonkiness this pass is supposed to be repairing.
     """
+    axis = None
+    if mirror:
+        axis = axis2 if axis2 is not None else best_axis(g, w, h)[1]
+
+    def twin(x, y):
+        if axis is None:
+            return None
+        mx = axis - x
+        return (mx, y) if 0 <= mx < w and mx != x else None
+
+    def place(x, y, colour):
+        """Fill (x, y) and its reflection. Returns the cells actually filled."""
+        done = []
+        for cx, cy in filter(None, ((x, y), twin(x, y))):
+            if g[cy][cx] is None:
+                g[cy][cx] = colour
+                done.append((cx, cy))
+        return done
+
+    def unplace(cells):
+        for cx, cy in cells:
+            g[cy][cx] = None
+
+    def touching(x, y):
+        return sum(1 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                   if 0 <= x + dx < w and 0 <= y + dy < h
+                   and g[y + dy][x + dx] is not None)
+
     added = 0
     for _ in range(passes):
         necks = weak_necks(g, w, h, min_load)
@@ -402,14 +482,43 @@ def thicken_necks(g, w, h, min_load=6, passes=3):
             break
         changed = False
         for x, y, _load in necks:
+            if not stranded_mass(g, w, h, x, y, min_load):
+                continue          # an earlier patch already cured this one
             colour = g[y][x]
-            for dy in (-1, 0, 1):
-                for dx in (-1, 0, 1):
-                    nx, ny = x + dx, y + dy
-                    if 0 <= nx < w and 0 <= ny < h and g[ny][nx] is None:
-                        g[ny][nx] = colour
-                        added += 1
-                        changed = True
+            spots = [(x + dx, y + dy)
+                     for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                     if (dx or dy) and 0 <= x + dx < w and 0 <= y + dy < h
+                     and g[y + dy][x + dx] is None]
+            spots.sort(key=lambda s: -touching(*s))
+            fix = []
+            for sx, sy in spots:
+                put = place(sx, sy, colour)
+                if not stranded_mass(g, w, h, x, y, min_load):
+                    fix = put
+                    break
+                unplace(put)
+            if not fix:
+                for i in range(len(spots)):
+                    for j in range(i + 1, len(spots)):
+                        put = (place(*spots[i], colour)
+                               + place(*spots[j], colour))
+                        if not stranded_mass(g, w, h, x, y, min_load):
+                            fix = put
+                            break
+                        unplace(put)
+                    if fix:
+                        break
+            if not fix and spots:
+                put = []
+                for sx, sy in spots:
+                    put += place(sx, sy, colour)
+                if stranded_mass(g, w, h, x, y, min_load):
+                    unplace(put)
+                else:
+                    fix = put
+            if fix:
+                added += len(fix)
+                changed = True
         if not changed:
             break
     return added
@@ -420,6 +529,139 @@ def thicken_necks(g, w, h, min_load=6, passes=3):
 # mandalas, hearts and circles those beads are the OUTER SILHOUETTE. Makers
 # would build the piece a ring smaller than designed. Swap them for a tinted
 # near-white that still reads as white beside real colours.
+def best_axis(g, w, h, slack=4):
+    """(score, 2*axis) of the vertical mirror line the ink most nearly obeys.
+
+    The axis is doubled so a half-integer one - what an even-width subject
+    needs - is still an integer here. Cells empty on BOTH sides are not
+    counted: a small subject floating in a sea of bare pegs would otherwise
+    score 95% for the sea, and every side-view fish in the library would look
+    bilaterally symmetric. A filled cell whose reflection falls off the board
+    counts as a mismatch, which keeps the winning axis from pushing ink over
+    the edge.
+
+    Only axes within `slack` beads of the ink's own centre are tried; the true
+    axis of a subject that is nearly symmetric already is never further out
+    than that, and scanning all 2w-1 of them costs 40x more for nothing.
+    """
+    xs = [x for y in range(h) for x in range(w) if g[y][x] is not None]
+    if not xs:
+        return 0.0, None
+    mid = min(xs) + max(xs)
+    best = (0.0, mid)
+    for a2 in range(max(0, mid - slack), min(2 * w - 2, mid + slack) + 1):
+        same = tot = 0
+        for y in range(h):
+            row = g[y]
+            for x in range(w):
+                mx = a2 - x
+                inside = 0 <= mx < w
+                a = row[x]
+                b = row[mx] if inside else None
+                if a is None and b is None:
+                    continue
+                tot += 1
+                if inside and a == b:
+                    same += 1
+        if tot and same / tot > best[0]:
+            best = (same / tot, a2)
+    return best
+
+
+def recentre(g, w, h):
+    """Slide the ink horizontally until its own centre is the board's centre.
+
+    Only worth doing before an imposed mirror, and only when there is bare
+    board to slide into. Mirroring about an axis that is not the board centre
+    leaves the columns at one edge with nothing to reflect onto: the sleepy
+    emoji faces got their one-sided "Zzz" copied across and then clipped by the
+    edge, which is a worse asymmetry than the one it was fixing. Centre first
+    and every column has a partner.
+    """
+    xs = [x for y in range(h) for x in range(w) if g[y][x] is not None]
+    if not xs:
+        return 0
+    dx = ((w - 1) - (min(xs) + max(xs))) // 2
+    if dx == 0:
+        return 0
+    order = range(w - 1, -1, -1) if dx > 0 else range(w)
+    for y in range(h):
+        row = g[y]
+        for x in order:
+            sx = x - dx
+            row[x] = row[sx] if 0 <= sx < w else None
+    return dx
+
+
+def mirror_score(g, w, h, axis2=None):
+    """How well the ink agrees with its reflection, 0..1.
+
+    Deliberately NOT the same measure best_axis() maximises. That one counts a
+    bead whose reflection falls off the board as a mismatch, because an axis
+    that pushes ink over the edge is a bad axis to mirror about. As a quality
+    score that penalty is wrong: a full-bleed pattern 28 columns wide, mirrored
+    about column 26, is perfectly symmetric apart from the one column that has
+    nowhere to reflect to, and scoring it 96% would report a defect that is not
+    there. Here the unpairable cells are simply not counted.
+    """
+    if axis2 is None:
+        _, axis2 = best_axis(g, w, h)
+    if axis2 is None:
+        return 1.0
+    same = tot = 0
+    for y in range(h):
+        row = g[y]
+        for x in range(w):
+            mx = axis2 - x
+            if not (0 <= mx < w):
+                continue
+            a, b = row[x], row[mx]
+            if a is None and b is None:
+                continue
+            tot += 1
+            if a == b:
+                same += 1
+    return same / tot if tot else 1.0
+
+
+def symmetrize(g, w, h, axis2=None):
+    """Reflect the pattern about its own mirror line, denser half winning.
+
+    A bug, a face, a gem and a mandala are all bilaterally symmetric by
+    design, but nothing in the drawing pipeline preserves that: ellipses round
+    differently on each side, strokes at float coordinates land a bead apart,
+    and the weld and outline passes act wherever they happen to be needed.
+    The result reads as wonky rather than as hand-made.
+
+    Two details earn their keep. The axis comes from the INK, not the board -
+    a subject sitting one bead off-centre would otherwise be reflected into a
+    doubled, offset ghost of itself. And the half that is copied is the one
+    with MORE beads, because the wonkiness is usually a dropped bead on one
+    side, and copying the poorer half would delete the good side's detail
+    instead of restoring the bad one's.
+    """
+    if axis2 is None:
+        _, axis2 = best_axis(g, w, h)
+    if axis2 is None:
+        return 0
+    left = sum(1 for y in range(h) for x in range(w)
+               if 2 * x < axis2 and g[y][x] is not None)
+    right = sum(1 for y in range(h) for x in range(w)
+                if 2 * x > axis2 and g[y][x] is not None)
+    changed = 0
+    for y in range(h):
+        row = g[y]
+        for x in range(w):
+            mx = axis2 - x
+            if not (0 <= mx < w) or mx == x:
+                continue
+            src, dst = (x, mx) if ((2 * x < axis2) == (left >= right)) else (mx, x)
+            if row[dst] != row[src]:
+                row[dst] = row[src]
+                changed += 1
+    return changed
+
+
 PALE_SWAP = {"white": "cream", "ivory": "cream", "clear": "toothpaste"}
 
 
@@ -444,7 +686,16 @@ def retint_pale(p):
     return q, n
 
 
-def repair(p, strip=False, drop_below=3, max_gap=5, thicken=True):
+# A subject that already agrees with its own reflection this closely was
+# drawn to be symmetric and came out a bead or two wonky. Below it, the
+# asymmetry is the subject - a side-view fish, a letter R, a hockey stick -
+# and mirroring would give it two heads. Measured on ink only, so a small
+# subject on a bare board cannot score for the bare board.
+SNAP_SYMMETRIC = 0.92
+
+
+def repair(p, strip=False, drop_below=3, max_gap=5, thicken=True,
+           mirror=False, snap=SNAP_SYMMETRIC):
     """Return a copy of `p` that is buildable, optionally without its backdrop.
 
     Order matters: the backdrop goes FIRST, because a full board is trivially
@@ -455,8 +706,33 @@ def repair(p, strip=False, drop_below=3, max_gap=5, thicken=True):
     """
     g, w, h = grid_of(p)
     removed = strip_background(g, w, h) if strip else None
+    score, axis2 = best_axis(g, w, h)
+    if mirror and any(c is None for row in g for c in row):
+        # An imposed mirror gets the board centre as its axis, which is only
+        # reachable once the subject is sitting on it. Full-bleed boards have
+        # nowhere to slide to and keep their measured axis.
+        recentre(g, w, h)
+        axis2 = w - 1
+    if not mirror and snap:
+        # Note the >=, with no upper bound. An ALREADY perfect subject still
+        # has to opt in, because the welding and thickening that follow are
+        # what break symmetry: a letter A drawn exactly symmetric came out at
+        # 0.95 because one neck got a patch and its mirror did not.
+        mirror = score >= snap
+    mirrored = symmetrize(g, w, h, axis2) if mirror else 0
     welded, dropped = make_buildable(g, w, h, drop_below, max_gap)
-    fattened = thicken_necks(g, w, h) if thicken else 0
+    if mirror:
+        # Welding acts wherever a piece happens to be loose, which is not
+        # symmetric. Mirror again, then re-weld in case the mirror undid a
+        # join it could not see.
+        mirrored += symmetrize(g, w, h, axis2)
+        w2, d2 = make_buildable(g, w, h, drop_below, max_gap)
+        welded += w2
+        dropped += d2
+    # Thickening goes LAST: it is the only pass whose result nothing else may
+    # disturb, and it mirrors its own patches so the shape stays symmetric.
+    fattened = (thicken_necks(g, w, h, mirror=mirror, axis2=axis2)
+                if thicken else 0)
     cells = [{"x": x, "y": y, "colorId": g[y][x]}
              for y in range(h) for x in range(w) if g[y][x] is not None]
     used = {c["colorId"] for c in cells}
@@ -465,4 +741,4 @@ def repair(p, strip=False, drop_below=3, max_gap=5, thicken=True):
     q.pop("rows", None)
     q["palette"] = [c for c in p["palette"] if c["id"] in used]
     return q, dict(removed=removed, welded=welded, dropped=dropped,
-                   thickened=fattened)
+                   thickened=fattened, mirrored=mirrored)

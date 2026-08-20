@@ -14,7 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from audit import PATTERNS, measure, near_duplicates            # noqa: E402
 from compact import from_rows                                    # noqa: E402
 from uniqueness import cell_map, family_of, select_distinct      # noqa: E402
-from connectivity import (components, grid_of, has_background,     # noqa: E402
+from connectivity import (SNAP_SYMMETRIC, best_axis, components,   # noqa: E402
+                          grid_of, has_background, mirror_score,
                           weak_necks)
 
 SHIPPED = json.load(open(PATTERNS))["patterns"]
@@ -240,6 +241,94 @@ def test_patterns_are_buildable():
           not big, f"{len(big)} too large: {big[:3]}")
 
 
+def test_size_variants():
+    """Small and medium have to be as buildable as the board they came from."""
+    import scaling
+    from compact import from_rows
+
+    def grid_of_variant(v, palette):
+        g = [[None] * v["width"] for _ in range(v["height"])]
+        for c in from_rows(v["rows"], palette):
+            g[c["y"]][c["x"]] = c["colorId"]
+        return g, v["width"], v["height"]
+
+    eligible = [p for p in SHIPPED
+                if round(min(p["grid"]["width"], p["grid"]["height"])
+                         * scaling.SIZES["small"]) >= scaling.MIN_SIDE]
+    missing = [f"{p['category']}/{p['title']}" for p in eligible
+               if set(p.get("sizes", {})) != {"small", "medium"}]
+    check("15. every board big enough to reduce offers small and medium",
+          not missing, f"{len(missing)} without both: {missing[:3]}")
+
+    wrong = []
+    for p in SHIPPED:
+        for name, v in (p.get("sizes") or {}).items():
+            if (v["width"] >= p["grid"]["width"]
+                    or min(v["width"], v["height"]) < scaling.MIN_SIDE
+                    or len(v["rows"]) != v["height"]
+                    or any(len(r) != v["width"] for r in v["rows"])):
+                wrong.append(f"{p['category']}/{p['title']}/{name}")
+    check("16. every size variant is smaller, square-edged and well formed",
+          not wrong, f"{len(wrong)} malformed: {wrong[:3]}")
+
+    broken = []
+    for p in SHIPPED:
+        if has_background(p):
+            continue
+        for name, v in (p.get("sizes") or {}).items():
+            g, w, h = grid_of_variant(v, p["palette"])
+            if len(components(g, w, h)) > 1:
+                broken.append(f"{p['category']}/{p['title']}/{name}")
+    check("17. every size variant of a backgroundless pattern is one piece",
+          not broken, f"{len(broken)} in pieces: {broken[:3]}")
+
+    lost = []
+    for p in SHIPPED:
+        for name, v in (p.get("sizes") or {}).items():
+            beads = sum(1 for r in v["rows"] for ch in r if ch != ".")
+            if beads < 12:
+                lost.append(f"{p['category']}/{p['title']}/{name}")
+    check("18. no size variant reduces to a handful of beads",
+          not lost, f"{len(lost)} nearly empty: {lost[:3]}")
+
+
+# ── 19. subjects drawn symmetric shipped wonky ───────────────────────────────
+# Symptom: "many of the bugs should have symmetric patterns, but they are
+# wonky". Ellipses rounded differently on each side, limbs grew towards +x/+y
+# only, and the weld and thicken passes patched whichever side happened to
+# need it. Nothing in the pipeline put it back.
+def test_symmetric_subjects_are_symmetric():
+    """A category drawn bilaterally symmetric must ship bilaterally symmetric.
+
+    A side-view fish or a letter R is asymmetric on purpose and is not checked;
+    the score is measured on INK only, so a small subject on a bare board
+    cannot earn credit for the bare board it sits in.
+    """
+    MIRRORED = ("bugs", "emoji", "gems", "hearts", "circles", "snowflakes",
+                "flowers", "stars", "mandalas")
+    bad = []
+    for cat in MIRRORED:
+        for p in BY_CAT.get(cat, []):
+            g, w, h = grid_of(p)
+            score = mirror_score(g, w, h)
+            if score < 0.99:
+                bad.append(f"{cat}/{p['title']} {100*score:.0f}%")
+    check("19. every subject in a symmetric category is symmetric",
+          not bad, f"{len(bad)} wonky: {bad[:4]}")
+
+    # And nothing ANYWHERE should sit in the uncanny band: a subject that is
+    # 95% symmetric was drawn symmetric and came out wrong, which reads worse
+    # than one that is frankly asymmetric.
+    band = []
+    for p in SHIPPED:
+        g, w, h = grid_of(p)
+        score = mirror_score(g, w, h)
+        if SNAP_SYMMETRIC <= score < 0.99:
+            band.append(f"{p['category']}/{p['title']} {100*score:.0f}%")
+    check("19b. almost nothing is left in the almost-symmetric band",
+          len(band) <= 20, f"{len(band)} nearly-symmetric: {band[:4]}")
+
+
 def main():
     print(f"regressions against {len(SHIPPED)} shipped patterns\n")
     for fn in (test_fill_changes_the_board, test_small_variants_do_not_converge,
@@ -247,7 +336,8 @@ def main():
                test_3d_nets_have_faces_and_folds,
                test_near_blank_measures_the_board, test_no_blank_boards_ship,
                test_shipped_library_has_no_lookalikes,
-               test_patterns_are_buildable):
+               test_patterns_are_buildable, test_size_variants,
+               test_symmetric_subjects_are_symmetric):
         fn()
     print()
     if FAILURES:

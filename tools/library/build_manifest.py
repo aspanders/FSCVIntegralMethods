@@ -27,11 +27,13 @@ import gen_circles
 import gen_creatures
 import gen_objects
 import gen_faces
+import gen_characters
 import gen_library
 import gen_library2
 import compact
 import uniqueness
 import connectivity
+import scaling
 from beadlib import REPO, CATEGORIES
 
 LIB = os.path.join(REPO, "library")
@@ -55,6 +57,8 @@ def collect():
     patterns += gen_icons.generate()     # icons: letters, digits, symbols
     patterns += gen_3d.generate()        # threeD builds with guides
     patterns += gen_circles.generate()   # round-pegboard designs (shape=circle)
+    patterns += gen_characters.generate()  # 1920s rubber-hose cast (see the
+                                           # copyright note in that module)
     # Silhouette categories rebuilt from parametric parts REPLACE the
     # recolour-heavy originals outright. Filtering by category rather than by
     # id matters: stable_id gives old and new the same "<category>-" prefix, so
@@ -77,7 +81,8 @@ def collect():
     # changes what a pattern looks like and so changes which pairs are
     # lookalikes. Buildability is repaired at the same time: a full board is
     # trivially connected, so every loose part was hidden under its backdrop.
-    return _interleave(_distinct_per_category(_buildable(list(by_id.values()))))
+    return _add_sizes(
+        _interleave(_distinct_per_category(_buildable(list(by_id.values())))))
 
 
 # Categories whose subject stands on its own. The rest keep a backdrop because
@@ -86,6 +91,19 @@ def collect():
 STRIP_BACKGROUND = {
     "animals", "birds", "bugs", "fish", "flowers", "food", "gems", "holidays",
     "icons", "sports", "sweets", "trees", "vehicles", "videogame", "emoji",
+    "characters",
+}
+
+
+# Categories drawn to be bilaterally symmetric. Nothing else in the pipeline
+# preserves that, so it is imposed at the end - but as a LOWER bar for the
+# snap, not as a command. Forcing it outright mirrored the one-sided "Zzz" on
+# the sleepy emoji faces and clipped the copy against the edge of the board,
+# turning a deliberate asymmetry into a lopsided one. A subject in these
+# categories only has to be roughly symmetric already to be pulled true.
+MIRROR_SYMMETRIC = {
+    "bugs", "emoji", "gems", "mandalas", "snowflakes", "stars", "hearts",
+    "flowers", "circles",
 }
 
 
@@ -99,13 +117,14 @@ def _buildable(patterns):
     """
     out = []
     stats = {"stripped": 0, "welded": 0, "dropped": 0, "repaired": 0,
-             "thickened": 0, "widened": 0, "retinted": 0}
+             "thickened": 0, "widened": 0, "retinted": 0, "mirrored": 0}
     for p in patterns:
         # A framed variant's border IS its backdrop; stripping it would delete
         # the frame and leave the field behind.
         strip = (p["category"] in STRIP_BACKGROUND
                  and not p["title"].endswith("Framed"))
-        q, info = connectivity.repair(p, strip=strip)
+        q, info = connectivity.repair(p, strip=strip,
+                                      mirror=p["category"] in MIRROR_SYMMETRIC)
         if not connectivity.has_background(q):
             q, tinted = connectivity.retint_pale(q)
             stats["retinted"] += 1 if tinted else 0
@@ -115,6 +134,8 @@ def _buildable(patterns):
             stats["repaired"] += 1
             stats["welded"] += info["welded"]
             stats["dropped"] += info["dropped"]
+        if info.get("mirrored"):
+            stats["mirrored"] += 1
         if info["thickened"]:
             stats["widened"] += 1
             stats["thickened"] += info["thickened"]
@@ -123,8 +144,36 @@ def _buildable(patterns):
           f"welded solid: {stats['repaired']} "
           f"(+{stats['welded']} beads, -{stats['dropped']} strays); "
           f"necks widened: {stats['widened']} (+{stats['thickened']} beads); "
-          f"board-coloured beads retinted in {stats['retinted']}")
+          f"retinted {stats['retinted']}; mirrored {stats['mirrored']}")
     return out
+
+
+def _add_sizes(patterns):
+    """Attach small and medium versions of every pattern.
+
+    Done here, at the very end, rather than in the generators: the reduction
+    has to run on the pattern as it will SHIP - backdrop already stripped,
+    parts already welded, necks already widened - or the small version would
+    inherit a full board and a set of defects the large one no longer has.
+    """
+    made = 0
+    for p in patterns:
+        g, w, h = connectivity.grid_of(p)
+        nobg = not connectivity.has_background(p)
+        sizes = {}
+        idx = {c["id"]: i for i, c in enumerate(p["palette"])}
+        for name, (sg, sw, sh) in scaling.variants(g, w, h, nobg).items():
+            sizes[name] = {
+                "width": sw, "height": sh,
+                "rows": ["".join(compact.EMPTY if c is None
+                                 else compact.CHARS[idx[c]] for c in row)
+                         for row in sg],
+            }
+        if sizes:
+            p["sizes"] = sizes
+            made += 1
+    print(f"  size variants: {made} patterns carry small/medium boards")
+    return patterns
 
 
 def _is_blank(p):

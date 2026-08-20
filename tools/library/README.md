@@ -28,8 +28,30 @@ first run offline. `build_manifest.py` keeps those copies identical to
 - `gen_3d.py` : threeD builds, each with a `buildGuide` and `assemblyGuide`.
 - `gen_seeds.py` : regenerates the tiny in-app `SeedPatterns` (one example per
   category) for both platforms. Run after changing the taxonomy.
+- `gen_creatures.py` / `gen_objects.py` / `gen_faces.py` : the silhouette
+  categories, built from parametric parts rather than recolours.
+- `gen_characters.py` : the 1920s rubber-hose cast, headlined by Steamboat
+  Willie. **Read the copyright note at the top of that file before adding to
+  it** - only the 1928 public-domain depiction belongs there.
 - `render.py` : renders any pattern (or the whole `patterns.json`) to PNG the way
   the app does, for eyeballing quality. `canvas.py` holds the shape primitives.
+
+## Quality passes
+
+Every pattern goes through these on its way into `patterns.json`; none of them
+live in the app.
+
+- `connectivity.py` : the physical checks. Strips backdrops, welds loose parts
+  onto the main piece, widens the one-bead necks that carry weight (and only
+  those - a leg or an antenna is meant to be one bead wide), and pulls
+  symmetric subjects true about their own mirror line.
+- `scaling.py` : the small and medium boards each pattern carries in its
+  `sizes` map. Box-majority reduction, then the same weld/widen/mirror repair
+  at the smaller size, because a reduced board still has to be buildable.
+- `uniqueness.py` / `audit.py` : distinctness. Two boards that render the same
+  are one pattern, however differently they were specified.
+- `test_regressions.py` : one named test per bug found in a QC pass, so none of
+  them can come back. Run it after any change to a generator or a pass.
 
 ## How the app updates
 

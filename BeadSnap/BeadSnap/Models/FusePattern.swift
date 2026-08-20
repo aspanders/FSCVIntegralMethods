@@ -24,7 +24,37 @@ struct FusePattern: Identifiable, Codable, Hashable {
     // Which pegboard the pattern is built on. Defaults to .square, so every
     // pattern written before this field existed decodes unchanged.
     var shape: PegboardShape = .square
+    // Reduced versions of the same design, keyed "small"/"medium", each in the
+    // same compact rows encoding and indexing the same palette. Built offline
+    // (tools/library/scaling.py) rather than resampled here, because a reduced
+    // board still has to be weldable: loose parts get re-welded and thin necks
+    // re-widened at the smaller size, which is not something to redo on the
+    // phone in two languages.
+    var sizes: [String: PatternSize]? = nil
     var version: Int
+
+    /// The boards this design can be built on, smallest first.
+    var scales: [BoardScale] {
+        BoardScale.allCases.filter { $0 == .large || sizes?[$0.key] != nil }
+    }
+
+    /// The same design on one of its other boards.
+    ///
+    /// A new id, because a small build and a large build of the same subject
+    /// are two different projects and must not overwrite each other's
+    /// progress. The palette is carried over whole so the reduced rows keep
+    /// indexing it.
+    func at(scale: BoardScale) -> FusePattern {
+        guard scale != .large, let v = sizes?[scale.key] else { return self }
+        var copy = self
+        copy.id = "\(id)-\(scale.key)"
+        copy.title = "\(title) (\(scale.label))"
+        copy.grid = GridSize(width: v.width, height: v.height)
+        copy.cells = FusePattern.expand(rows: v.rows, palette: palette)
+        copy.rows = nil
+        copy.sizes = nil
+        return copy
+    }
 
     var hasInstructions: Bool {
         !(buildGuide?.isEmpty ?? true) || !(assemblyGuide?.isEmpty ?? true)
@@ -102,6 +132,7 @@ struct FusePattern: Identifiable, Codable, Hashable {
         buildGuide    = try c.decodeIfPresent(String.self, forKey: .buildGuide)
         assemblyGuide = try c.decodeIfPresent(String.self, forKey: .assemblyGuide)
         shape        = try c.decodeIfPresent(PegboardShape.self, forKey: .shape) ?? .square
+        sizes        = try c.decodeIfPresent([String: PatternSize].self, forKey: .sizes)
         version      = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
     }
 
@@ -132,11 +163,34 @@ struct FusePattern: Identifiable, Codable, Hashable {
 
 // MARK: - Supporting Types
 
+/// One reduced board for a pattern, in the same compact encoding as `rows`.
+struct PatternSize: Codable, Hashable {
+    var width: Int
+    var height: Int
+    var rows: [String]
+}
+
+/// Which of a pattern's boards to build. `.large` is the pattern as designed;
+/// the others come from its `sizes` map and are only offered when they exist.
+enum BoardScale: String, CaseIterable, Identifiable {
+    case small, medium, large
+    var id: String { rawValue }
+    var key: String { rawValue }
+    var label: String {
+        switch self {
+        case .small:  return "Small"
+        case .medium: return "Medium"
+        case .large:  return "Large"
+        }
+    }
+}
+
 enum PatternCategory: String, Codable, CaseIterable, Identifiable {
-    // 23 content categories (100 patterns each) + 3D specialty + user designs.
+    // 24 content categories + 3D specialty + user designs.
     case geometric, mandalas, hearts, stars, flowers, rainbows, space, emoji,
          gems, icons, animals, birds, fish, bugs, food, sweets, trees, vehicles,
-         snowflakes, holidays, videogame, sports, circles, threeD, custom
+         snowflakes, holidays, videogame, sports, circles, characters, threeD,
+         custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
@@ -163,6 +217,7 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .videogame:  return "Video Game"
         case .sports:     return "Sports"
         case .circles:    return "Circles"
+        case .characters: return "Characters"
         case .threeD:     return "3D"
         case .custom:     return "My Designs"
         }
@@ -193,6 +248,7 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .videogame:  return "🎮"
         case .sports:     return "⚽"
         case .circles:    return "⭕"
+        case .characters: return "🎩"
         case .threeD:     return "🧊"
         case .custom:     return "✏️"
         }

@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.beadsnap.app.data.model.BoardScale
 import com.beadsnap.app.data.model.CreatorType
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.model.PatternCategory
@@ -57,6 +58,10 @@ fun LibraryScreen(
     val libraryUpdate by (library?.updateApplied ?: remember { MutableStateFlow(null) }).collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
     var patternToDelete by remember { mutableStateOf<FusePattern?>(null) }
+    // A pattern that ships more than one board asks which one to build before
+    // opening. Patterns with a single board open straight away - a dialog with
+    // one button in it is just an extra tap.
+    var patternToSize by remember { mutableStateOf<FusePattern?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val gridState = rememberLazyGridState()
 
@@ -158,7 +163,10 @@ fun LibraryScreen(
                     items(patterns, key = { it.id }) { pattern ->
                         PatternCard(
                             pattern = pattern,
-                            onClick = { onPatternClick(pattern) },
+                            onClick = {
+                                if (pattern.scales().size > 1) patternToSize = pattern
+                                else onPatternClick(pattern)
+                            },
                             onDuplicate = if (pattern.createdBy != CreatorType.system) {
                                 { store.duplicate(pattern) }
                             } else null,
@@ -170,6 +178,41 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+
+    patternToSize?.let { pattern ->
+        AlertDialog(
+            onDismissRequest = { patternToSize = null },
+            title = { Text("Build \"${pattern.title}\" at what size?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Every size is a complete, buildable design - not a crop.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    pattern.scales().forEach { scale ->
+                        val board = pattern.atScale(scale)
+                        OutlinedButton(
+                            onClick = {
+                                patternToSize = null
+                                onPatternClick(board)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "${scale.label}  ·  ${board.grid.displayName}  ·  " +
+                                    "${board.totalBeads} beads"
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { patternToSize = null }) { Text("Cancel") }
+            }
+        )
     }
 
     patternToDelete?.let { pattern ->

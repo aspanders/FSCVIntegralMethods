@@ -20,6 +20,7 @@ CATEGORIES = ["geometric", "mandalas", "hearts", "stars", "flowers",
               "sweets", "trees", "vehicles", "snowflakes", "holidays",
               "videogame", "sports",
               "circles",
+              "characters",
               "threeD"]
 
 # ── Palette ────────────────────────────────────────────────────────────────

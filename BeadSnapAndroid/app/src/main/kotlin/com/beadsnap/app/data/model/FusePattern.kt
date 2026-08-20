@@ -22,6 +22,13 @@ data class FusePattern(
     // ('.' = empty). Present only in the shipped library; expanded to `cells`
     // on load via materialized(). Kept out of the in-memory pattern afterward.
     val rows: List<String>? = null,
+    // Reduced versions of the same design, keyed "small"/"medium", each in the
+    // same compact rows encoding and indexing the same palette. Built offline
+    // (tools/library/scaling.py) rather than resampled here, because a reduced
+    // board still has to be weldable: loose parts get re-welded and thin necks
+    // re-widened at the smaller size, which is not something to redo on the
+    // phone in two languages.
+    val sizes: Map<String, PatternSize>? = null,
     // Which pegboard the pattern is built on. Defaults to `square`, so every
     // pattern written before this field existed (including the whole shipped
     // library/patterns.json) decodes unchanged.
@@ -47,6 +54,40 @@ data class FusePattern(
             }
         }
         return copy(cells = expanded, rows = null)
+    }
+
+    /** The boards this design can be built on, smallest first. */
+    fun scales(): List<BoardScale> =
+        BoardScale.entries.filter { it == BoardScale.large || sizes?.containsKey(it.key) == true }
+
+    /**
+     * The same design on one of its other boards.
+     *
+     * A new id, because a small build and a large build of the same subject are
+     * two different projects and must not overwrite each other's progress. The
+     * palette is carried over whole so the reduced rows keep indexing it.
+     */
+    fun atScale(scale: BoardScale): FusePattern {
+        if (scale == BoardScale.large) return materialized()
+        val v = sizes?.get(scale.key) ?: return materialized()
+        val expanded = ArrayList<Cell>()
+        for (y in v.rows.indices) {
+            val row = v.rows[y]
+            for (x in row.indices) {
+                val ch = row[x]
+                if (ch == '.') continue
+                val i = CHARS.indexOf(ch)
+                if (i in palette.indices) expanded.add(Cell(x, y, palette[i].id))
+            }
+        }
+        return copy(
+            id    = "$id-${scale.key}",
+            title = "$title (${scale.label})",
+            grid  = GridSize(v.width, v.height),
+            cells = expanded,
+            rows  = null,
+            sizes = null
+        )
     }
 
     fun colorCounts(): List<Pair<BeadColor, Int>> {
@@ -76,7 +117,7 @@ data class FusePattern(
 // The icon property is named `symbol`, not `emoji`, because one of the entries
 // is itself called `emoji` and an entry cannot share a name with a property.
 enum class PatternCategory(val displayName: String, val symbol: String) {
-    // 23 content categories (100 patterns each) + 3D specialty + user designs.
+    // 24 content categories + 3D specialty + user designs.
     geometric("Geometric", "🔷"),
     mandalas("Mandalas", "🌀"),
     hearts("Hearts", "💗"),
@@ -100,6 +141,7 @@ enum class PatternCategory(val displayName: String, val symbol: String) {
     videogame("Video Game", "🎮"),
     sports("Sports", "⚽"),
     circles("Circles", "⭕"),
+    characters("Characters", "🎩"),
     threeD("3D", "🧊"),
     custom("My Designs", "✏️")
 }
@@ -135,6 +177,20 @@ enum class PegboardShape(val displayName: String) {
 
 @Serializable
 enum class CreatorType { system, user, ai }
+
+/** One reduced board for a pattern, in the same compact encoding as `rows`. */
+@Serializable
+data class PatternSize(val width: Int, val height: Int, val rows: List<String>)
+
+/**
+ * Which of a pattern's boards to build. `large` is the pattern as designed;
+ * the others come from its `sizes` map and are only offered when they exist.
+ */
+enum class BoardScale(val key: String, val label: String) {
+    small("small", "Small"),
+    medium("medium", "Medium"),
+    large("large", "Large")
+}
 
 @Serializable
 data class GridSize(val width: Int, val height: Int) {

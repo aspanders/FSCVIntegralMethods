@@ -4,12 +4,19 @@ struct LibraryView: View {
     @StateObject private var viewModel = LibraryViewModel()
     @ObservedObject private var store = PatternStore.shared
     @State private var patternToDelete: FusePattern?
+    // A pattern that ships more than one board asks which one to build before
+    // opening. Patterns with a single board open straight away - a sheet with
+    // one button in it is just an extra tap.
+    @State private var patternToSize: FusePattern?
+    // An explicit path, so the size sheet can push the CHOSEN board rather
+    // than the one that was tapped.
+    @State private var path: [FusePattern] = []
     @State private var showTipJar = false
 
     private let columns = [GridItem(.adaptive(minimum: 130, maximum: 180), spacing: 14)]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 categoryBar
                 Divider()
@@ -19,7 +26,13 @@ struct LibraryView: View {
                     } else {
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(viewModel.patterns) { pattern in
-                                NavigationLink(value: pattern) {
+                                Button {
+                                    if pattern.scales.count > 1 {
+                                        patternToSize = pattern
+                                    } else {
+                                        path.append(pattern)
+                                    }
+                                } label: {
                                     PatternCard(pattern: pattern)
                                         .padding(4)
                                 }
@@ -48,6 +61,27 @@ struct LibraryView: View {
             .searchable(text: $viewModel.searchQuery, prompt: "Search patterns")
             .navigationDestination(for: FusePattern.self) { pattern in
                 PatternEditorView(pattern: pattern)
+            }
+            .confirmationDialog(
+                patternToSize.map { "Build \"\($0.title)\" at what size?" } ?? "",
+                isPresented: Binding(
+                    get: { patternToSize != nil },
+                    set: { if !$0 { patternToSize = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                if let subject = patternToSize {
+                    ForEach(subject.scales) { scale in
+                        let board = subject.at(scale: scale)
+                        Button("\(scale.label) · \(board.grid.displayName) · \(board.totalBeads) beads") {
+                            patternToSize = nil
+                            path.append(board)
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) { patternToSize = nil }
+            } message: {
+                Text("Every size is a complete, buildable design - not a crop.")
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

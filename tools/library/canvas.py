@@ -93,12 +93,17 @@ class Grid:
         x0, y0, x1, y1 = float(x0), float(y0), float(x1), float(y1)
         steps = int(max(abs(x1 - x0), abs(y1 - y0)) * 2) + 1
         r = width - 1
+        # Grow symmetrically about the stroke. Growing only towards +x/+y
+        # shifted every limb half a bead down-right, which is one of the
+        # reasons the bugs came out lopsided.
+        lo = -(r // 2)
+        hi = r - (r // 2)
         for i in range(steps + 1):
             t = i / steps
             cx = x0 + (x1 - x0) * t
             cy = y0 + (y1 - y0) * t
-            for dy in range(r + 1):
-                for dx in range(r + 1):
+            for dy in range(lo, hi + 1):
+                for dx in range(lo, hi + 1):
                     self.set(cx + dx, cy + dy, cid)
 
     def poly(self, pts, cid):
