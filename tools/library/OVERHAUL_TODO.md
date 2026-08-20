@@ -53,50 +53,85 @@ gives every subject a one-bead dark edge.
 
 ## STATUS: complete
 
-Every category is now 100% structurally unique with zero exact duplicates.
+`python audit.py` is the gate. It measures four things, and the third only
+exists because the first two passed while the library was still repetitive:
 
-| | baseline v9 | v16 |
+| measure | what it catches |
+|---|---|
+| distinct designs | colour-only recolours |
+| exact duplicates | the same board shipped twice |
+| **lookalike pairs** | boards differing by a handful of beads, which `signature` calls unique |
+| near-blank / speckled / tiny | patterns not worth making |
+
+Lookalikes are split into **same-family** (a variant the drawing ignored) and
+**cross-family** (two designs that render the same), because the fixes differ.
+
+| | baseline v9 | v29 |
 |---|---|---|
-| patterns | 2790 | 2778 |
+| patterns | 2790 | 2722 |
 | distinct designs | 59.0% | **100.0%** |
 | exact duplicates | 1145 | **0** |
-| categories under 80% unique | 10 | **0** |
+| lookalike pairs | 13536 | **251, all in icons** |
+| blank boards | 1 | **0** |
 
-Rebuilt from parametric parts (`gen_creatures.py`, `gen_objects.py`):
-birds, fish, bugs, trees, animals, vehicles, flowers, food, sweets, sports,
-holidays, videogame, rainbows, icons. Plus circles and the `space` suns fixed
-in place.
+The 251 remaining are letters resembling letters - M and N, O and 0. `icons`
+is deliberately exempt: a category defined by COMPLETENESS is worse for
+missing D, F, N and 8 than for containing near-neighbours.
 
-### Machinery worth reusing
+## The bugs this pass found
 
-- `_frame` draws on a roomy canvas, scales UP to fill the board, then centres
-  the ink. Filling the board is most of what makes a 28x28 icon readable, and
-  auto-centring means composed subjects never clip.
-- `_pick_bg` picks the background furthest from the subject's body colour.
-- `_outline` gives every subject a one-bead dark edge.
-- `_run_ops` interprets a shape recipe - a list of primitives in a -10..10 box
-  with colours by index - so an object category is a table of drawings rather
-  than twenty bespoke functions. `("clip", r)` erases outside a radius, which
-  is how ball seams drawn as outside-centred rings stop leaving fragments.
-- `_interleave` in build_manifest deals each category round-robin across its
-  design families, so a category does not open with twelve variations of one
-  idea.
+Each of these passed every check that existed at the time.
 
-### Traps this hit, worth not repeating
+1. **Auto-fit cancelled every scale variant.** `_frame` scales a subject up to
+   fill the board, so a spec asking for 0.76 and one asking for 1.18 both came
+   out full-size. "Grapes" and "Grapes Large" were 99.9% identical. Scale is
+   now expressed as `fill` where the fitting happens.
+2. **Shrinking makes different things converge.** The first fix used 0.54 fill
+   for the small variants, and at that size "Wasp Small" and "Firefly Small"
+   were 99.7% identical - and 90% of the board was background. 0.72 is the
+   floor.
+3. **`_emit` only deduped EXACT matches**, so a parameter sweep fine enough to
+   fill a category was finer than the eye. It now rejects lookalikes, which is
+   why the candidate pools are far larger than the targets.
+4. **`family_of` missed sequence suffixes.** "Planet 4" and "Vert Stripes w1"
+   each became their own family, which both mislabelled lookalike pairs and
+   defeated the interleave - round-robin over 75 one-member families
+   reproduces the original order, so space still opened with 16 planets and
+   geometric with 14 stripe patterns.
+5. **3D nets erased themselves.** `_place` wrote the overlay's transparent
+   marker through as a colour, so every face overlay deleted the face under
+   it: the dice net was a scatter of pips with no faces, the gift box four
+   floating red bars. Nets also had no fold lines, and the lines had to be
+   drawn BEFORE the overlay or they clipped the corner pips.
+6. **The near-blank measure was wrong.** It compared the dominant colour to
+   the PLACED beads, so a one-colour star on an empty board scored 100% - 57
+   of 105 flags were that. It measures against the whole board now.
+7. **One genuinely blank board** shipped: "Square Grid s4", where the grid
+   spacing made the squares meet. `_is_blank` drops those.
 
-- **Spec order matters.** `_emit` caps at the target, so species-major spec
-  generation silently drops the tail of the species list - vehicles shipped
-  with no boats, planes or rockets while still reporting 100 unique patterns.
-  Generate pose-major.
-- **Variants must change the drawing.** A "Winged" spider is still a spider;
-  variants that a plan ignores collapse into duplicates.
-- **Thin appendages fight the auto-scaler.** A long one-bead tail makes the
-  bounding box wide, so the whole animal shrinks to fit it.
-- **`Grid.set` ignores None**, so nothing can be erased by drawing over it in
-  the background colour; `_erase_below` and the `clip` op exist for that.
-- **Uniqueness numbers can look fine while a category reads as repetitive** -
-  that is what `_interleave` fixes, and no metric catches it. Look at the
-  contact sheets.
+## Machinery worth reusing
+
+- `_frame(draw, spec, bg, fill=)` - draw roomy, scale to the requested share
+  of the board, centre the ink.
+- `_pick_bg` - background furthest from the subject's colour.
+- `_outline` - one-bead dark edge.
+- `_run_ops` - shape recipes; `("clip", r)` erases outside a radius, which is
+  how ball seams drawn as outside-centred rings stop leaving fragments.
+- `uniqueness.select_distinct` / `family_of` - the distinctness backstop and
+  the one shared definition of a design family.
+- `_interleave` - deals each category round-robin across families.
+
+## Traps worth not repeating
+
+- **Generate specs pose-major.** `_emit` caps at the target, so species-major
+  order silently drops the tail of the species list - vehicles shipped with no
+  boats, planes or rockets while reporting 100 unique patterns.
+- **A variant must change the drawing.** A "Winged" spider is still a spider.
+- **Thin appendages fight the auto-scaler** - a one-bead tail widens the
+  bounding box and shrinks the whole subject to fit it.
+- **`Grid.set` ignores None**, so nothing can be erased by drawing over it.
+- **Metrics can be clean while the category reads badly.** Look at the contact
+  sheets: `python audit.py --montage <category>`.
 
 ## Historical TODO — remaining categories
 ## TODO — remaining categories (recolour-heavy; unique % from audit.py)

@@ -16,22 +16,30 @@ import math
 
 from beadlib import PALETTE, make_pattern, rgb_to_lab, hex_to_rgb, stable_id
 from canvas import Grid
-from uniqueness import signature
+from uniqueness import cell_map, signature
+
+NEAR_DUP = 0.95   # two boards sharing more than this are indistinguishable
 
 S = 28          # board side for every design here
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def _emit(cat, specs, build, target=100):
+def _emit(cat, specs, build, target=100, near=NEAR_DUP):
     """Build each spec, drop structural duplicates, keep `target`.
 
     Callers must generate specs POSE-major (every species at pose 0, then
     every species at pose 1, ...). Species-major order plus this cap silently
     drops the tail of the species list: vehicles lost every boat, plane and
     rocket that way, and the category still reported 100 unique patterns.
+
+    [near] is the lookalike threshold. Raise it for categories defined by
+    COMPLETENESS rather than novelty - an alphabet missing N, R and T because
+    they resemble M, P and I is worse than one that contains all three.
     """
+    import numpy as np
     out, seen = [], set()
+    kept_by_size = {}
     for i, spec in enumerate(specs):
         g = build(spec)
         pat = make_pattern(stable_id(cat, f"{spec['name']}-{i}"), spec["name"], cat,
@@ -39,6 +47,14 @@ def _emit(cat, specs, build, target=100):
         sig = signature(pat)
         if sig in seen:
             continue
+        # Visual distinctness, not just an exact match: a variant the drawing
+        # ignores produces a board differing by a couple of beads, which
+        # signature() happily calls unique.
+        v = cell_map(pat)
+        stack = kept_by_size.get((g.w, g.h))
+        if stack and (np.stack(stack) == v).mean(axis=1).max() >= near:
+            continue
+        kept_by_size.setdefault((g.w, g.h), []).append(v)
         seen.add(sig)
         out.append(pat)
         if len(out) >= target:
@@ -49,7 +65,7 @@ def _emit(cat, specs, build, target=100):
 BIG = 60          # working canvas; the subject is auto-framed down onto S x S
 
 
-def _frame(draw, spec, bg, size=S, margin=1):
+def _frame(draw, spec, bg, size=S, margin=1, fill=None):
     """Draw on a roomy canvas, then centre the ink on the real board.
 
     Composing a subject from parts makes its extent hard to predict - a heron
@@ -58,13 +74,22 @@ def _frame(draw, spec, bg, size=S, margin=1):
     sitting wherever the maths happened to put it. Drawing big and framing
     afterwards means every design is centred and whole, and a subject too large
     for the board is redrawn smaller rather than cropped.
+
+    [fill] is the fraction of the board the subject should occupy, and it is
+    NOT optional decoration. Auto-fitting to the board silently cancels any
+    scale a caller applies to its own spec: "Grapes" and "Grapes Large" both
+    ended up filling the board and came out 99.9% identical, and the same went
+    for every Small/Large variant in every category - about two of every five
+    patterns were a lookalike of another. Scale has to be expressed here, where
+    the fitting happens, or not at all.
     """
     # Search DOWN from oversized, and take the largest scale that still fits.
     # Only shrinking left small subjects (a mouse, a sapling) marooned in the
     # middle of a big board at a size where nothing is identifiable; filling the
     # board is most of what makes a 28x28 icon readable.
-    for attempt in range(14):
-        scale = 1.7 - attempt * 0.10
+    want = (size - 2 * margin) * (fill if fill else spec.get("fill", 1.0))
+    for attempt in range(20):
+        scale = 1.7 - attempt * 0.08
         g = Grid(BIG, BIG)
         g.fill(None)
         draw(g, spec, BIG / 2.0, BIG / 2.0, scale)
@@ -74,7 +99,7 @@ def _frame(draw, spec, bg, size=S, margin=1):
             break
         w = max(xs) - min(xs) + 1
         h = max(ys) - min(ys) + 1
-        if w <= size - 2 * margin and h <= size - 2 * margin:
+        if max(w, h) <= want and w <= size - 2 * margin and h <= size - 2 * margin:
             out = Grid(size, size)
             out.fill(bg)
             ox = (size - w) // 2 - min(xs)
@@ -226,7 +251,7 @@ def _draw_bird(g, spec, cx, cy, scale):
         # The wing reads as a wing because of its EDGE, so it is drawn as a
         # shade of the body rather than in the beak colour - an orange wing
         # patch on a purple bird just looked like a mistake.
-        g.ellipse(cx - rx * 0.15, cy + 0.4, rx * 0.58, ry * 0.46, wingc)
+        g.ellipse(cx - rx * 0.15, cy + 0.4, rx * 0.72, ry * 0.46, wingc)
     elif wing == "spread":
         g.poly([(cx - 1, cy - 2), (cx - rx - 7 * scale, cy - ry - 5 * scale),
                 (cx - rx - 3 * scale, cy + 1)], wingc)
@@ -273,18 +298,22 @@ def _draw_bird(g, spec, cx, cy, scale):
 
 def birds():
     specs = []
-    poses = [("", {}), (" Perched", {"legs": +1}), (" Calling", {"head": +0.6}),
-             (" Fledgling", {"scale": 0.78}), (" Alert", {"neck": +2.0})]
+    # Every variant changes the DRAWING or the share of the board it takes.
+    # A pure scale factor is cancelled by _frame's auto-fit.
+    poses = [("", {"fill": 0.96}), (" Perched", {"legs": +2, "fill": 0.96}),
+             (" Calling", {"head": +0.9, "fill": 0.86}),
+             (" Wings Out", {"wing": "spread", "fill": 0.96}),
+             (" Alert", {"neck": +3.0, "fill": 0.80})]
     for pi, (suffix, tweak) in enumerate(poses):
         for si, (name, body, neck, head, beak, tail, legs, crest, wing) in enumerate(BIRD_SPECIES):
-            sc = tweak.get("scale", 1.0)
-            parts = ((body[0] * sc, body[1] * sc),
-                     max(0.0, neck * sc + tweak.get("neck", 0)),
-                     head * sc + tweak.get("head", 0),
+            parts = (body,
+                     max(0.0, neck + tweak.get("neck", 0)),
+                     head + tweak.get("head", 0),
                      beak, tail,
-                     max(0, int(legs * sc) + tweak.get("legs", 0)), crest, wing)
+                     max(0, legs + tweak.get("legs", 0)), crest,
+                     tweak.get("wing", wing))
             specs.append(dict(
-                name=f"{name}{suffix}", parts=parts,
+                name=f"{name}{suffix}", parts=parts, fill=tweak["fill"],
                 cols=BIRD_COLOURS[(si + pi) % len(BIRD_COLOURS)],
                 bg=_pick_bg(BIRD_COLOURS[(si + pi) % len(BIRD_COLOURS)][0], BIRD_SKY, si + pi),
                 tags=["bird", name.lower()]))
@@ -319,6 +348,14 @@ FISH_SPECIES = [
     ("Tetra",     (4.4, 3.2), "fork",   0.7, 0.6, "round",  "bands"),
     ("Marlin",    (8.6, 3.2), "lunate", 2.0, 0.6, "sword",  "none"),
     ("Grouper",   (7.0, 4.6), "fan",    0.9, 0.7, "blunt",  "blotch"),
+    ("Seahorse",  (3.0, 6.4), "point",  1.4, 0.4, "point",  "bands"),
+    ("Ray",       (9.0, 2.2), "point",  0.4, 0.4, "blunt",  "spots"),
+    ("Carp",      (8.0, 4.4), "fan",    0.8, 0.6, "blunt",  "bands"),
+    ("Perch",     (6.4, 4.2), "fork",   1.1, 0.8, "point",  "bands"),
+    ("Snapper",   (7.2, 4.8), "fork",   0.9, 0.7, "point",  "blotch"),
+    ("Bass",      (7.8, 4.2), "fan",    1.0, 0.7, "blunt",  "spots"),
+    ("Minnow",    (3.8, 2.4), "fork",   0.6, 0.5, "point",  "none"),
+    ("Discus",    (5.2, 6.0), "point",  1.5, 1.4, "blunt",  "bands"),
 ]
 
 FISH_COLOURS = [
@@ -394,21 +431,22 @@ def _draw_fish(g, spec, cx, cy, scale):
 
 def fish():
     specs = []
-    poses = [("", 1.0, {}), (" Young", 0.76, {}), (" Large", 1.14, {}),
-             (" Finned", 1.0, {"dorsal": 0.9, "ventral": 0.8}),
-             (" Sleek", 1.0, {"dorsal": -0.35, "ventral": -0.3})]
+    poses = [("", 0.96, {}), (" Small", 0.72, {}),
+             (" Finned", 0.96, {"dorsal": 1.2, "ventral": 1.0}),
+             (" Sleek", 0.78, {"dorsal": -0.4, "ventral": -0.35}),
+             (" Spotted", 0.96, {"stripe": "spots"})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, body, tail, dor, ven, snout, stripe) in enumerate(FISH_SPECIES):
             specs.append(dict(
-                name=f"{name}{suffix}",
+                name=f"{name}{suffix}", fill=sc,
                 parts=((body[0], body[1]),
                        tail,
                        max(0.0, dor + tw.get("dorsal", 0)),
                        max(0.0, ven + tw.get("ventral", 0)),
-                       snout, stripe),
+                       snout, tw.get("stripe", stripe)),
                 cols=FISH_COLOURS[(si * 3 + pi) % len(FISH_COLOURS)],
                 bg=_pick_bg(FISH_COLOURS[(si * 3 + pi) % len(FISH_COLOURS)][0], WATER, si + pi),
-                tags=["fish", name.lower()], scale=sc))
+                tags=["fish", name.lower()], scale=1.0))
     return _emit("fish", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_fish(g, s, x, y, k * s["scale"]),
                                    sp, sp["bg"]), 100)
@@ -417,27 +455,36 @@ def fish():
 # ── BUGS ─────────────────────────────────────────────────────────────────────
 
 BUG_SPECIES = [
-    # name          plan        wings   legs segs antennae extras
-    ("Ladybug",     "beetle",   0,      6,  1,  2, "spots"),
-    ("Beetle",      "beetle",   0,      6,  1,  2, "split"),
-    ("Stag Beetle", "beetle",   0,      6,  1,  2, "horns"),
-    ("Butterfly",   "flier",    2,      6,  3,  2, "wingdot"),
-    ("Moth",        "flier",    2,      6,  3,  2, "furry"),
-    ("Dragonfly",   "flier",    4,      6,  5,  2, "long"),
-    ("Bee",         "flier",    2,      6,  3,  2, "bands"),
-    ("Wasp",        "flier",    2,      6,  4,  2, "waist"),
-    ("Ant",         "walker",   0,      6,  3,  2, "none"),
-    ("Grasshopper", "walker",   0,      6,  2,  2, "jump"),
-    ("Cricket",     "walker",   0,      6,  2,  2, "jump"),
-    ("Mantis",      "walker",   0,      6,  3,  2, "claws"),
-    ("Caterpillar", "crawler",  0,      8,  7,  2, "none"),
-    ("Centipede",   "crawler",  0,     14, 10,  2, "none"),
-    ("Spider",      "spider",   0,      8,  2,  0, "none"),
-    ("Scorpion",    "spider",   0,      8,  4,  0, "sting"),
-    ("Snail",       "snail",    0,      0,  1,  2, "shell"),
-    ("Firefly",     "flier",    2,      6,  3,  2, "glow"),
-    ("Cicada",      "flier",    2,      6,  2,  2, "none"),
-    ("Weevil",      "beetle",   0,      6,  1,  2, "snout"),
+    # name          plan       wings legs segs ants extra      body (len, width)
+    ("Ladybug",     "beetle",   0,   6,  1,  2, "spots",    (6.2, 5.2)),
+    ("Beetle",      "beetle",   0,   6,  1,  2, "split",    (7.4, 4.4)),
+    ("Stag Beetle", "beetle",   0,   6,  1,  2, "horns",    (8.2, 4.0)),
+    ("Weevil",      "beetle",   0,   6,  1,  2, "snout",    (5.6, 3.4)),
+    ("Chafer",      "beetle",   0,   6,  1,  2, "bands",    (6.8, 5.6)),
+    ("Butterfly",   "flier",    2,   6,  3,  2, "wingdot",  (6.4, 2.6)),
+    ("Moth",        "flier",    2,   6,  3,  2, "furry",    (5.6, 3.4)),
+    ("Dragonfly",   "flier",    4,   6,  5,  2, "long",     (10.4, 1.8)),
+    ("Damselfly",   "flier",    4,   6,  6,  2, "long",     (9.0, 1.4)),
+    ("Bee",         "flier",    2,   6,  3,  2, "bands",    (5.4, 3.8)),
+    ("Wasp",        "flier",    2,   6,  4,  2, "waist",    (7.0, 2.4)),
+    ("Hornet",      "flier",    2,   6,  4,  2, "bands",    (8.0, 3.0)),
+    ("Firefly",     "flier",    2,   6,  3,  2, "glow",     (6.0, 2.8)),
+    ("Cicada",      "flier",    2,   6,  2,  2, "none",     (6.6, 4.2)),
+    ("Ant",         "walker",   0,   6,  3,  2, "none",     (6.0, 2.2)),
+    ("Termite",     "walker",   0,   6,  3,  2, "bands",    (6.6, 2.8)),
+    ("Grasshopper", "walker",   0,   6,  2,  2, "jump",     (8.4, 2.6)),
+    ("Cricket",     "walker",   0,   6,  2,  2, "jump",     (7.0, 3.2)),
+    ("Mantis",      "walker",   0,   6,  3,  2, "claws",    (9.0, 2.0)),
+    ("Stick Insect","walker",   0,   6,  5,  2, "none",     (11.5, 1.2)),
+    ("Caterpillar", "crawler",  0,   8,  7,  2, "none",     (0, 0)),
+    ("Centipede",   "crawler",  0,  14, 10,  2, "none",     (0, 0)),
+    ("Millipede",   "crawler",  0,  18, 13,  2, "none",     (0, 0)),
+    ("Grub",        "crawler",  0,   6,  5,  2, "none",     (0, 0)),
+    ("Spider",      "spider",   0,   8,  2,  0, "none",     (4.0, 4.6)),
+    ("Tarantula",   "spider",   0,   8,  2,  0, "furry",    (5.4, 5.6)),
+    ("Scorpion",    "spider",   0,   8,  4,  0, "sting",    (4.4, 5.0)),
+    ("Snail",       "snail",    0,   0,  1,  2, "shell",    (0, 0)),
+    ("Slug",        "snail",    0,   0,  1,  2, "none",     (0, 0)),
 ]
 
 BUG_COLOURS = [
@@ -452,23 +499,33 @@ LEAF = ["light_green", "cream", "ivory", "toothpaste", "light_gray",
 
 
 def _draw_bug(g, spec, cx, cy, scale):
-    plan, wings, legs, segs, ants, extra = spec["parts"]
+    plan, wings, legs, segs, ants, extra, body = spec["parts"]
     main, accent, hi = spec["cols"]
     u = scale
 
     if plan in ("beetle", "flier", "walker"):
-        bl = 7 * u if plan != "walker" else 8 * u
-        bw = 4.6 * u if plan == "beetle" else 3.2 * u
+        # Proportions per species: a stick insect and a chafer share the walker
+        # and beetle plans but must not share a silhouette. One hard-coded body
+        # per plan is what collapsed twenty species into six shapes.
+        bl = body[0] * u
+        bw = body[1] * u
         for i in range(legs // 2):
             ly = cy - bl * 0.4 + i * bl * 0.55
             for sgn in (-1, 1):
                 g.line(cx + sgn * bw * 0.6, ly, cx + sgn * (bw + 4 * u),
                        ly + (2.4 * u if plan != "walker" else 3.6 * u), accent)
         if wings:
-            for sgn in (-1, 1):
-                g.ellipse(cx + sgn * bw * 1.5, cy - bl * 0.15, bw * 1.5, bl * 0.62, hi)
-                if wings == 4:
-                    g.ellipse(cx + sgn * bw * 1.35, cy + bl * 0.45, bw * 1.15, bl * 0.4, hi)
+            if extra in ("wingdot", "furry"):
+                # A butterfly is mostly wing. Drawn at the same scale as a
+                # bee's, it just read as a fly.
+                for sgn in (-1, 1):
+                    g.ellipse(cx + sgn * bw * 2.3, cy - bl * 0.45, bw * 2.3, bl * 0.75, hi)
+                    g.ellipse(cx + sgn * bw * 1.8, cy + bl * 0.55, bw * 1.8, bl * 0.55, hi)
+            else:
+                for sgn in (-1, 1):
+                    g.ellipse(cx + sgn * bw * 1.5, cy - bl * 0.15, bw * 1.5, bl * 0.62, hi)
+                    if wings == 4:
+                        g.ellipse(cx + sgn * bw * 1.35, cy + bl * 0.45, bw * 1.15, bl * 0.4, hi)
         g.ellipse(cx, cy, bw, bl, main)
         g.disc(cx, cy - bl - 1.2 * u, 2.4 * u, accent)
         if extra == "spots":
@@ -485,8 +542,8 @@ def _draw_bug(g, spec, cx, cy, scale):
                        cx + sgn * 4 * u, cy - bl - 6 * u, accent)
         elif extra == "wingdot":
             for sgn in (-1, 1):
-                g.disc(cx + sgn * bw * 1.8, cy - bl * 0.35, 1.5 * u, accent)
-                g.disc(cx + sgn * bw * 1.3, cy + bl * 0.2, 1.1 * u, main)
+                g.disc(cx + sgn * bw * 2.4, cy - bl * 0.55, 2.0 * u, accent)
+                g.disc(cx + sgn * bw * 1.7, cy + bl * 0.6, 1.4 * u, accent)
         elif extra == "glow":
             g.ellipse(cx, cy + bl * 0.7, bw * 0.8, bl * 0.3, hi)
         elif extra == "waist":
@@ -509,8 +566,15 @@ def _draw_bug(g, spec, cx, cy, scale):
                 g.line(sx, cy + 2 * u, sx, cy + 5 * u, accent)
         hy = cy - 2 * u
     elif plan == "spider":
-        g.ellipse(cx, cy + 2 * u, 4.0 * u, 4.6 * u, main)
-        g.disc(cx, cy - 2.6 * u, 2.6 * u, accent)
+        g.ellipse(cx, cy + 2 * u, body[0] * u, body[1] * u, main)
+        g.disc(cx, cy - body[1] * 0.6 * u, 2.6 * u, accent)
+        if extra == "furry":
+            for k in range(10):
+                a = k * math.pi / 5
+                g.line(cx + math.cos(a) * body[0] * 0.9 * u,
+                       cy + 2 * u + math.sin(a) * body[1] * 0.9 * u,
+                       cx + math.cos(a) * (body[0] + 1.6) * u,
+                       cy + 2 * u + math.sin(a) * (body[1] + 1.6) * u, main, t=0)
         for i in range(4):
             for sgn in (-1, 1):
                 a = -0.9 + i * 0.55
@@ -520,10 +584,14 @@ def _draw_bug(g, spec, cx, cy, scale):
             g.line(cx, cy + 6 * u, cx + 7 * u, cy + 1 * u, accent)
             g.disc(cx + 7.6 * u, cy + 0.4 * u, 1.4 * u, hi)
         hy = cy - 2.6 * u
-    else:   # snail
+    else:   # snail / slug
         g.ellipse(cx - 1.5 * u, cy + 3.4 * u, 6.5 * u, 2.2 * u, accent)
-        for k in range(4):
-            g.ring(cx + 1.5 * u, cy, (6.2 - k * 1.5) * u, main if k % 2 == 0 else hi, t=1.4 * u)
+        if extra == "shell":
+            for k in range(4):
+                g.ring(cx + 1.5 * u, cy, (6.2 - k * 1.5) * u,
+                       main if k % 2 == 0 else hi, t=1.4 * u)
+        else:
+            g.ellipse(cx + 0.5 * u, cy + 1.4 * u, 5.6 * u, 2.4 * u, main)
         hy = cy + 1.5 * u
         cx = cx - 6 * u
 
@@ -541,19 +609,21 @@ def bugs():
     # A "Winged" spider is still a spider, so the first cut lost a third of the
     # category to structural collisions; leg count and segment count move
     # something in every plan.
-    poses = [("", 1.0, {}), (" Small", 0.74, {}), (" Large", 1.18, {}),
-             (" Long", 1.0, {"segs": +2, "legs": +2}),
-             (" Slender", 0.9, {"segs": +1, "legs": -2})]
+    poses = [("", 0.96, {}), (" Small", 0.72, {}),
+             (" Long", 0.96, {"segs": +3, "legs": +4}),
+             (" Slender", 0.78, {"segs": +1, "legs": -2}),
+             (" Antennaed", 0.96, {"ants": +2, "segs": +2})]
     for pi, (suffix, sc, tw) in enumerate(poses):
-        for si, (name, plan, wings, legs, segs, ants, extra) in enumerate(BUG_SPECIES):
+        for si, (name, plan, wings, legs, segs, ants, extra, body) in enumerate(BUG_SPECIES):
             w2 = wings + tw.get("wings", 0) if plan == "flier" else wings
             specs.append(dict(
                 name=f"{name}{suffix}",
                 parts=(plan, w2, max(4, legs + tw.get("legs", 0)),
-                       max(1, segs + tw.get("segs", 0)), ants, extra),
+                       max(1, segs + tw.get("segs", 0)),
+                       ants + tw.get("ants", 0), extra, body),
                 cols=BUG_COLOURS[(si * 7 + pi) % len(BUG_COLOURS)],
                 bg=_pick_bg(BUG_COLOURS[(si * 7 + pi) % len(BUG_COLOURS)][0], LEAF, si + pi),
-                tags=["bug", name.lower()], scale=sc))
+                fill=sc, tags=["bug", name.lower()], scale=1.0))
     return _emit("bugs", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_bug(g, s, x, y, k * s["scale"]),
                                    sp, sp["bg"]), 100)
@@ -583,6 +653,14 @@ TREE_SPECIES = [
     ("Bamboo",      "bamboo",  5,   (1.6, 16), 0,  "none"),
     ("Mushroom",    "cap",     0,   (3.0, 7),  0,  "spots"),
     ("Topiary",     "ball",    3,   (1.8, 6),  0,  "none"),
+    ("Redwood",     "conifer", 6,   (2.6, 6),  0,  "none"),
+    ("Juniper",     "cloud",   4,   (2.0, 4),  3,  "none"),
+    ("Olive",       "flat",    1,   (2.4, 7),  3,  "fruit"),
+    ("Magnolia",    "round",   1,   (2.4, 6),  2,  "blossom"),
+    ("Aspen",       "oval",    1,   (1.6, 11), 0,  "bands"),
+    ("Yew",         "column",  1,   (2.4, 4),  0,  "fruit"),
+    ("Fern",        "palm",    0,   (1.6, 5),  8,  "none"),
+    ("Dead Tree",   "bare",    0,   (2.0, 11), 6,  "none"),
 ]
 
 TREE_COLOURS = [
@@ -686,16 +764,18 @@ def _draw_tree(g, spec, cx, cy, scale):
 
 def trees():
     specs = []
-    poses = [("", 1.0, {}), (" Sapling", 0.7, {}), (" Old", 1.16, {}),
-             (" Tall", 1.0, {"trunk": 1.5}), (" Squat", 1.0, {"trunk": 0.6})]
+    poses = [("", 0.96, {}), (" Sapling", 0.72, {}),
+             (" Tall", 0.96, {"trunk": 1.9}), (" Squat", 0.96, {"trunk": 0.45}),
+             (" Young", 0.78, {"trunk": 1.2, "tiers": -1})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, crown, tiers, trunk, branch, extra) in enumerate(TREE_SPECIES):
             tr = (trunk[0], trunk[1] * tw.get("trunk", 1.0))
             specs.append(dict(
-                name=f"{name}{suffix}", parts=(crown, tiers, tr, branch, extra),
+                name=f"{name}{suffix}", fill=sc,
+                parts=(crown, max(1, tiers + tw.get("tiers", 0)), tr, branch, extra),
                 cols=TREE_COLOURS[(si * 3 + pi) % len(TREE_COLOURS)],
                 bg=_pick_bg(TREE_COLOURS[(si * 3 + pi) % len(TREE_COLOURS)][0], SKY, si + pi),
-                tags=["tree", name.lower()], scale=sc))
+                tags=["tree", name.lower()], scale=1.0))
     return _emit("trees", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_tree(g, s, x, y, k * s["scale"]),
                                    sp, sp["bg"]), 100)
@@ -899,18 +979,19 @@ def _draw_animal(g, spec, cx, cy, scale):
 
 def animals():
     specs = []
-    poses = [("", 1.0, {}), (" Cub", 0.72, {}), (" Big", 1.16, {}),
-             (" Standing", 1.0, {"legs": 1.7}), (" Crouching", 1.0, {"legs": 0.45})]
+    poses = [("", 0.96, {}), (" Cub", 0.72, {}),
+             (" Standing", 0.96, {"legs": 2.1}), (" Crouching", 0.96, {"legs": 0.3}),
+             (" Grazing", 0.78, {"legs": 1.4, "neck": -0.6})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, body, neck, head, ear, snout, tail, legs, mark) in enumerate(ANIMAL_SPECIES):
             specs.append(dict(
                 name=f"{name}{suffix}",
-                parts=(body, neck, head, ear, snout, tail,
-                       legs * tw.get("legs", 1.0), mark),
+                parts=(body, max(0.0, neck + tw.get("neck", 0)), head, ear, snout,
+                       tail, legs * tw.get("legs", 1.0), mark),
                 cols=ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)],
                 bg=_pick_bg(ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)][0],
                             FIELD, si + pi),
-                tags=["animal", name.lower()], scale=sc))
+                fill=sc, tags=["animal", name.lower()], scale=1.0))
     return _emit("animals", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_animal(g, s, x, y, k * s["scale"]),
                                    sp, sp["bg"]), 100)

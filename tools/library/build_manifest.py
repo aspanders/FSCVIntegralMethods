@@ -26,9 +26,11 @@ import gen_3d
 import gen_circles
 import gen_creatures
 import gen_objects
+import gen_faces
 import gen_library
 import gen_library2
 import compact
+import uniqueness
 from beadlib import REPO, CATEGORIES
 
 LIB = os.path.join(REPO, "library")
@@ -58,24 +60,61 @@ def collect():
     # an id-based filter shipped both and doubled the category.
     rebuilt = dict(gen_creatures.GENERATORS)
     rebuilt.update(gen_objects.GENERATORS)
-    patterns = [p for p in patterns if p["category"] not in rebuilt]
+    rebuilt.update(gen_faces.GENERATORS)
+    # space is TOPPED UP rather than replaced: the planets and suns are fine,
+    # there just are not a hundred distinct ways to draw a disc.
+    topped_up = {"space"}
+    patterns = [p for p in patterns
+                if p["category"] not in rebuilt or p["category"] in topped_up]
     for fn in rebuilt.values():
         patterns += fn()
     if os.path.exists(INCOMING):
         patterns += json.load(open(INCOMING))
     # de-dup by id (later wins)
     by_id = {p["id"]: p for p in patterns}
-    return _interleave(list(by_id.values()))
+    return _interleave(_distinct_per_category(list(by_id.values())))
 
 
-VARIANT_WORDS = {
-    # Suffixes the generators append to mark a variant of one design.
-    "Small", "Large", "Wide", "Tall", "Bold", "Fine", "Compact", "Long", "Big",
-    "Wheels", "Cub", "Standing", "Crouching", "Young", "Sleek", "Finned",
-    "Winged", "Slender", "Perched", "Calling", "Fledgling", "Alert", "Sapling",
-    "Old", "Squat", "Bud", "Full", "Double", "Simple", "Tile", "Knockout",
-    "Shadow",
-}
+def _is_blank(p):
+    from collections import Counter
+    cells = p.get("cells") or compact.from_rows(p.get("rows", []), p["palette"])
+    w, h = p["grid"]["width"], p["grid"]["height"]
+    ids = [c.get("colorId") for c in cells if c.get("colorId")]
+    if not ids:
+        return True
+    return Counter(ids).most_common(1)[0][1] / (w * h) >= 0.995
+
+
+def _distinct_per_category(patterns):
+    """Drop patterns that look like one already in the same category.
+
+    Structural uniqueness is an EXACT match and so passes at 100% while a
+    category is still full of pairs nobody could tell apart - 4384 of them at
+    one point, mostly consecutive steps of a parameter sweep. This is the
+    backstop: no shipped pattern shares 95% of its cells with another in the
+    same category, whatever the generator did.
+    """
+    from collections import OrderedDict
+    by_cat = OrderedDict()
+    for p in patterns:
+        by_cat.setdefault(p["category"], []).append(p)
+    # Some categories are defined by completeness, not by novelty. An alphabet
+    # missing D, F and N because they resemble O, E and M is worse than one
+    # containing all three: the letters ARE similar, and a user looking for a D
+    # is not consoled by its absence being principled.
+    LENIENT = {"icons": 1.0}
+    out = []
+    for cat, lst in by_cat.items():
+        # A board covered by a single colour is a blank, not a pattern. One
+        # slipped through as "Square Grid s4", where the grid spacing happened
+        # to make the squares meet.
+        lst = [p for p in lst if not _is_blank(p)]
+        keep = uniqueness.select_distinct(lst, threshold=LENIENT.get(cat, 0.95))
+        if len(keep) < len(lst):
+            print(f"  {cat}: dropped {len(lst) - len(keep)} lookalikes "
+                  f"({len(lst)} -> {len(keep)})")
+        out += keep
+    return out
 
 
 def _interleave(patterns):
@@ -96,15 +135,10 @@ def _interleave(patterns):
     for cat, lst in by_cat.items():
         fams = OrderedDict()
         for p in lst:
-            # The family is the title with its trailing VARIANT words removed:
-            # "Wren Perched" and "Wren Calling" are one family, "Robin" another.
-            # Taking the first word instead collapsed every letter into a single
-            # "Letter" family, so the icons category opened with one letter and
-            # then thirteen symbols.
-            words = p["title"].split()
-            while len(words) > 1 and words[-1] in VARIANT_WORDS:
-                words.pop()
-            fams.setdefault(" ".join(words), []).append(p)
+            # uniqueness.family_of strips both variant words and sequence
+            # numbers, so "Wren Perched" and "Wren Calling" are one family and
+            # "Planet 4" and "Planet 19" are too.
+            fams.setdefault(uniqueness.family_of(p["title"]), []).append(p)
         order = list(fams.values())
         i = 0
         while any(order):

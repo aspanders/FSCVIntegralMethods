@@ -26,17 +26,17 @@ from collections import Counter, defaultdict
 
 from beadlib import REPO
 from compact import from_rows
-from uniqueness import signature
+from uniqueness import family_of, signature
 
 PATTERNS = os.path.join(REPO, "library", "patterns.json")
 
 # Thresholds. Deliberately loose - these flag patterns worth LOOKING at, they
 # are not a pass mark.
 MIN_BEADS = 40          # below this there is barely a pattern to make
-MAX_DOMINANT = 0.93     # one colour taking more than this is nearly a blank
+MAX_DOMINANT = 0.90     # one colour over this share of the BOARD is near-blank
 MAX_SPECKLE = 0.15      # isolated beads as a fraction of all beads
 MIN_UNIQUE_FRAC = 0.80  # a category below this is mostly recolours
-
+NEAR_DUP = 0.95         # two boards sharing more than this are indistinguishable
 
 def grid_of(p):
     cells = p.get("cells") or from_rows(p.get("rows", []), p["palette"])
@@ -53,7 +53,11 @@ def measure(p):
     filled = [v for row in g for v in row if v]
     n = len(filled)
     counts = Counter(filled)
-    dom = counts.most_common(1)[0][1] / n if n else 1.0
+    # Share of the whole BOARD, not of the placed beads. Measured against the
+    # placed beads, a one-colour star silhouette on an empty board scores 100%
+    # and gets flagged as near-blank, which it plainly is not - 57 of the 105
+    # flags were exactly that.
+    dom = counts.most_common(1)[0][1] / (w * h) if n else 1.0
     iso = 0
     for y in range(h):
         for x in range(w):
@@ -65,7 +69,49 @@ def measure(p):
             if nb and all(u != v for u in nb):
                 iso += 1
     sym = sum(1 for y in range(h) for x in range(w) if g[y][x] == g[y][w - 1 - x]) / (w * h)
-    return dict(beads=n, colours=len(counts), dom=dom, speckle=iso / max(n, 1), sym=sym)
+    return dict(beads=n, colours=len(counts), dom=dom, fill=n / (w * h),
+                speckle=iso / max(n, 1), sym=sym)
+
+
+def near_duplicates(patterns, threshold=NEAR_DUP):
+    """Pairs of patterns that share more than `threshold` of their cells.
+
+    uniqueness.signature is an EXACT match, so two boards differing by a single
+    bead both count as distinct. That is the gap this closes: a category can
+    report 100% unique while being full of pairs nobody could tell apart. The
+    comparison is colour-agnostic - it compares which cells share a colour, not
+    which colour they share - so a recolour still collapses.
+    """
+    import numpy as np
+    by_size = defaultdict(list)
+    for p in patterns:
+        by_size[(p["grid"]["width"], p["grid"]["height"])].append(p)
+    out = []
+    for (w, h), group in by_size.items():
+        if len(group) < 2:
+            continue
+        rows = []
+        for p in group:
+            cells = p.get("cells") or from_rows(p.get("rows", []), p["palette"])
+            g = np.zeros(w * h, dtype=np.int16)
+            idx = {}
+            for c in cells:
+                cid = c.get("colorId")
+                if cid is None:
+                    continue
+                if cid not in idx:
+                    idx[cid] = len(idx) + 1
+                g[c["y"] * w + c["x"]] = idx[cid]
+            rows.append(g)
+        M = np.stack(rows)
+        for i in range(len(group)):
+            same = (M[i + 1:] == M[i]).mean(axis=1)
+            for j in np.nonzero(same >= threshold)[0]:
+                a, b = group[i]["title"], group[i + 1 + int(j)]["title"]
+                out.append((float(same[j]), a, b,
+                            family_of(a) == family_of(b)))
+    out.sort(reverse=True)
+    return out
 
 
 def exact_key(p):
@@ -94,8 +140,13 @@ def audit(patterns):
                 failures["near-blank"].append((cat, p["title"], round(100 * m["dom"])))
             if m["speckle"] > MAX_SPECKLE:
                 failures["speckled"].append((cat, p["title"], round(100 * m["speckle"])))
+        near = near_duplicates(lst)
+        same_fam = [x for x in near if x[3]]
+        cross_fam = [x for x in near if not x[3]]
         rows.append(dict(
             cat=cat, n=len(lst), uniq=uniq, frac=uniq / len(lst), dups=dups,
+            near=len(near), samefam=len(same_fam), crossfam=len(cross_fam),
+            worst=near[0] if near else None,
             beads=sum(m["beads"] for m in ms) / len(ms),
             colours=sum(m["colours"] for m in ms) / len(ms),
             speckle=sum(m["speckle"] for m in ms) / len(ms)))
@@ -150,21 +201,33 @@ def main():
         return
 
     rows, failures = audit(patterns)
-    print(f"{'category':<12}{'n':>5}{'unique':>8}{'%':>6}{'exactDup':>10}"
-          f"{'beads':>7}{'cols':>6}{'speckle':>9}")
+    print(f"{'category':<12}{'n':>5}{'unique':>8}{'%':>6}{'exactDup':>9}"
+          f"{'sameFam':>9}{'crossFam':>9}{'beads':>7}{'speckle':>9}")
     worst = []
     for r in rows:
         mark = "  <-- mostly recolours" if r["frac"] < MIN_UNIQUE_FRAC else ""
         if mark:
             worst.append(r)
+        flag = "  <-- lookalikes" if r["near"] else ""
         print(f"{r['cat']:<12}{r['n']:>5}{r['uniq']:>8}{100*r['frac']:>5.0f}%"
-              f"{r['dups']:>10}{r['beads']:>7.0f}{r['colours']:>6.1f}"
-              f"{100*r['speckle']:>8.1f}%{mark}")
+              f"{r['dups']:>9}{r['samefam']:>9}{r['crossfam']:>9}{r['beads']:>7.0f}"
+              f"{100*r['speckle']:>8.1f}%{mark or flag}")
     n = sum(r["n"] for r in rows)
     u = sum(r["uniq"] for r in rows)
     d = sum(r["dups"] for r in rows)
+    sf = sum(r["samefam"] for r in rows)
+    cf = sum(r["crossfam"] for r in rows)
     print(f"\n{n} patterns, {u} distinct designs ({100*u/n:.1f}%), "
           f"{d} exact duplicates")
+    print(f"lookalike pairs at >={100*NEAR_DUP:.0f}% identical cells: "
+          f"{sf} same-family (pointless variants), {cf} cross-family "
+          f"(designs that render the same)")
+    for r in rows:
+        if r["worst"]:
+            sc, a, b, same = r["worst"]
+            kind = "same-family" if same else "CROSS-FAMILY"
+            print(f"    {r['cat']:<11} worst {100*sc:5.1f}%  {kind:<12} "
+                  f"{a}  ==  {b}")
     print(f"{len(worst)} categories below {100*MIN_UNIQUE_FRAC:.0f}% unique: "
           f"{', '.join(r['cat'] for r in worst) or 'none'}")
     for k, v in sorted(failures.items()):

@@ -114,7 +114,7 @@ def _draw_vehicle(g, spec, cx, cy, scale):
             for k in range(6):
                 g.rect(cx - ln * 0.45 + k * ln * 0.15, top - hg * 0.55,
                        cx - ln * 0.45 + k * ln * 0.15 + 0.8 * u, top - hg * 0.2, trim)
-            g.rect(cx - ln * 0.48, top - hg * 0.58, cx + ln * 0.05, top - hg * 0.48, trim)
+            g.rect(cx - ln * 0.48, top - hg * 0.72, cx + ln * 0.05, top - hg * 0.48, trim)
         elif extra == "arm":
             g.line(cx - ln * 0.1, top, cx - ln * 0.55, top - hg * 1.5, trim, t=1)
             g.poly([(cx - ln * 0.55, top - hg * 1.5), (cx - ln * 0.75, top - hg * 0.7),
@@ -220,8 +220,8 @@ def _draw_vehicle(g, spec, cx, cy, scale):
 
 def vehicles():
     specs = []
-    poses = [("", 1.0, {}), (" Compact", 0.82, {}), (" Long", 1.0, {"len": 1.28}),
-             (" Tall", 1.0, {"hgt": 1.45}), (" Big Wheels", 1.0, {"ws": 1.5})]
+    poses = [("", 0.96, {}), (" Compact", 0.72, {}), (" Long", 0.96, {"len": 1.45}),
+             (" Tall", 0.96, {"hgt": 1.7}), (" Big Wheels", 0.78, {"ws": 1.8})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, plan, ln, hg, cab, nw, ws, extra) in enumerate(VEHICLES):
             specs.append(dict(
@@ -230,10 +230,10 @@ def vehicles():
                        cab, nw, ws * tw.get("ws", 1.0), extra),
                 cols=VEH_COLOURS[(si * 3 + pi) % len(VEH_COLOURS)],
                 bg=_pick_bg(VEH_COLOURS[(si * 3 + pi) % len(VEH_COLOURS)][0], PALE, si + pi),
-                tags=["vehicle", name.lower()], scale=sc))
+                tags=["vehicle", name.lower()], fill=sc, scale=1.0))
     return _emit("vehicles", specs,
-                 lambda sp: _frame(lambda g, s, x, y, k: _draw_vehicle(g, s, x, y, k * s["scale"]),
-                                   sp, sp["bg"]), 100)
+                 lambda sp: _frame(lambda g, s, x, y, k: _draw_vehicle(g, s, x, y, k),
+                                   sp, sp["bg"], fill=sp["fill"]), 100)
 
 
 GENERATORS = {"vehicles": vehicles}
@@ -265,6 +265,16 @@ FLOWERS = [
     ("Chrysanthemum", 22, "needle",  3, 0.18, 0, 0, "none"),
     ("Bouquet",        8, "oval",    1, 0.30, 3, 2, "wrap"),
     ("Potted Plant",   6, "round",   1, 0.28, 1, 3, "pot"),
+    ("Water Lily",     8, "spoon",   2, 0.30, 0, 0, "pad"),
+    ("Peony",         20, "frill",   4, 0.14, 0, 0, "none"),
+    ("Zinnia",        16, "point",   2, 0.28, 0, 0, "none"),
+    ("Aster",         26, "needle",  2, 0.20, 0, 0, "none"),
+    ("Buttercup",      5, "round",   1, 0.30, 0, 0, "none"),
+    ("Snowdrop",       0, "bell",    2, 0.00, 1, 1, "none"),
+    ("Foxglove",       0, "bell",    5, 0.00, 1, 2, "none"),
+    ("Lavender",       0, "spike",   8, 0.00, 1, 2, "none"),
+    ("Clover",         3, "notch",   1, 0.18, 1, 1, "none"),
+    ("Camellia",      12, "oval",    4, 0.12, 0, 0, "none"),
 ]
 
 FLOWER_COLOURS = [
@@ -388,19 +398,21 @@ def _draw_flower(g, spec, cx, cy, scale):
 
 def flowers():
     specs = []
-    poses = [("", 1.0, {}), (" Bud", 0.72, {}), (" Full", 1.15, {}),
-             (" Double", 1.0, {"layers": +1}), (" Simple", 1.0, {"layers": -1})]
+    poses = [("", 0.96, {}), (" Bud", 0.72, {}),
+             (" Double", 0.96, {"layers": +2}), (" Simple", 0.96, {"layers": -1}),
+             (" Sprig", 0.78, {"stem": 1, "leaves": 2})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, pet, shape, lay, ctr, stem, lv, base) in enumerate(FLOWERS):
             specs.append(dict(
                 name=f"{name}{suffix}",
-                parts=(pet, shape, max(1, lay + tw.get("layers", 0)), ctr, stem, lv, base),
+                parts=(pet, shape, max(1, lay + tw.get("layers", 0)), ctr,
+                       tw.get("stem", stem), tw.get("leaves", lv), base),
                 cols=FLOWER_COLOURS[(si * 3 + pi) % len(FLOWER_COLOURS)],
                 bg=_pick_bg(FLOWER_COLOURS[(si * 3 + pi) % len(FLOWER_COLOURS)][0], PALE, si + pi),
-                tags=["flower", name.lower()], scale=sc))
+                tags=["flower", name.lower()], fill=sc, scale=1.0))
     return _emit("flowers", specs,
-                 lambda sp: _frame(lambda g, s, x, y, k: _draw_flower(g, s, x, y, k * s["scale"]),
-                                   sp, sp["bg"]), 100)
+                 lambda sp: _frame(lambda g, s, x, y, k: _draw_flower(g, s, x, y, k),
+                                   sp, sp["bg"], fill=sp["fill"]), 100)
 
 
 GENERATORS["flowers"] = flowers
@@ -463,18 +475,22 @@ def _recipe_category(cat, items, variants, target=100):
     whole point. Variants change shape.
     """
     specs = []
-    for vi, (suffix, sc, mut) in enumerate(variants):
+    for vi, (suffix, fill, mut, border) in enumerate(variants):
         for si, (name, cols, ops) in enumerate(items):
             specs.append(dict(name=f"{name}{suffix}", ops=mut(ops) if mut else ops,
-                              cols=cols, scale=sc,
+                              cols=cols, fill=fill, border=border,
                               bg=_pick_bg(cols[0], PALE, si + vi),
                               tags=[cat, name.lower()]))
 
     def build(sp):
         def draw(g, spec, cx, cy, k):
-            _run_ops(g, spec["ops"], cx, cy, k * spec["scale"], spec["cols"])
+            _run_ops(g, spec["ops"], cx, cy, k, spec["cols"])
             _outline(g, "black" if spec["cols"][0] != "black" else "dark_gray", None)
-        return _frame(draw, sp, sp["bg"])
+        out = _frame(draw, sp, sp["bg"], fill=sp["fill"])
+        if sp.get("border"):
+            out.frame(0, 0, out.w - 1, out.h - 1, sp["cols"][1], t=2)
+            out.frame(2, 2, out.w - 3, out.h - 3, sp["cols"][0], t=1)
+        return out
     return _emit(cat, specs, build, target)
 
 
@@ -623,8 +639,9 @@ FOOD_ITEMS = [
 
 def food():
     return _recipe_category("food", FOOD_ITEMS, [
-        ("", 1.0, None), (" Small", 0.76, None), (" Large", 1.18, None),
-        (" Wide", 1.0, _squash(0.72)), (" Tall", 1.0, _squash(1.32))])
+        ("", 0.96, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
+        (" Framed", 0.62, None, True)])
 
 
 GENERATORS["food"] = food
@@ -725,8 +742,9 @@ SWEET_ITEMS = [
 
 def sweets():
     return _recipe_category("sweets", SWEET_ITEMS, [
-        ("", 1.0, None), (" Small", 0.76, None), (" Large", 1.18, None),
-        (" Wide", 1.0, _squash(0.74)), (" Tall", 1.0, _squash(1.3))])
+        ("", 0.96, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
+        (" Framed", 0.62, None, True)])
 
 
 # ── SPORTS ───────────────────────────────────────────────────────────────────
@@ -833,8 +851,9 @@ SPORT_ITEMS = [
 
 def sports():
     return _recipe_category("sports", SPORT_ITEMS, [
-        ("", 1.0, None), (" Small", 0.76, None), (" Large", 1.18, None),
-        (" Wide", 1.0, _squash(0.74)), (" Tall", 1.0, _squash(1.3))])
+        ("", 0.96, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
+        (" Framed", 0.62, None, True)])
 
 
 GENERATORS.update({"sweets": sweets, "sports": sports})
@@ -948,8 +967,9 @@ HOLIDAY_ITEMS = [
 
 def holidays():
     return _recipe_category("holidays", HOLIDAY_ITEMS, [
-        ("", 1.0, None), (" Small", 0.76, None), (" Large", 1.18, None),
-        (" Wide", 1.0, _squash(0.74)), (" Tall", 1.0, _squash(1.3))])
+        ("", 0.96, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
+        (" Framed", 0.62, None, True)])
 
 
 # ── VIDEOGAME ────────────────────────────────────────────────────────────────
@@ -1052,8 +1072,9 @@ VG_ITEMS = [
 
 def videogame():
     return _recipe_category("videogame", VG_ITEMS, [
-        ("", 1.0, None), (" Small", 0.76, None), (" Large", 1.18, None),
-        (" Wide", 1.0, _squash(0.74)), (" Tall", 1.0, _squash(1.3))])
+        ("", 0.96, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
+        (" Framed", 0.62, None, True)])
 
 
 GENERATORS.update({"holidays": holidays, "videogame": videogame})
@@ -1184,8 +1205,8 @@ def rainbows():
              ("target", 6, 1.7, "none"), ("target", 4, 2.4, "none"),
              ("heart", 5, 0, "none"), ("steps", 6, 0, "none"), ("steps", 4, 0, "drops")]
     specs = []
-    for vi, (suffix, sc) in enumerate([("", 1.0), (" Bold", 1.0), (" Fine", 1.0),
-                                       (" Small", 0.78), (" Large", 1.12)]):
+    for vi, (suffix, sc) in enumerate([("", 0.96), (" Bold", 0.96), (" Fine", 0.96),
+                                       (" Small", 0.72), (" Wide", 0.84)]):
         for si, (form, bands, t, extra) in enumerate(forms):
             b = bands + (2 if suffix == " Fine" else (-1 if suffix == " Bold" else 0))
             tt = t * (0.75 if suffix == " Fine" else (1.35 if suffix == " Bold" else 1.0))
@@ -1194,10 +1215,10 @@ def rainbows():
                 parts=(form, max(2, b), tt, extra),
                 cols=BOWS[(si + vi) % len(BOWS)],
                 bg=_pick_bg("white", PALE, si + vi),
-                tags=["rainbow", form], scale=sc))
+                tags=["rainbow", form], fill=sc, scale=1.0))
     return _emit("rainbows", specs,
-                 lambda sp: _frame(lambda g, s, x, y, k: _draw_bow(g, s, x, y, k * s["scale"]),
-                                   sp, sp["bg"]), 100)
+                 lambda sp: _frame(lambda g, s, x, y, k: _draw_bow(g, s, x, y, k),
+                                   sp, sp["bg"], fill=sp["fill"]), 100)
 
 
 GENERATORS["rainbows"] = rainbows
@@ -1305,21 +1326,201 @@ def _draw_glyph(g, spec, cx, cy, scale):
 
 
 def icons():
-    styles = [("", "solid"), (" Tile", "tile"), (" Knockout", "knockout"),
-              (" Shadow", "shadow")]
+    styles = [("", "solid", 0.96), (" Small", "solid", 0.72),
+              (" Knockout", "knockout", 0.96), (" Shadow", "shadow", 0.86)]
     specs = []
-    for vi, (suffix, style) in enumerate(styles):
+    for vi, (suffix, style, fill) in enumerate(styles):
         for si, (name, rows) in enumerate(FONT.items()):
             title = name if len(name) > 1 else f"Letter {name}" if name.isalpha() \
                 else f"Number {name}"
             cols = ICON_COLOURS[(si + vi * 3) % len(ICON_COLOURS)]
             specs.append(dict(
                 name=f"{title}{suffix}", parts=(rows, style), cols=cols,
-                bg=_pick_bg(cols[0], PALE, si + vi),
+                bg=_pick_bg(cols[0], PALE, si + vi), fill=fill,
                 tags=["icon", name.lower()], scale=1.0))
+    # near=1.0: only exact duplicates are dropped. Letters are supposed to
+    # look like each other - the category's job is to have all of them.
     return _emit("icons", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_glyph(g, s, x, y, k),
-                                   sp, sp["bg"]), 120)
+                                   sp, sp["bg"], fill=sp["fill"]), 140, near=1.0)
 
 
 GENERATORS["icons"] = icons
+
+
+# ── SPACE ────────────────────────────────────────────────────────────────────
+# The old category was planets and suns: parameter sweeps of a disc, which the
+# distinctness filter cut to 75. These are the other things in the sky.
+
+SPACE_ITEMS = [
+    ("Rocket", ("white", "red", "sky_blue", "dark_gray"), [
+        ("p", [(-3.4, -4), (3.4, -4), (0, -11)], 0), ("r", -3.4, -4, 3.4, 6, 0),
+        ("r", -3.4, -1.6, 3.4, 0.6, 1), ("d", 0, 3, 2.2, 2),
+        ("p", [(-3.4, 2), (-7.4, 8), (-3.4, 8)], 1), ("p", [(3.4, 2), (7.4, 8), (3.4, 8)], 1),
+        ("p", [(-2.4, 6), (2.4, 6), (0, 11)], 1)]),
+    ("Saturn", ("cheddar", "banana", "caramel", "cream"), [
+        ("e", 0, 0, 11.0, 2.6, 1), ("d", 0, 0, 6.6, 0),
+        ("e", 0, -2.4, 5.6, 1.4, 2), ("e", 0, 2, 5.0, 1.2, 2),
+        ("clip", 12.0)]),
+    ("UFO", ("silver", "neon_green", "dark_gray", "aqua"), [
+        ("e", 0, 0, 10.4, 3.0, 0), ("d", 0, -3.4, 5.0, 1),
+        ("d", -5.4, 0.6, 1.4, 1), ("d", 0, 1.2, 1.4, 1), ("d", 5.4, 0.6, 1.4, 1),
+        ("p", [(-5, 3), (5, 3), (8, 9), (-8, 9)], 3)]),
+    ("Astronaut", ("white", "sky_blue", "silver", "red"), [
+        ("d", 0, -2, 7.4, 0), ("d", 0, -2, 5.4, 1),
+        ("r", -5.4, 4, 5.4, 10, 0), ("r", -8.4, 5, -5.4, 9, 0),
+        ("r", 5.4, 5, 8.4, 9, 0), ("r", -2, 4.4, 2, 6, 3)]),
+    ("Satellite", ("silver", "sky_blue", "dark_gray", "banana"), [
+        ("r", -2.6, -4, 2.6, 4, 0), ("r", -10.4, -3, -3, 3, 1),
+        ("r", 3, -3, 10.4, 3, 1), ("l", -10.4, 0, 10.4, 0, 0.5, 2),
+        ("d", 0, -7.4, 2.6, 2), ("l", 0, -5, 0, -4, 0.7, 2)]),
+    ("Comet", ("sky_blue", "white", "aqua", "banana"), [
+        ("d", 5, -4, 4.4, 1), ("p", [(2, -7), (-11, 6), (-6, 8), (4, -1)], 0),
+        ("p", [(4, -1), (-8, 9), (-3, 9), (6, 1)], 2)]),
+    ("Moon Phase", ("cream", "silver", "light_gray", "banana"), [
+        ("d", 0, 0, 9.4, 0), ("d", 5.4, 0, 8.0, None), ("d", 0, 0, 9.4, None),
+        ("d", 0, 0, 9.4, 0), ("d", 5.6, 0, 8.2, None),
+        ("d", -3.4, -3.4, 1.6, 1), ("d", -1.4, 3, 1.2, 1)]),
+    ("Telescope", ("dark_gray", "banana", "silver", "sky_blue"), [
+        ("p", [(-9, 4), (2, -7), (6, -3), (-5, 8)], 0),
+        ("e", 4, -5, 3.4, 2.6, 1), ("l", -2, 6, -2, 11, 1.0, 2),
+        ("l", -7, 11, 3, 11, 1.0, 2)]),
+    ("Galaxy", ("purple", "hot_pink", "aqua", "white"), [
+        ("d", 0, 0, 2.6, 3),
+        ("d", 4, -2, 2.2, 1), ("d", 7, 1, 1.8, 0), ("d", 6, 5, 1.5, 2),
+        ("d", -4, 2, 2.2, 1), ("d", -7, -1, 1.8, 0), ("d", -6, -5, 1.5, 2),
+        ("d", 1, -6, 1.5, 0), ("d", -1, 6, 1.5, 0),
+        ("d", 9, 4, 1.1, 2), ("d", -9, -4, 1.1, 2)]),
+    ("Space Station", ("silver", "sky_blue", "dark_gray", "red"), [
+        ("o", 0, 0, 9.0, 1.8, 0), ("r", -1.6, -9, 1.6, 9, 0),
+        ("r", -9, -1.6, 9, 1.6, 0), ("d", 0, 0, 3.4, 1),
+        ("d", 0, -9, 1.8, 3), ("d", 0, 9, 1.8, 3)]),
+    ("Asteroid", ("dark_gray", "light_gray", "black", "silver"), [
+        ("p", [(-9, -2), (-4, -8), (4, -7), (9, -1), (7, 6), (-2, 9), (-8, 5)], 0),
+        ("d", -3, -2, 2.2, 2), ("d", 3.4, 2, 1.8, 2), ("d", 1, -4.4, 1.4, 2)]),
+    ("Earth", ("blue", "dark_green", "white", "aqua"), [
+        ("d", 0, 0, 9.4, 0),
+        ("p", [(-6, -5), (-1, -6), (1, -1), (-4, 1), (-7, -1)], 1),
+        ("p", [(2, 1), (7, -1), (8, 4), (3, 6)], 1),
+        ("p", [(-5, 4), (-1, 3), (-2, 7), (-6, 7)], 1), ("clip", 9.4)]),
+    ("Constellation", ("banana", "white", "sky_blue", "navy"), [
+        ("l", -8, -6, -2, -2, 0.5, 2), ("l", -2, -2, 3, -7, 0.5, 2),
+        ("l", 3, -7, 8, -3, 0.5, 2), ("l", -2, -2, 0, 4, 0.5, 2),
+        ("l", 0, 4, 6, 7, 0.5, 2), ("l", 0, 4, -6, 8, 0.5, 2),
+        ("d", -8, -6, 1.8, 0), ("d", -2, -2, 2.2, 0), ("d", 3, -7, 1.8, 0),
+        ("d", 8, -3, 1.8, 0), ("d", 0, 4, 2.2, 0), ("d", 6, 7, 1.6, 0),
+        ("d", -6, 8, 1.6, 0)]),
+    ("Shooting Star", ("banana", "white", "cheddar", "sky_blue"), [
+        ("p", [(4, -7), (6.2, -1.4), (11.6, -1.4), (7.2, 2), (9, 7.4),
+               (4, 4), (-1, 7.4), (0.8, 2), (-3.6, -1.4), (1.8, -1.4)], 0),
+        ("p", [(-1, -2), (-11, 5), (-8, 7), (0, 1)], 1),
+        ("p", [(0, 1), (-9, 9), (-5, 9), (2, 3)], 2)]),
+    ("Black Hole", ("black", "orange", "banana", "dark_purple"), [
+        ("o", 0, 0, 10.4, 1.6, 1), ("o", 0, 0, 8.4, 1.4, 2),
+        ("o", 0, 0, 6.6, 1.2, 1), ("d", 0, 0, 5.0, 0)]),
+    ("Alien Ship", ("neon_green", "silver", "dark_green", "aqua"), [
+        ("e", 0, 2, 10.4, 3.4, 1), ("d", 0, -2.4, 5.6, 0),
+        ("o", 0, -2.4, 5.6, 1.0, 2), ("r", -1, 5, 1, 11, 3),
+        ("p", [(-5, 11), (5, 11), (7, 13), (-7, 13)], 3)]),
+]
+
+
+def space():
+    return _recipe_category("space", SPACE_ITEMS, [
+        ("", 0.96, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
+        (" Framed", 0.62, None, True)], target=60)
+
+
+GENERATORS["space"] = space
+
+
+# ── GEMS ─────────────────────────────────────────────────────────────────────
+# The old gems were discs and ovals with a highlight: identifiable as "a shiny
+# blob", not as a cut stone. A cut stone reads from its FACETS - a table, a
+# crown and a girdle - so these are drawn as facet polygons rather than as an
+# outline with a sparkle inside.
+
+def _facets(top, bot, w, table, col_a, col_b, girdle):
+    """Standard brilliant-style facet set for a stone of half-width w."""
+    return [
+        ("p", [(-table, top), (table, top), (w, girdle), (-w, girdle)], 0),
+        ("p", [(-w, girdle), (w, girdle), (0, bot)], 1),
+        ("p", [(-table, top), (0, top - 0.1), (0, girdle), (-w * 0.45, girdle)], 2),
+        ("p", [(table, top), (0, top - 0.1), (0, girdle), (w * 0.45, girdle)], 3),
+        ("l", -w, girdle, w, girdle, 0.5, 2),
+        ("l", -w * 0.45, girdle, 0, bot, 0.4, 3),
+        ("l", w * 0.45, girdle, 0, bot, 0.4, 3),
+    ]
+
+
+GEM_CUTS = [
+    ("Round Brilliant", (-8.5, 9.5, 9.0, 4.5, -3.0)),
+    ("Emerald Cut",     (-9.5, 9.0, 6.5, 5.5, -5.0)),
+    ("Princess Cut",    (-9.0, 9.5, 8.0, 7.5, -6.0)),
+    ("Marquise",        (-9.5, 9.5, 5.5, 2.0, -1.0)),
+    ("Pear Cut",        (-9.5, 9.5, 7.0, 2.5, 1.0)),
+    ("Oval Cut",        (-9.0, 9.0, 7.0, 4.0, -2.0)),
+    ("Cushion Cut",     (-8.5, 9.0, 8.5, 6.0, -4.0)),
+    ("Trillion",        (-9.0, 8.0, 9.5, 8.0, -7.0)),
+    ("Baguette",        (-9.5, 9.5, 4.5, 4.2, -6.5)),
+    ("Asscher",         (-9.0, 9.0, 7.5, 6.5, -5.5)),
+    ("Radiant",         (-9.0, 9.5, 8.5, 6.5, -5.0)),
+    ("Heart Cut",       (-8.0, 9.5, 8.5, 3.0, -2.0)),
+]
+
+GEM_COLOURS = [
+    ("red", "dark_red", "hot_pink", "blush"),
+    ("blue", "navy", "sky_blue", "aqua"),
+    ("green", "dark_green", "light_green", "toothpaste"),
+    ("purple", "dark_purple", "lavender", "light_lavender"),
+    ("aqua", "teal", "toothpaste", "white"),
+    ("banana", "cheddar", "cream", "white"),
+    ("magenta", "purple", "light_pink", "blush"),
+    ("orange", "rust", "cheddar", "banana"),
+    ("light_gray", "silver", "white", "cream"),
+    ("dark_red", "black", "red", "blush"),
+]
+
+
+def gems():
+    items = []
+    # Colour is invisible to the distinctness test, so cycling ten colours per
+    # cut produced ten identical boards. Proportion is what actually varies a
+    # stone: table width, girdle height and half-width, which is also what
+    # separates a real Asscher from a real Emerald cut.
+    PROPS = [(1.00, 1.00, 0.0), (0.72, 1.00, 0.0), (1.28, 1.00, 0.0),
+             (1.00, 0.80, 0.0), (1.00, 1.18, 0.0), (1.00, 1.00, -2.5),
+             (1.00, 1.00, 2.5), (0.80, 1.15, -1.5)]
+    for name, (top, bot, w, table, girdle) in GEM_CUTS:
+        for ci, (ts, ws, gs) in enumerate(PROPS):
+            cols = GEM_COLOURS[(len(items) + ci) % len(GEM_COLOURS)]
+            table_i = table * ts
+            w_i = w * ws
+            girdle_i = girdle + gs
+            ops = _facets(top, bot, w_i, table_i, cols[0], cols[1], girdle_i)
+            if name == "Heart Cut":
+                ops = [("d", -w_i * 0.48, top + 2.4, w_i * 0.55, 0),
+                       ("d", w_i * 0.48, top + 2.4, w_i * 0.55, 0),
+                       ("p", [(-w_i, top + 3.2), (w_i, top + 3.2), (0, bot)], 0),
+                       ("l", 0, top + 2.0, 0, bot, 0.5, 2),
+                       ("p", [(-w_i * 0.62, top + 3.2), (0, top + 3.2), (0, bot * 0.7)], 1)]
+            elif name == "Marquise":
+                ops = [("e", 0, 0.5, w_i, 9.4 * ts, 0),
+                       ("e", 0, 0.5, w_i * 0.55, 6.4 * ts, 2),
+                       ("l", -w_i, 0.5, w_i, 0.5, 0.5, 1),
+                       ("l", 0, -9, 0, 10, 0.5, 1)]
+            elif name == "Pear Cut":
+                ops = [("d", 0, 3.4, w_i, 0),
+                       ("p", [(-w_i, 3.4), (w_i, 3.4), (0, top)], 0),
+                       ("l", -w_i, 3.4, w_i, 3.4, 0.5, 1),
+                       ("p", [(-w_i * 0.5, 3.4), (w_i * 0.5, 3.4), (0, top * 0.55)], 2),
+                       ("d", 0, 4.4, w_i * 0.42, 1)]
+            items.append((f"{name} {ci + 1}", cols, ops))
+    return _recipe_category("gems", items, [
+        ("", 0.94, None, False), (" Small", 0.72, None, False),
+        (" Wide", 0.94, _squash(0.66), False), (" Framed", 0.62, None, True)],
+        target=120)
+
+
+GENERATORS["gems"] = gems

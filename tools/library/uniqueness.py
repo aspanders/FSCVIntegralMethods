@@ -4,6 +4,8 @@ A pattern's signature is COLOR-AGNOSTIC: the grid of palette indices in
 first-appearance order. Two patterns that differ only by color collapse to the
 same signature, so `dedup` drops pure recolors and keeps only distinct designs.
 """
+import re
+
 from compact import from_rows
 
 
@@ -52,3 +54,94 @@ def colored_signature(p):
 
 def count_unique(patterns):
     return len({signature(p) for p in patterns})
+
+
+# ── Visual distinctness ──────────────────────────────────────────────────────
+
+def cell_map(p, w=None, h=None):
+    """Colour-agnostic index map: which cells share a colour, not which colour.
+
+    A recolour collapses onto its original, exactly as `signature` intends -
+    but unlike `signature` this supports comparing two boards that are ALMOST
+    the same, which is the failure `signature` cannot see. Two patterns can
+    differ by one bead and both count as unique while looking identical.
+    """
+    import numpy as np
+    cells = p.get("cells")
+    if cells is None:
+        cells = from_rows(p.get("rows", []), p["palette"])
+    w = w or p["grid"]["width"]
+    h = h or p["grid"]["height"]
+    g = np.zeros(w * h, dtype=np.int16)
+    idx = {}
+    for c in cells:
+        cid = c.get("colorId")
+        if cid is None:
+            continue
+        if cid not in idx:
+            idx[cid] = len(idx) + 1
+        x, y = c["x"], c["y"]
+        if 0 <= x < w and 0 <= y < h:
+            g[y * w + x] = idx[cid]
+    return g
+
+
+def select_distinct(patterns, limit=None, threshold=0.95):
+    """Greedily keep patterns that no earlier kept pattern looks like.
+
+    Generators sweep parameters, and a sweep fine enough to fill a category is
+    usually finer than the eye: mandalas 225 and 243 shared 99.8% of their
+    cells. Rather than hand-tuning every stride, over-generate and let this
+    decide what actually reads as a different design.
+
+    Boards of different sizes are trivially distinct, so they are compared only
+    within their own size.
+    """
+    import numpy as np
+    kept, kept_by_size = [], {}
+    for p in patterns:
+        size = (p["grid"]["width"], p["grid"]["height"])
+        v = cell_map(p)
+        stack = kept_by_size.get(size)
+        if stack is not None and len(stack):
+            if (np.stack(stack) == v).mean(axis=1).max() >= threshold:
+                continue
+        kept_by_size.setdefault(size, []).append(v)
+        kept.append(p)
+        if limit and len(kept) >= limit:
+            break
+    return kept
+
+
+# Suffixes generators append to mark a variant of one design.
+VARIANT_WORDS = {
+    "Small", "Large", "Wide", "Tall", "Bold", "Fine", "Compact", "Long", "Big",
+    "Wheels", "Cub", "Standing", "Crouching", "Grazing", "Young", "Sleek",
+    "Finned", "Spotted", "Winged", "Slender", "Antennaed", "Perched", "Calling",
+    "Fledgling", "Alert", "Out", "Wings", "Sapling", "Old", "Squat", "Bud",
+    "Full", "Double", "Simple", "Sprig", "Tile", "Knockout", "Shadow", "Framed",
+    "Silhouette", "Outline", "Grin", "Laughing", "Sad", "Wink", "Love", "Cool",
+    "Surprised", "Angry", "Sleepy", "Silly", "Starry",
+}
+
+
+_PARAM_TAG = re.compile(r"^[a-z]{1,2}[-0-9.]+$")
+
+
+def family_of(title):
+    """The design a title belongs to, ignoring variant and sequence suffixes.
+
+    Three kinds of suffix have to go: variant words ("Wren Perched"), bare
+    sequence numbers ("Planet 4"), and the parameter tags generators append
+    ("Vert Stripes w1", "4-Point r0.46 z0.47"). Treating any of them as part of
+    the name makes every sweep member its own family, which both mislabels
+    lookalike pairs as cross-family and defeats interleaving a category by
+    family - round-robin over 75 one-member families reproduces the original
+    order exactly, so geometric still opened with fourteen stripe patterns.
+    """
+    words = title.split()
+    while len(words) > 1 and (words[-1] in VARIANT_WORDS or
+                              words[-1].replace(".", "").isdigit() or
+                              _PARAM_TAG.match(words[-1])):
+        words.pop()
+    return " ".join(words)

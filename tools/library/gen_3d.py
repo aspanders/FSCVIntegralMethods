@@ -12,12 +12,22 @@ DOT = "‧"  # empty cell marker used in the ascii art
 def _blank(w, h):
     return [[DOT] * w for _ in range(h)]
 
-def _place(grid, ox, oy, rows):
+def _place(grid, ox, oy, rows, transparent=True):
+    """Stamp `rows` onto the grid. DOT means "leave what is underneath".
+
+    This used to write DOT through as if it were a colour, so every face
+    overlay ERASED the face it was drawn on: the dice net came out as a
+    scatter of black pips with no white faces at all, and the gift box as four
+    disconnected red bars with no green box. Overlays are transparent by
+    definition - they are drawn on top of a face that is already there.
+    """
     for y, row in enumerate(rows):
         for x, ch in enumerate(row):
+            if transparent and ch == DOT:
+                continue
             grid[oy + y][ox + x] = ch
 
-def cube_net(size, faces, fill):
+def cube_net(size, faces, fill, edge=None):
     """Unfolded cross net of a cube.
 
         [top]
@@ -39,15 +49,25 @@ def cube_net(size, faces, fill):
         "bottom": (size, 2 * size),
     }
     for name, (ox, oy) in pos.items():
-        _place(g, ox, oy, ["".join(r) for r in face_solid])
+        _place(g, ox, oy, ["".join(r) for r in face_solid], transparent=False)
+        if edge:
+            # A build layout has to show where the folds are; without a border
+            # every face ran into its neighbour and the net read as one blob.
+            # Drawn BEFORE the overlay, so a die's corner pips and a lid's
+            # ribbon border sit on top of the fold line rather than under it.
+            for i in range(size):
+                g[oy][ox + i] = edge
+                g[oy + size - 1][ox + i] = edge
+                g[oy + i][ox] = edge
+                g[oy + i][ox + size - 1] = edge
         overlay = faces.get(name)
         if overlay:
             _place(g, ox, oy, overlay)
     return ["".join(r) for r in g], w, h
 
 def net_pattern(key, title, tags, size, faces, fill, cmap, build, assembly,
-                difficulty="medium"):
-    rows, w, h = cube_net(size, faces, fill)
+                difficulty="medium", edge=None):
+    rows, w, h = cube_net(size, faces, fill, edge=edge)
     cells = cells_from_ascii(rows, cmap)
     return make_pattern(stable_id("3d", key), title, "threeD", w, h, cells,
                         tags=tags + ["3d", "construction"],
@@ -85,7 +105,7 @@ def generate():
         size=5,
         faces={"front": DICE[1], "back": DICE[6], "top": DICE[2],
                "bottom": DICE[5], "left": DICE[3], "right": DICE[4]},
-        fill="W", cmap={"W": "white", PIP: "black"},
+        fill="W", cmap={"W": "white", PIP: "black", "E": "light_gray"}, edge="E",
         build=(
             "Make six 5x5 white panels, one for each face of the cube.\n"
             "Add black pips to each panel using the net layout:\n"
@@ -111,7 +131,8 @@ def generate():
                "left": ["‧‧RR‧‧"] * 6, "right": ["‧‧RR‧‧"] * 6,
                "top": ["RRRRRR", "R‧‧‧‧R", "R‧YY‧R", "R‧YY‧R", "R‧‧‧‧R", "RRRRRR"],
                "bottom": None},
-        fill="G", cmap={"G": "green", "R": "red", "Y": "cheddar"},
+        fill="G", cmap={"G": "green", "R": "red", "Y": "cheddar",
+                        "E": "dark_green"}, edge="E",
         build=(
             "Make five 6x6 green panels for the four walls and the base, plus\n"
             "one 6x6 lid panel. Add the red ribbon stripes down each wall and\n"
@@ -133,7 +154,7 @@ def generate():
         size=6,
         faces={"front": ["‧‧‧‧‧‧", "‧KK‧KK", "‧KK‧KK", "‧‧KK‧‧", "‧KKKK‧", "‧K‧‧K‧"],
                "back": None, "left": None, "right": None, "top": None, "bottom": None},
-        fill="G", cmap={"G": "green", "K": "black"},
+        fill="G", cmap={"G": "green", "K": "black", "E": "dark_green"}, edge="E",
         build=(
             "Make six 6x6 panels in green.\n"
             "On ONE panel (the front) add the black face: two square eyes and the\n"
@@ -174,8 +195,10 @@ def generate():
     # 5) Planter / cup
     out.append(panel_pattern(
         "planter", "Bead Planter", ["planter", "cup", "pot"],
-        rows=["TTTTTT", "TGGGGT", "TGGGGT", "TGGGGT", "TGGGGT", "TTTTTT"],
-        cmap={"T": "toothpaste", "G": "green"},
+        rows=["‧‧SS‧‧", "‧LSSL‧", "‧‧LSL‧", "TTTTTT", "TBBBBT",
+              "TGGGGT", "TGGGGT", "TGGGGT", "TTTTTT"],
+        cmap={"T": "toothpaste", "G": "green", "B": "dark_brown",
+              "S": "dark_green", "L": "light_green"},
         build=(
             "Make 4 identical wall panels (6x6) and 1 base panel (6x6) using the\n"
             "two-tone design shown, a light rim with a green body. All five\n"

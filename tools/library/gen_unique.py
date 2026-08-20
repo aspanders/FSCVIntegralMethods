@@ -8,7 +8,9 @@ import math
 
 from beadlib import make_pattern, stable_id
 from canvas import Grid, star_points, reg_polygon, heart_points
-from uniqueness import signature
+from uniqueness import cell_map, signature
+
+NEAR_DUP = 0.95   # two boards sharing more than this are indistinguishable
 
 PAIRS = [("navy", "white"), ("red", "cream"), ("teal", "banana"),
          ("hot_pink", "light_pink"), ("purple", "lemon"), ("forest", "light_green"),
@@ -21,19 +23,34 @@ TRIOS = [("red", "white", "navy"), ("teal", "cream", "orange"),
 
 
 def _emit(cat, gens, target=200):
-    """Run builders, tag with palette, dedup by structure, take `target`."""
+    """Run builders, tag with palette, keep only VISUALLY distinct ones.
+
+    Exact structural dedup is not enough. These generators sweep parameters,
+    and consecutive steps of a fine sweep differ by a handful of beads:
+    mandalas 225 and 243 shared 99.8% of their cells and both counted as
+    unique. Accepting a candidate only when it differs from everything already
+    accepted turns a big candidate pool into a set someone can actually tell
+    apart, and it is why the pools here are deliberately far larger than the
+    target.
+    """
+    import numpy as np
     out, seen = [], set()
+    kept_by_size = {}
     i = 0
     for title, g, tags in gens:
         pat = make_pattern(stable_id(cat, f"{title}-{i}"), title, cat,
                            g.w, g.h, g.cells(), tags + [cat])
+        i += 1
         sig = signature(pat)
         if sig in seen:
-            i += 1
             continue
+        v = cell_map(pat)
+        stack = kept_by_size.get((g.w, g.h))
+        if stack and (np.stack(stack) == v).mean(axis=1).max() >= NEAR_DUP:
+            continue
+        kept_by_size.setdefault((g.w, g.h), []).append(v)
         seen.add(sig)
         out.append(pat)
-        i += 1
         if len(out) >= target:
             break
     return out
