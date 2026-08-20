@@ -186,11 +186,10 @@ enum BoardScale: String, CaseIterable, Identifiable {
 }
 
 enum PatternCategory: String, Codable, CaseIterable, Identifiable {
-    // 24 content categories + 3D specialty + user designs.
+    // 23 content categories (100 patterns each) + 3D specialty + user designs.
     case geometric, mandalas, hearts, stars, flowers, rainbows, space, emoji,
          gems, icons, animals, birds, fish, bugs, food, sweets, trees, vehicles,
-         snowflakes, holidays, videogame, sports, circles, characters, threeD,
-         custom
+         snowflakes, holidays, videogame, sports, circles, threeD, custom
     var id: String { rawValue }
     var displayName: String {
         switch self {
@@ -217,7 +216,6 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .videogame:  return "Video Game"
         case .sports:     return "Sports"
         case .circles:    return "Circles"
-        case .characters: return "Characters"
         case .threeD:     return "3D"
         case .custom:     return "My Designs"
         }
@@ -248,7 +246,6 @@ enum PatternCategory: String, Codable, CaseIterable, Identifiable {
         case .videogame:  return "🎮"
         case .sports:     return "⚽"
         case .circles:    return "⭕"
-        case .characters: return "🎩"
         case .threeD:     return "🧊"
         case .custom:     return "✏️"
         }

@@ -27,7 +27,7 @@ import gen_circles
 import gen_creatures
 import gen_objects
 import gen_faces
-import gen_characters
+import gen_willie
 import gen_library
 import gen_library2
 import compact
@@ -57,8 +57,6 @@ def collect():
     patterns += gen_icons.generate()     # icons: letters, digits, symbols
     patterns += gen_3d.generate()        # threeD builds with guides
     patterns += gen_circles.generate()   # round-pegboard designs (shape=circle)
-    patterns += gen_characters.generate()  # 1920s rubber-hose cast (see the
-                                           # copyright note in that module)
     # Silhouette categories rebuilt from parametric parts REPLACE the
     # recolour-heavy originals outright. Filtering by category rather than by
     # id matters: stable_id gives old and new the same "<category>-" prefix, so
@@ -73,6 +71,10 @@ def collect():
                 if p["category"] not in rebuilt or p["category"] in topped_up]
     for fn in rebuilt.values():
         patterns += fn()
+    # AFTER the rebuild, or the filter above would drop them: videogame is one
+    # of the categories gen_objects replaces wholesale.
+    patterns += gen_willie.generate()    # three hand-drawn Steamboat Willie
+                                         # boards; see the copyright note there
     if os.path.exists(INCOMING):
         patterns += json.load(open(INCOMING))
     # de-dup by id (later wins)
@@ -91,7 +93,6 @@ def collect():
 STRIP_BACKGROUND = {
     "animals", "birds", "bugs", "fish", "flowers", "food", "gems", "holidays",
     "icons", "sports", "sweets", "trees", "vehicles", "videogame", "emoji",
-    "characters",
 }
 
 

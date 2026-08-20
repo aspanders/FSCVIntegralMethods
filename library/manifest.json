@@ -1,6 +1,6 @@
 {
-  "version": 50,
-  "count": 2703,
+  "version": 51,
+  "count": 2656,
   "perCategory": {
     "geometric": 199,
     "mandalas": 181,
@@ -22,10 +22,9 @@
     "vehicles": 100,
     "snowflakes": 197,
     "holidays": 100,
-    "videogame": 100,
+    "videogame": 103,
     "sports": 100,
     "circles": 91,
-    "characters": 50,
     "threeD": 8
   },
   "patternsUrl": "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/claude/fuse-bead-converter-app-706h2s/library/patterns.json",

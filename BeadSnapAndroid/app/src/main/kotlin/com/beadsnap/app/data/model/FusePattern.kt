@@ -117,7 +117,7 @@ data class FusePattern(
 // The icon property is named `symbol`, not `emoji`, because one of the entries
 // is itself called `emoji` and an entry cannot share a name with a property.
 enum class PatternCategory(val displayName: String, val symbol: String) {
-    // 24 content categories + 3D specialty + user designs.
+    // 23 content categories (100 patterns each) + 3D specialty + user designs.
     geometric("Geometric", "🔷"),
     mandalas("Mandalas", "🌀"),
     hearts("Hearts", "💗"),
@@ -141,7 +141,6 @@ enum class PatternCategory(val displayName: String, val symbol: String) {
     videogame("Video Game", "🎮"),
     sports("Sports", "⚽"),
     circles("Circles", "⭕"),
-    characters("Characters", "🎩"),
     threeD("3D", "🧊"),
     custom("My Designs", "✏️")
 }

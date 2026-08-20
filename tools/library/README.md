@@ -30,9 +30,10 @@ first run offline. `build_manifest.py` keeps those copies identical to
   category) for both platforms. Run after changing the taxonomy.
 - `gen_creatures.py` / `gen_objects.py` / `gen_faces.py` : the silhouette
   categories, built from parametric parts rather than recolours.
-- `gen_characters.py` : the 1920s rubber-hose cast, headlined by Steamboat
-  Willie. **Read the copyright note at the top of that file before adding to
-  it** - only the 1928 public-domain depiction belongs there.
+- `gen_willie.py` : three hand-drawn Steamboat Willie boards for `videogame`.
+  **Read the copyright note at the top of that file before adding to it** -
+  only the 1928 public-domain depiction belongs there, and the note also
+  explains why there are three of them and not thirty.
 - `render.py` : renders any pattern (or the whole `patterns.json`) to PNG the way
   the app does, for eyeballing quality. `canvas.py` holds the shape primitives.
 
