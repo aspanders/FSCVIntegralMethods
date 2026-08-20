@@ -98,8 +98,8 @@ def _draw_face(g, spec, cx, cy, scale):
     elif plan == "sun":
         for i in range(12):
             a = i * math.pi / 6
-            g.line(cx + math.cos(a) * R * 0.9, cy + math.sin(a) * R * 0.9,
-                   cx + math.cos(a) * R * 1.45, cy + math.sin(a) * R * 1.45, accent, t=0.9 * u)
+            g.limb(cx + math.cos(a) * R * 0.9, cy + math.sin(a) * R * 0.9,
+                   cx + math.cos(a) * R * 1.45, cy + math.sin(a) * R * 1.45, accent)
         g.disc(cx, cy, R, skin)
     elif plan == "moon":
         g.disc(cx, cy, R, skin)
@@ -108,8 +108,8 @@ def _draw_face(g, spec, cx, cy, scale):
     elif plan == "alien":
         g.ellipse(cx, cy - R * 0.1, R * 0.86, R * 1.08, skin)
         for sgn in (-1, 1):
-            g.line(cx + sgn * R * 0.3, cy - R * 1.0, cx + sgn * R * 0.7, cy - R * 1.7,
-                   accent, t=0.7 * u)
+            g.limb(cx + sgn * R * 0.3, cy - R * 1.0, cx + sgn * R * 0.7, cy - R * 1.7,
+                   accent)
             g.disc(cx + sgn * R * 0.72, cy - R * 1.75, 1.4 * u, accent)
     elif plan == "robot":
         g.rect(cx - R * 0.9, cy - R * 0.8, cx + R * 0.9, cy + R * 0.9, skin)

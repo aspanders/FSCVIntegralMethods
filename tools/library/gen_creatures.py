@@ -136,16 +136,41 @@ def _pick_bg(main, options, nth=0):
 
 
 def _outline(g, cid, bg):
-    """One-bead dark edge wherever a filled cell touches background."""
+    """One-bead dark edge around SOLID masses only.
+
+    Outlining every edge bead worked when appendages were one bead wide and
+    got skipped as hopeless. Now that legs, antennae and stems are two beads
+    wide (canvas.Grid.limb), every bead in them is an edge bead - so the
+    outline ate the whole limb and the bugs came out as black scribbles with a
+    coloured body.
+
+    A bead is outlined only if it neighbours a bead that survives one erosion,
+    i.e. one that has all four neighbours filled. A two-wide strand erodes to
+    nothing and keeps its own colour; a body has an interior and gets its edge.
+    """
+    solid = [[False] * g.w for _ in range(g.h)]
+    for y in range(g.h):
+        for x in range(g.w):
+            if g.g[y][x] in (None, bg):
+                continue
+            if all(g.inb(x + dx, y + dy) and g.g[y + dy][x + dx] not in (None, bg)
+                   for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                solid[y][x] = True
     edge = []
     for y in range(g.h):
         for x in range(g.w):
             if g.g[y][x] in (None, bg):
                 continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                if not g.inb(x + dx, y + dy) or g.g[y + dy][x + dx] in (None, bg):
-                    edge.append((x, y))
-                    break
+            outside = any(not g.inb(x + dx, y + dy) or
+                          g.g[y + dy][x + dx] in (None, bg)
+                          for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            if not outside:
+                continue
+            near_solid = solid[y][x] or any(
+                g.inb(x + dx, y + dy) and solid[y + dy][x + dx]
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            if near_solid:
+                edge.append((x, y))
     for x, y in edge:
         g.set(x, y, cid)
 
@@ -206,8 +231,8 @@ def _draw_bird(g, spec, cx, cy, scale):
 
     if legs:
         for off in (-1.4, 1.4):
-            g.line(cx + off, cy + ry - 1, cx + off * 0.6, cy + ry + legs, bill)
-            g.line(cx + off * 0.6, cy + ry + legs, cx + off * 0.6 + 1.8,
+            g.limb(cx + off, cy + ry - 1, cx + off * 0.6, cy + ry + legs, bill)
+            g.limb(cx + off * 0.6, cy + ry + legs, cx + off * 0.6 + 1.8,
                    cy + ry + legs, bill)
     g.ellipse(cx, cy, rx, ry, main)
     g.ellipse(cx + 0.6, cy + ry * 0.35, rx * 0.66, ry * 0.5, belly)
@@ -240,12 +265,12 @@ def _draw_bird(g, spec, cx, cy, scale):
     elif tail == "train":
         for k in range(-2, 3):
             ty = cy + 1 + k * 3.0 * scale
-            g.line(bx, cy + 1, bx - 10 * scale, ty, belly)
+            g.limb(bx, cy + 1, bx - 10 * scale, ty, belly)
             g.disc(bx - 10 * scale, ty, 1.6 * scale, main)
     elif tail == "plume":
         for k in range(3):
-            g.line(bx + 1, cy - 1, bx - (5 + k) * scale,
-                   cy - 6 * scale + k * 2.4 * scale, main, t=1)
+            g.limb(bx + 1, cy - 1, bx - (5 + k) * scale,
+                   cy - 6 * scale + k * 2.4 * scale, main)
 
     if wing == "folded":
         # The wing reads as a wing because of its EDGE, so it is drawn as a
@@ -266,7 +291,7 @@ def _draw_bird(g, spec, cx, cy, scale):
     elif beak == "dagger":
         g.poly([(tipx - 1, hy - 1), (tipx + 7 * scale, hy + 0.4), (tipx - 1, hy + 1.2)], bill)
     elif beak == "needle":
-        g.line(tipx - 1, hy, tipx + 7 * scale, hy - 1, bill)
+        g.limb(tipx - 1, hy, tipx + 7 * scale, hy - 1, bill)
     elif beak == "hook":
         g.poly([(tipx - 1, hy - 1.6), (tipx + 3.4 * scale, hy - 0.6),
                 (tipx + 2.4 * scale, hy + 2.2), (tipx - 1, hy + 1)], bill)
@@ -512,7 +537,7 @@ def _draw_bug(g, spec, cx, cy, scale):
         for i in range(legs // 2):
             ly = cy - bl * 0.4 + i * bl * 0.55
             for sgn in (-1, 1):
-                g.line(cx + sgn * bw * 0.6, ly, cx + sgn * (bw + 4 * u),
+                g.limb(cx + sgn * bw * 0.6, ly, cx + sgn * (bw + 4 * u),
                        ly + (2.4 * u if plan != "walker" else 3.6 * u), accent)
         if wings:
             if extra in ("wingdot", "furry"):
@@ -538,7 +563,7 @@ def _draw_bug(g, spec, cx, cy, scale):
                 g.rect(cx - bw, cy + bl * k - 0.8 * u, cx + bw, cy + bl * k + 0.8 * u, accent)
         elif extra == "horns":
             for sgn in (-1, 1):
-                g.line(cx + sgn * 1.4 * u, cy - bl - 2 * u,
+                g.limb(cx + sgn * 1.4 * u, cy - bl - 2 * u,
                        cx + sgn * 4 * u, cy - bl - 6 * u, accent)
         elif extra == "wingdot":
             for sgn in (-1, 1):
@@ -549,21 +574,21 @@ def _draw_bug(g, spec, cx, cy, scale):
         elif extra == "waist":
             g.ellipse(cx, cy + bl * 0.15, bw * 0.35, bl * 0.12, None)
         elif extra == "snout":
-            g.line(cx, cy - bl - 3 * u, cx, cy - bl - 6 * u, accent)
+            g.limb(cx, cy - bl - 3 * u, cx, cy - bl - 6 * u, accent)
         elif extra == "claws":
             for sgn in (-1, 1):
-                g.line(cx + sgn * bw, cy - bl * 0.6, cx + sgn * (bw + 4 * u), cy - bl * 1.2, accent)
+                g.limb(cx + sgn * bw, cy - bl * 0.6, cx + sgn * (bw + 4 * u), cy - bl * 1.2, accent)
         elif extra == "jump":
             for sgn in (-1, 1):
-                g.line(cx + sgn * bw * 0.7, cy + bl * 0.2, cx + sgn * (bw + 3 * u), cy - bl * 0.4, accent)
-                g.line(cx + sgn * (bw + 3 * u), cy - bl * 0.4, cx + sgn * (bw + 5 * u), cy + bl * 0.6, accent)
+                g.limb(cx + sgn * bw * 0.7, cy + bl * 0.2, cx + sgn * (bw + 3 * u), cy - bl * 0.4, accent)
+                g.limb(cx + sgn * (bw + 3 * u), cy - bl * 0.4, cx + sgn * (bw + 5 * u), cy + bl * 0.6, accent)
         hy = cy - bl - 1.2 * u
     elif plan == "crawler":
         for i in range(segs):
             sx = cx - (segs - 1) * 1.9 * u / 2 + i * 1.9 * u
             g.disc(sx, cy + math.sin(i * 0.9) * 1.4 * u, 2.2 * u, main if i else accent)
             if i % 2 == 0:
-                g.line(sx, cy + 2 * u, sx, cy + 5 * u, accent)
+                g.limb(sx, cy + 2 * u, sx, cy + 5 * u, accent)
         hy = cy - 2 * u
     elif plan == "spider":
         g.ellipse(cx, cy + 2 * u, body[0] * u, body[1] * u, main)
@@ -571,17 +596,17 @@ def _draw_bug(g, spec, cx, cy, scale):
         if extra == "furry":
             for k in range(10):
                 a = k * math.pi / 5
-                g.line(cx + math.cos(a) * body[0] * 0.9 * u,
+                g.limb(cx + math.cos(a) * body[0] * 0.9 * u,
                        cy + 2 * u + math.sin(a) * body[1] * 0.9 * u,
                        cx + math.cos(a) * (body[0] + 1.6) * u,
-                       cy + 2 * u + math.sin(a) * (body[1] + 1.6) * u, main, t=0)
+                       cy + 2 * u + math.sin(a) * (body[1] + 1.6) * u, main)
         for i in range(4):
             for sgn in (-1, 1):
                 a = -0.9 + i * 0.55
-                g.line(cx + sgn * 2 * u, cy + 1 * u,
+                g.limb(cx + sgn * 2 * u, cy + 1 * u,
                        cx + sgn * (4 + 6 * math.cos(a)) * u, cy + 1 * u + 7 * math.sin(a) * u, accent)
         if extra == "sting":
-            g.line(cx, cy + 6 * u, cx + 7 * u, cy + 1 * u, accent)
+            g.limb(cx, cy + 6 * u, cx + 7 * u, cy + 1 * u, accent)
             g.disc(cx + 7.6 * u, cy + 0.4 * u, 1.4 * u, hi)
         hy = cy - 2.6 * u
     else:   # snail / slug
@@ -597,7 +622,7 @@ def _draw_bug(g, spec, cx, cy, scale):
 
     for k in range(ants):
         sgn = -1 if k == 0 else 1
-        g.line(cx + sgn * 1.2 * u, hy - 1.4 * u, cx + sgn * 4.4 * u, hy - 6 * u, accent)
+        g.limb(cx + sgn * 1.2 * u, hy - 1.4 * u, cx + sgn * 4.4 * u, hy - 6 * u, accent)
     _outline(g, "black" if main != "black" else "dark_gray", None)
     for sgn in (-1, 1):
         g.set(cx + sgn * 1.1 * u, hy - 0.4 * u, hi)
@@ -707,7 +732,7 @@ def _draw_tree(g, spec, cx, cy, scale):
     elif crown == "weep":
         g.ellipse(cx, top - 4 * u, 8.5 * u, 5 * u, leaf)
         for k in range(-3, 4):
-            g.line(cx + k * 2.4 * u, top - 2 * u, cx + k * 2.6 * u, top + 5 * u, leaf2)
+            g.limb(cx + k * 2.4 * u, top - 2 * u, cx + k * 2.6 * u, top + 5 * u, leaf2)
     elif crown == "palm":
         for k in range(branch):
             a = math.pi + k * math.pi / max(1, branch - 1)
@@ -741,7 +766,7 @@ def _draw_tree(g, spec, cx, cy, scale):
             g.rect(cx - tw, yy, cx + tw, yy + 0.9 * u, leaf2)
             for sgn in (-1, 1):
                 if k % 2 == 0:
-                    g.line(cx + sgn * tw, yy, cx + sgn * 6 * u, yy - 3.4 * u, leaf)
+                    g.limb(cx + sgn * tw, yy, cx + sgn * 6 * u, yy - 3.4 * u, leaf)
     elif crown == "cap":
         g.ellipse(cx, top, 8.5 * u, 5 * u, leaf)
         g.rect(cx - 8.5 * u, top, cx + 8.5 * u, top + 5 * u, None)
@@ -926,7 +951,7 @@ def _draw_animal(g, spec, cx, cy, scale):
     elif tail == "thin":
         g.line(bx, cy, bx - 3.4 * u, cy - 2.6 * u, dark, t=0)
     elif tail == "tuft":
-        g.line(bx, cy - 1 * u, bx - 3.4 * u, cy + 3.4 * u, dark)
+        g.limb(bx, cy - 1 * u, bx - 3.4 * u, cy + 3.4 * u, dark)
         g.disc(bx - 3.8 * u, cy + 3.8 * u, 1.3 * u, dark)
     elif tail == "hook":
         for k in range(7):
@@ -953,9 +978,9 @@ def _draw_animal(g, spec, cx, cy, scale):
         # Only over the back. Radiating them all the way round made a sun.
         for k in range(9):
             a = math.pi + k * math.pi / 10
-            g.line(cx + math.cos(a) * rx * 0.75, cy + math.sin(a) * ry * 0.75,
+            g.limb(cx + math.cos(a) * rx * 0.75, cy + math.sin(a) * ry * 0.75,
                    cx + math.cos(a) * (rx + 2.4 * u), cy + math.sin(a) * (ry + 2.4 * u),
-                   dark, t=0)
+                   dark)
     elif mark == "wool":
         for k in range(7):
             a = math.pi + k * math.pi / 6
@@ -964,8 +989,8 @@ def _draw_animal(g, spec, cx, cy, scale):
         g.ring(hx, hy, head + 2.2 * u, dark, t=2.2 * u)
     elif mark == "antler":
         for sgn in (-1, 1):
-            g.line(hx - head * 0.2, hy - head, hx + sgn * head * 0.8, hy - head * 2.6, belly)
-            g.line(hx + sgn * head * 0.8, hy - head * 2.6, hx + sgn * head * 1.5,
+            g.limb(hx - head * 0.2, hy - head, hx + sgn * head * 0.8, hy - head * 2.6, belly)
+            g.limb(hx + sgn * head * 0.8, hy - head * 2.6, hx + sgn * head * 1.5,
                    hy - head * 2.1, belly)
     elif mark == "mask":
         g.rect(hx - head * 0.4, hy - head * 0.35, hx + head * 0.9, hy + head * 0.15, dark)

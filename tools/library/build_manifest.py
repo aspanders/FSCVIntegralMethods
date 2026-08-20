@@ -31,6 +31,7 @@ import gen_library
 import gen_library2
 import compact
 import uniqueness
+import connectivity
 from beadlib import REPO, CATEGORIES
 
 LIB = os.path.join(REPO, "library")
@@ -72,7 +73,58 @@ def collect():
         patterns += json.load(open(INCOMING))
     # de-dup by id (later wins)
     by_id = {p["id"]: p for p in patterns}
-    return _interleave(_distinct_per_category(list(by_id.values())))
+    # Backdrops come off BEFORE the distinctness filter, because removing one
+    # changes what a pattern looks like and so changes which pairs are
+    # lookalikes. Buildability is repaired at the same time: a full board is
+    # trivially connected, so every loose part was hidden under its backdrop.
+    return _interleave(_distinct_per_category(_buildable(list(by_id.values()))))
+
+
+# Categories whose subject stands on its own. The rest keep a backdrop because
+# it carries meaning - a starfield, a full-bleed rainbow, a night sky behind a
+# snowflake - or because the pattern IS the fill.
+STRIP_BACKGROUND = {
+    "animals", "birds", "bugs", "fish", "flowers", "food", "gems", "holidays",
+    "icons", "sports", "sweets", "trees", "vehicles", "videogame", "emoji",
+}
+
+
+def _buildable(patterns):
+    """Strip backdrops where they are decoration, then weld every pattern solid.
+
+    Fused beads bond where their edges meet, so a part joined only at a corner
+    is a hinge and a part joined not at all is a piece on the floor. With a
+    backdrop nothing is ever loose, which is why 218 patterns in the categories
+    that already had none were unbuildable and nobody had noticed.
+    """
+    out = []
+    stats = {"stripped": 0, "welded": 0, "dropped": 0, "repaired": 0,
+             "thickened": 0, "widened": 0, "retinted": 0}
+    for p in patterns:
+        # A framed variant's border IS its backdrop; stripping it would delete
+        # the frame and leave the field behind.
+        strip = (p["category"] in STRIP_BACKGROUND
+                 and not p["title"].endswith("Framed"))
+        q, info = connectivity.repair(p, strip=strip)
+        if not connectivity.has_background(q):
+            q, tinted = connectivity.retint_pale(q)
+            stats["retinted"] += 1 if tinted else 0
+        if info["removed"]:
+            stats["stripped"] += 1
+        if info["welded"] or info["dropped"]:
+            stats["repaired"] += 1
+            stats["welded"] += info["welded"]
+            stats["dropped"] += info["dropped"]
+        if info["thickened"]:
+            stats["widened"] += 1
+            stats["thickened"] += info["thickened"]
+        out.append(q)
+    print(f"  backdrops removed: {stats['stripped']}; "
+          f"welded solid: {stats['repaired']} "
+          f"(+{stats['welded']} beads, -{stats['dropped']} strays); "
+          f"necks widened: {stats['widened']} (+{stats['thickened']} beads); "
+          f"board-coloured beads retinted in {stats['retinted']}")
+    return out
 
 
 def _is_blank(p):

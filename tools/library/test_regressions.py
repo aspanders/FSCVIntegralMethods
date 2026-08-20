@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from audit import PATTERNS, measure, near_duplicates            # noqa: E402
 from compact import from_rows                                    # noqa: E402
 from uniqueness import cell_map, family_of, select_distinct      # noqa: E402
+from connectivity import (components, grid_of, has_background,     # noqa: E402
+                          weak_necks)
 
 SHIPPED = json.load(open(PATTERNS))["patterns"]
 BY_CAT = {}
@@ -198,13 +200,54 @@ def test_shipped_library_has_no_lookalikes():
           not dropped, "; ".join(dropped[:4]))
 
 
+# ── 10-13. buildability, added after the backdrops came off ─────────────────
+# Symptom: with a backdrop every pattern is trivially one connected piece, so
+# 218 unbuildable patterns sat in the categories that already had none and
+# nobody noticed. Removing backdrops from 1500 more would have shipped
+# hundreds of piles of loose beads.
+def test_patterns_are_buildable():
+    nobg = [p for p in SHIPPED if not has_background(p)]
+    frac = len(nobg) / len(SHIPPED)
+    check("10. at least 60% of the library has no background",
+          frac >= 0.60, f"{100*frac:.1f}%")
+
+    broken = []
+    for p in nobg:
+        g, w, h = grid_of(p)
+        if len(components(g, w, h)) > 1:
+            broken.append(f"{p['category']}/{p['title']}")
+    check("11. every backgroundless pattern is ONE connected piece",
+          not broken, f"{len(broken)} in pieces: {broken[:3]}")
+
+    thin = []
+    for p in nobg:
+        g, w, h = grid_of(p)
+        if weak_necks(g, w, h):
+            thin.append(f"{p['category']}/{p['title']}")
+    check("12. no part hangs off a pattern by a single bead",
+          not thin, f"{len(thin)} thin joins: {thin[:3]}")
+
+    # An empty peg reads as pale grey, so a white bead is indistinguishable
+    # from one left out - and on the mandalas those beads are the silhouette.
+    pale = [f"{p['category']}/{p['title']}" for p in nobg
+            if any(c["id"] in ("white", "ivory", "clear") for c in p["palette"])]
+    check("13. no backgroundless pattern uses a board-coloured bead",
+          not pale, f"{len(pale)}: {pale[:3]}")
+
+    big = [f"{p['category']}/{p['title']}" for p in SHIPPED
+           if max(p["grid"]["width"], p["grid"]["height"]) > 29]
+    check("14. every board fits a standard 29x29 pegboard",
+          not big, f"{len(big)} too large: {big[:3]}")
+
+
 def main():
     print(f"regressions against {len(SHIPPED)} shipped patterns\n")
     for fn in (test_fill_changes_the_board, test_small_variants_do_not_converge,
                test_emit_rejects_lookalikes, test_family_of_strips_suffixes,
                test_3d_nets_have_faces_and_folds,
                test_near_blank_measures_the_board, test_no_blank_boards_ship,
-               test_shipped_library_has_no_lookalikes):
+               test_shipped_library_has_no_lookalikes,
+               test_patterns_are_buildable):
         fn()
     print()
     if FAILURES:

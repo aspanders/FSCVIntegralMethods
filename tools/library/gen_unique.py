@@ -500,7 +500,8 @@ def mandalas():
         nrings = 3 + (i // len(syms)) % 3
         code = i // (len(syms) * 3)                      # new sequence every 18
         seq = [RING_SHAPES[(code // (base ** k)) % base] for k in range(nrings)]
-        s = (24, 28, 30)[i % 3]
+        # 29x29 is the standard large pegboard; 30 does not fit one.
+        s = (24, 27, 29)[i % 3]
         pal = MPAL[i % len(MPAL)]
         gens.append((f"Mandala {sym}-fold {i+1}", _mandala(sym, seq, s, pal),
                      ["mandala", f"{sym}fold"]))
@@ -588,7 +589,9 @@ def snowflakes():
                     for pl in plate_sets:
                         for ang in angs:
                             for ln in lens:
-                                s = (27, 29, 32)[i % 3]
+                                # 29x29 is the standard large
+                                # pegboard; 32 does not fit one.
+                                s = (25, 27, 29)[i % 3]
                                 col = SPAL[i % len(SPAL)]
                                 bg = SBG[i % len(SBG)]
                                 spec = (pos, ln, ang, sub, pl, tip, center)

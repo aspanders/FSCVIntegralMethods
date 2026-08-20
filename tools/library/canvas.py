@@ -81,6 +81,26 @@ class Grid:
                 err += dx
                 y0 += sy
 
+    def limb(self, x0, y0, x1, y1, cid, width=2):
+        """A stroke that is never thinner than `width` beads.
+
+        `line` with the default thickness lays a single bead per step, which
+        for an appendage is a one-bead-wide strand: every bead along it is a
+        break point, and a diagonal run of them is a chain of corner contacts
+        that never fuses at all. Legs, antennae, tails, stems and masts all go
+        through here so they come out as solid, weldable material.
+        """
+        x0, y0, x1, y1 = float(x0), float(y0), float(x1), float(y1)
+        steps = int(max(abs(x1 - x0), abs(y1 - y0)) * 2) + 1
+        r = width - 1
+        for i in range(steps + 1):
+            t = i / steps
+            cx = x0 + (x1 - x0) * t
+            cy = y0 + (y1 - y0) * t
+            for dy in range(r + 1):
+                for dx in range(r + 1):
+                    self.set(cx + dx, cy + dy, cid)
+
     def poly(self, pts, cid):
         """Scanline fill of a polygon given as [(x,y), ...]."""
         if not pts:

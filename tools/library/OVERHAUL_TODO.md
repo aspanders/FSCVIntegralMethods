@@ -78,6 +78,47 @@ The 251 remaining are letters resembling letters - M and N, O and 0. `icons`
 is deliberately exempt: a category defined by COMPLETENESS is worse for
 missing D, F, N and 8 than for containing near-neighbours.
 
+## Buildability (v37)
+
+A pattern with a backdrop is trivially one connected piece, so nothing was
+ever loose and nobody noticed that 218 patterns in the categories which
+already had none could not be built at all. Removing backdrops from 1500 more
+would have shipped hundreds of piles of loose beads.
+
+`python connectivity.py` reports the state; `build_manifest.py` enforces it.
+
+| | before | v37 |
+|---|---|---|
+| backgroundless | 27.4% | **85.1%** |
+| of those, unbuildable | 218 | **0** |
+| parts hanging by one bead | 675 | **0** |
+| board-coloured beads on a transparent board | 858 | **0** |
+| boards larger than 29x29 | 123 | **0** |
+
+Fused beads bond where their EDGES meet, so:
+
+- **No connection** - a piece on the floor. `make_buildable` welds each loose
+  piece to the body along the shortest run of empty cells, in the loose
+  piece's own colour, and drops strays smaller than 3 beads that are more than
+  5 cells away.
+- **Corner-only contact** - a hinge, not a weld. Same routine: the empty
+  corner cell is one bead of bridge.
+- **A one-bead join carrying weight** - a cherry on a stem, a wheel under a
+  frame. `weak_necks` finds articulation beads that would strand 6+ beads;
+  `thicken_necks` fills the cells around them into a solid block.
+- **One-bead-wide strands** - fixed at the SOURCE. `canvas.Grid.limb` draws
+  every leg, antenna, tail, stem and mast at least 2 beads wide. Widening
+  these after the fact only moves the break one bead along.
+- **White beads on a transparent board** - an empty peg reads as pale grey, so
+  the maker cannot tell "place a white bead" from "leave it out", and on the
+  mandalas and hearts those beads were the outer silhouette. `retint_pale`
+  swaps white/ivory/clear for cream and toothpaste.
+
+One consequence worth knowing: `_outline` now edges only SOLID masses. Once
+appendages became 2 beads wide, every bead in them was an edge bead, so
+outlining ate the whole limb and the bugs came out as black scribbles. A bead
+is outlined only if it neighbours one that survives an erosion.
+
 ## Regression tests
 
 `python test_regressions.py` has one named test per bug below, each stating the

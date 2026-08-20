@@ -124,8 +124,8 @@ def _draw_vehicle(g, spec, cx, cy, scale):
         elif extra == "funnel":
             g.rect(cx + ln * 0.02, top - hg * 1.1, cx + ln * 0.16, top, trim)
         elif extra == "pole":
-            g.line(cx, top, cx, top - hg * 1.3, trim)
-            g.line(cx, top - hg * 1.3, cx + ln * 0.3, top - hg * 1.45, trim)
+            g.limb(cx, top, cx, top - hg * 1.3, trim)
+            g.limb(cx, top - hg * 1.3, cx + ln * 0.3, top - hg * 1.45, trim)
         if plan == "rail":
             g.rect(cx - ln * 0.62, bot + wr * 1.5, cx + ln * 0.62, bot + wr * 2.0, trim)
     elif plan == "two":
@@ -153,7 +153,7 @@ def _draw_vehicle(g, spec, cx, cy, scale):
             off = 0 if cab == "mid" else ln * 0.2
             g.rect(cx - ln * 0.16 + off, cy - hg * 1.3, cx + ln * 0.14 + off, cy - hg / 2, glass)
         if extra == "sail":
-            g.line(cx, cy - hg / 2, cx, cy - hg / 2 - 11 * u, trim)
+            g.limb(cx, cy - hg / 2, cx, cy - hg / 2 - 11 * u, trim)
             g.poly([(cx + 0.6 * u, cy - hg / 2 - 11 * u), (cx + 6.5 * u, cy - hg / 2 - 1),
                     (cx + 0.6 * u, cy - hg / 2 - 1)], glass)
             g.poly([(cx - 0.6 * u, cy - hg / 2 - 10 * u), (cx - 4.5 * u, cy - hg / 2 - 1),
@@ -210,9 +210,9 @@ def _draw_vehicle(g, spec, cx, cy, scale):
         elif extra == "basket":
             g.ellipse(cx, cy - hg * 0.15, ln / 2, hg / 2, body)
             for k in (-0.5, 0.0, 0.5):
-                g.line(cx + ln * k * 0.9, cy - hg * 0.6, cx + ln * k * 0.35, cy + hg * 0.36, glass)
-            g.line(cx - ln * 0.2, cy + hg * 0.36, cx - ln * 0.2, cy + hg * 0.62, trim)
-            g.line(cx + ln * 0.2, cy + hg * 0.36, cx + ln * 0.2, cy + hg * 0.62, trim)
+                g.limb(cx + ln * k * 0.9, cy - hg * 0.6, cx + ln * k * 0.35, cy + hg * 0.36, glass)
+            g.limb(cx - ln * 0.2, cy + hg * 0.36, cx - ln * 0.2, cy + hg * 0.62, trim)
+            g.limb(cx + ln * 0.2, cy + hg * 0.36, cx + ln * 0.2, cy + hg * 0.62, trim)
             g.rect(cx - ln * 0.26, cy + hg * 0.62, cx + ln * 0.26, cy + hg * 0.95, trim)
 
     _outline(g, "black" if body != "black" else "dark_gray", None)
@@ -346,14 +346,14 @@ def _draw_flower(g, spec, cx, cy, scale):
             sgn = -1 if k % 2 == 0 else 1
             bx = cx + sgn * 3 * u
             by = head_y - 3 * u + k * 3.2 * u
-            g.line(cx, head_y - 6 * u, bx, by, green)
+            g.limb(cx, head_y - 6 * u, bx, by, green)
             g.poly([(bx - 2.2 * u, by), (bx + 2.2 * u, by),
                     (bx + 1.4 * u, by + 3.4 * u), (bx - 1.4 * u, by + 3.4 * u)], petal)
     elif shape == "tuft":
         g.ellipse(cx, head_y + 2 * u, 3.0 * u, 2.6 * u, green)
         for k in range(11):
             a = -math.pi * 0.9 + k * math.pi * 0.8 / 10
-            g.line(cx, head_y, cx + math.cos(a) * 5 * u, head_y + math.sin(a) * 5 * u, petal)
+            g.limb(cx, head_y, cx + math.cos(a) * 5 * u, head_y + math.sin(a) * 5 * u, petal)
     else:
         if shape == "cup":
             # A tulip is ONE cup sitting on the stem; three of them arranged
@@ -387,7 +387,7 @@ def _draw_flower(g, spec, cx, cy, scale):
         g.ring(cx, head_y, R * 0.42, petal, t=1.1 * u)
     elif base == "stamen":
         for k in range(4):
-            g.line(cx, head_y, cx + (k - 1.5) * 1.6 * u, head_y - 5.5 * u, mid)
+            g.limb(cx, head_y, cx + (k - 1.5) * 1.6 * u, head_y - 5.5 * u, mid)
     elif base == "face":
         g.ellipse(cx, head_y + 1.4 * u, R * 0.34, R * 0.26, mid)
 
