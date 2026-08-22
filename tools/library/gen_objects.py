@@ -64,6 +64,43 @@ VEH_COLOURS = [
 ]
 
 
+# A taxi is yellow, a fire engine is red, an ambulance is white with a red
+# cross. Rotating a palette across the vehicle list threw all of that away, and
+# a vehicle's colour convention is doing as much identifying work as its
+# silhouette.  (body, glass, trim)
+VEHICLE_PALETTE = {
+    "Car":           ("red", "sky_blue", "black"),
+    "Sports Car":    ("yellow", "sky_blue", "black"),
+    "Taxi":          ("yellow", "sky_blue", "black"),
+    "Police Car":    ("white", "sky_blue", "navy"),
+    "Van":           ("silver", "sky_blue", "dark_gray"),
+    "Ambulance":     ("white", "sky_blue", "red"),
+    "Bus":           ("red", "sky_blue", "dark_gray"),
+    "School Bus":    ("yellow", "sky_blue", "black"),
+    "Truck":         ("blue", "sky_blue", "dark_gray"),
+    "Pickup":        ("teal", "sky_blue", "dark_gray"),
+    "Tanker":        ("silver", "sky_blue", "dark_gray"),
+    "Fire Engine":   ("red", "sky_blue", "silver"),
+    "Tractor":       ("green", "sky_blue", "yellow"),
+    "Digger":        ("yellow", "sky_blue", "dark_gray"),
+    "Bulldozer":     ("orange", "sky_blue", "dark_gray"),
+    "Monster Truck": ("magenta", "sky_blue", "black"),
+    "Train":         ("dark_red", "banana", "black"),
+    "Tram":          ("green", "sky_blue", "dark_gray"),
+    "Motorbike":     ("red", "black", "silver"),
+    "Bicycle":       ("teal", "black", "silver"),
+    "Scooter":       ("aqua", "white", "dark_gray"),
+    "Boat":          ("white", "blue", "dark_brown"),
+    "Sailboat":      ("white", "sky_blue", "navy"),
+    "Ship":          ("navy", "white", "dark_red"),
+    "Submarine":     ("banana", "sky_blue", "dark_gray"),
+    "Plane":         ("silver", "sky_blue", "navy"),
+    "Helicopter":    ("navy", "sky_blue", "red"),
+    "Rocket":        ("white", "red", "dark_gray"),
+    "Balloon":       ("red", "banana", "dark_brown"),
+}
+
+
 def _draw_vehicle(g, spec, cx, cy, scale):
     plan, ln, hg, cab, nw, ws, extra = spec["parts"]
     body, glass, trim = spec["cols"]
@@ -220,20 +257,34 @@ def _draw_vehicle(g, spec, cx, cy, scale):
 
 def vehicles():
     specs = []
-    poses = [("", 0.96, {}), (" Compact", 0.72, {}), (" Long", 0.96, {"len": 1.45}),
-             (" Tall", 0.96, {"hgt": 1.7}), (" Big Wheels", 0.78, {"ws": 1.8})]
+    # " Compact" shrank the whole vehicle to 0.72 of the board, which the size
+    # boards now do properly; " Tall" scaled the body height by 1.7 and turned
+    # a taxi into a tower and a motorbike into a pink smear. What is left
+    # changes the vehicle without breaking it, plus a line drawing.
+    poses = [("", 0.96, {}), (" Long", 0.96, {"len": 1.30}),
+             (" Big Wheels", 0.96, {"ws": 1.55}),
+             (" Outline", 0.96, {"line": True})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, plan, ln, hg, cab, nw, ws, extra) in enumerate(VEHICLES):
             specs.append(dict(
                 name=f"{name}{suffix}",
                 parts=(plan, ln * tw.get("len", 1.0), hg * tw.get("hgt", 1.0),
                        cab, nw, ws * tw.get("ws", 1.0), extra),
-                cols=VEH_COLOURS[(si * 3 + pi) % len(VEH_COLOURS)],
-                bg=_pick_bg(VEH_COLOURS[(si * 3 + pi) % len(VEH_COLOURS)][0], PALE, si + pi),
-                tags=["vehicle", name.lower()], fill=sc, scale=1.0))
-    return _emit("vehicles", specs,
-                 lambda sp: _frame(lambda g, s, x, y, k: _draw_vehicle(g, s, x, y, k),
-                                   sp, sp["bg"], fill=sp["fill"]), 100)
+                cols=VEHICLE_PALETTE.get(
+                    name, VEH_COLOURS[(si * 3 + pi) % len(VEH_COLOURS)]),
+                bg=_pick_bg(VEHICLE_PALETTE.get(
+                    name, VEH_COLOURS[(si * 3 + pi) % len(VEH_COLOURS)])[0],
+                    PALE, si + pi),
+                tags=["vehicle", name.lower()], fill=sc, scale=1.0,
+                line=tw.get("line", False)))
+
+    def build(sp):
+        out = _frame(lambda g, s, x, y, k: _draw_vehicle(g, s, x, y, k),
+                     sp, sp["bg"], fill=sp["fill"])
+        if sp.get("line"):
+            _hollow(out, sp["bg"])
+        return out
+    return _emit("vehicles", specs, build, 100)
 
 
 GENERATORS = {"vehicles": vehicles}
@@ -286,6 +337,47 @@ FLOWER_COLOURS = [
 ]
 
 
+# Colour belongs to the SPECIES, exactly as it does for food and for the
+# creature categories. Rotating a palette across the flower list produced a
+# blue sunflower, a red clover and a cream orchid on a cream board - and a
+# sunflower that is not yellow with a dark middle is not a sunflower, however
+# good its petals are.  (petals, centre / secondary, foliage)
+FLOWER_PALETTE = {
+    "Daisy":          ("white", "yellow", "green"),
+    "Sunflower":      ("yellow", "dark_brown", "green"),
+    "Rose":           ("red", "dark_red", "dark_green"),
+    "Tulip":          ("red", "banana", "green"),
+    "Lily":           ("white", "orange", "green"),
+    "Lotus":          ("light_pink", "banana", "dark_green"),
+    "Poppy":          ("red", "black", "green"),
+    "Cherry Blossom": ("light_pink", "blush", "dark_brown"),
+    "Orchid":         ("magenta", "banana", "green"),
+    "Iris":           ("purple", "banana", "green"),
+    "Daffodil":       ("banana", "orange", "green"),
+    "Hyacinth":       ("purple", "lavender", "green"),
+    "Carnation":      ("hot_pink", "light_pink", "green"),
+    "Pansy":          ("purple", "banana", "green"),
+    "Bluebell":       ("blue", "sky_blue", "green"),
+    "Thistle":        ("purple", "lavender", "dark_green"),
+    "Dandelion":      ("banana", "yellow", "green"),
+    "Hibiscus":       ("red", "banana", "dark_green"),
+    "Marigold":       ("orange", "banana", "green"),
+    "Chrysanthemum":  ("banana", "orange", "green"),
+    "Bouquet":        ("magenta", "banana", "green"),
+    "Potted Plant":   ("green", "light_green", "dark_green"),
+    "Water Lily":     ("light_pink", "banana", "dark_green"),
+    "Peony":          ("light_pink", "hot_pink", "dark_green"),
+    "Zinnia":         ("hot_pink", "banana", "green"),
+    "Aster":          ("purple", "banana", "green"),
+    "Buttercup":      ("yellow", "banana", "green"),
+    "Snowdrop":       ("white", "light_green", "green"),
+    "Foxglove":       ("light_pink", "magenta", "dark_green"),
+    "Lavender":       ("lavender", "purple", "dark_green"),
+    "Clover":         ("light_green", "white", "dark_green"),
+    "Camellia":       ("red", "light_pink", "dark_green"),
+}
+
+
 def _petal(g, cx, cy, a, r, w, shape, col):
     px, py = cx + math.cos(a) * r, cy + math.sin(a) * r
     if shape in ("oval", "wide", "frill"):
@@ -317,10 +409,15 @@ def _draw_flower(g, spec, cx, cy, scale):
     head_y = cy - (4 * u if stem else 0)
     R = (6.0 if stem else 8.5) * u
 
+    # A bloom drawn on its own, seen from directly above, is a rosette - and a
+    # rosette on a 28x28 board is a mandala. The stem and the pair of leaves
+    # are what say "flower" before the petal shape says which flower, so every
+    # species that does not sit in a pot or on a lily pad gets them.
     if stem:
         for k in range(stem):
             sx = cx + (k - (stem - 1) / 2) * 4 * u
-            g.line(sx, head_y + 2 * u, cx, cy + 12 * u, green, t=max(1, 0.8 * u))
+            g.limb(sx, head_y + 2 * u, cx, cy + 12 * u, green,
+                   width=max(2, int(1.4 * u)))
     for k in range(leaves):
         sgn = -1 if k % 2 == 0 else 1
         g.ellipse(cx + sgn * 3.4 * u, cy + (5 + k * 2.4) * u, 3.2 * u, 1.5 * u, green)
@@ -363,8 +460,13 @@ def _draw_flower(g, spec, cx, cy, scale):
             layers = 0
         for L in range(layers):
             rr = R * (1.0 - L * 0.26)
-            w = max(1.2 * u, rr * (0.42 if petals <= 8 else 0.30))
-            n = max(3, petals - L * 2)
+            # A petal is half a bloom's identity and it only reads if there is
+            # BOARD between it and the next one. Twenty-six needles at 0.30 of
+            # the radius overlap into a solid annulus, which is what turned
+            # every daisy, marigold and camellia into a dartboard. Eight petals
+            # at a third of the radius leave a gap you can see.
+            n = max(3, min(8, petals - L * 2))
+            w = max(1.2 * u, min(rr * 0.34, math.pi * rr / n * 0.62))
             for k in range(n):
                 a = -math.pi / 2 + k * 2 * math.pi / n + L * 0.4
                 _petal(g, cx, head_y, a, rr, w, shape, petal if L % 2 == 0 else mid)
@@ -391,24 +493,33 @@ def _draw_flower(g, spec, cx, cy, scale):
     elif base == "face":
         g.ellipse(cx, head_y + 1.4 * u, R * 0.34, R * 0.26, mid)
 
-    # Outlined in a neutral, not in the leaf colour: a green edge round every
-    # petal made the bloom read as foliage.
-    _outline(g, "black" if petal != "black" else "dark_gray", None)
+    # No outline. Outlining a ring of petals draws a dark edge round the whole
+    # ring - petals and the gaps between them alike - and the bloom comes back
+    # as a wheel. The petal colour is chosen to contrast with the backdrop, so
+    # the silhouette holds on its own.
 
 
 def flowers():
     specs = []
-    poses = [("", 0.96, {}), (" Bud", 0.72, {}),
+    poses = [("", 0.96, {}),
              (" Double", 0.96, {"layers": +2}), (" Simple", 0.96, {"layers": -1}),
-             (" Sprig", 0.78, {"stem": 1, "leaves": 2})]
+             (" Tall", 0.96, {"stem": 1, "leaves": 3}),
+             (" Spray", 0.96, {"stem": 3, "leaves": 2})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, pet, shape, lay, ctr, stem, lv, base) in enumerate(FLOWERS):
             specs.append(dict(
                 name=f"{name}{suffix}",
                 parts=(pet, shape, max(1, lay + tw.get("layers", 0)), ctr,
-                       tw.get("stem", stem), tw.get("leaves", lv), base),
-                cols=FLOWER_COLOURS[(si * 3 + pi) % len(FLOWER_COLOURS)],
-                bg=_pick_bg(FLOWER_COLOURS[(si * 3 + pi) % len(FLOWER_COLOURS)][0], PALE, si + pi),
+                       # A species with its own base (a pot, a lily pad, a
+                       # twig) already stands on something; everything else
+                       # gets a stem whether its spec asked for one or not.
+                       tw.get("stem", stem if base != "none" else 1),
+                       tw.get("leaves", max(2, lv)), base),
+                cols=FLOWER_PALETTE.get(
+                    name, FLOWER_COLOURS[(si * 3 + pi) % len(FLOWER_COLOURS)]),
+                bg=_pick_bg(FLOWER_PALETTE.get(
+                    name, FLOWER_COLOURS[(si * 3 + pi) % len(FLOWER_COLOURS)])[0],
+                    PALE, si + pi),
                 tags=["flower", name.lower()], fill=sc, scale=1.0))
     return _emit("flowers", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_flower(g, s, x, y, k),
@@ -475,10 +586,12 @@ def _recipe_category(cat, items, variants, target=100):
     whole point. Variants change shape.
     """
     specs = []
-    for vi, (suffix, fill, mut, border) in enumerate(variants):
+    for vi, variant in enumerate(variants):
+        suffix, fill, mut, border = variant[:4]
+        line = variant[4] if len(variant) > 4 else False
         for si, (name, cols, ops) in enumerate(items):
             specs.append(dict(name=f"{name}{suffix}", ops=mut(ops) if mut else ops,
-                              cols=cols, fill=fill, border=border,
+                              cols=cols, fill=fill, border=border, line=line,
                               bg=_pick_bg(cols[0], PALE, si + vi),
                               tags=[cat, name.lower()]))
 
@@ -487,12 +600,59 @@ def _recipe_category(cat, items, variants, target=100):
             _run_ops(g, spec["ops"], cx, cy, k, spec["cols"])
             _outline(g, "black" if spec["cols"][0] != "black" else "dark_gray", None)
         out = _frame(draw, sp, sp["bg"], fill=sp["fill"])
+        if sp.get("line") and _hollow(out, sp["bg"]) is None:
+            return out
         if sp.get("border"):
-            out.frame(0, 0, out.w - 1, out.h - 1, sp["cols"][1], t=2)
-            out.frame(2, 2, out.w - 3, out.h - 3, sp["cols"][0], t=1)
+            out.frame(0, 0, out.w - 1, out.h - 1, sp["cols"][1], t=1)
+            out.frame(1, 1, out.w - 2, out.h - 2, sp["cols"][0], t=1)
         return out
     return _emit(cat, specs, build, target)
 
+
+def _hollow(g, bg):
+    """Turn a filled subject into a line drawing of itself.
+
+    Keeps a bead only where it borders something DIFFERENT - the background, or
+    another colour - so the silhouette and the internal boundaries survive and
+    the flat fills drop out. This is what replaced the squash variants: " Wide"
+    and " Tall" scaled every y coordinate by 0.62 and 1.55, which is a change
+    of shape rather than of size, and it turned a motorbike into a pink blob
+    and a helicopter into nothing recognisable at all. A line drawing of a
+    motorbike is still a motorbike.
+
+    The result is one bead wide nearly everywhere, which is fine: a strand of
+    beads fuses into solid material. It is a mass hanging off a mass by a
+    single weld that breaks, and connectivity.thicken_necks handles that case
+    downstream.
+    """
+    keep = [[False] * g.w for _ in range(g.h)]
+    for y in range(g.h):
+        for x in range(g.w):
+            c = g.g[y][x]
+            if c is None or c == bg:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                n = g.g[ny][nx] if g.inb(nx, ny) else None
+                if n != c:
+                    keep[y][x] = True
+                    break
+    solid = sum(1 for y in range(g.h) for x in range(g.w)
+                if g.g[y][x] not in (None, bg))
+    left = sum(1 for y in range(g.h) for x in range(g.w) if keep[y][x])
+    # A line drawing of something that was already thin is a scribble. A bat, a
+    # shuttlecock and a whistle are mostly edge to begin with, so hollowing
+    # them leaves a handful of scattered beads and nothing to recognise.
+    # Refuse, and the caller ships the solid board instead - which _emit then
+    # drops as a duplicate of the base pattern, so the category simply has one
+    # fewer variant rather than one more bad one.
+    if left < 55 or left > solid * 0.75:
+        return None
+    for y in range(g.h):
+        for x in range(g.w):
+            if not keep[y][x] and g.g[y][x] not in (None, bg):
+                g.g[y][x] = bg
+    return g
 
 def _squash(f):
     """Scale every y coordinate - a real change of shape, not of size."""
@@ -639,9 +799,9 @@ FOOD_ITEMS = [
 
 def food():
     return _recipe_category("food", FOOD_ITEMS, [
-        ("", 0.96, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
-        (" Framed", 0.62, None, True)])
+        ("", 0.96, None, False),
+        (" Outline", 0.96, None, False, True),
+        (" Framed", 0.80, None, True)])
 
 
 GENERATORS["food"] = food
@@ -742,9 +902,9 @@ SWEET_ITEMS = [
 
 def sweets():
     return _recipe_category("sweets", SWEET_ITEMS, [
-        ("", 0.96, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
-        (" Framed", 0.62, None, True)])
+        ("", 0.96, None, False),
+        (" Outline", 0.96, None, False, True),
+        (" Framed", 0.80, None, True)])
 
 
 # ── SPORTS ───────────────────────────────────────────────────────────────────
@@ -851,9 +1011,9 @@ SPORT_ITEMS = [
 
 def sports():
     return _recipe_category("sports", SPORT_ITEMS, [
-        ("", 0.96, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
-        (" Framed", 0.62, None, True)])
+        ("", 0.96, None, False),
+        (" Outline", 0.96, None, False, True),
+        (" Framed", 0.80, None, True)])
 
 
 GENERATORS.update({"sweets": sweets, "sports": sports})
@@ -967,9 +1127,9 @@ HOLIDAY_ITEMS = [
 
 def holidays():
     return _recipe_category("holidays", HOLIDAY_ITEMS, [
-        ("", 0.96, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
-        (" Framed", 0.62, None, True)])
+        ("", 0.96, None, False),
+        (" Outline", 0.96, None, False, True),
+        (" Framed", 0.80, None, True)])
 
 
 # ── VIDEOGAME ────────────────────────────────────────────────────────────────
@@ -1072,9 +1232,9 @@ VG_ITEMS = [
 
 def videogame():
     return _recipe_category("videogame", VG_ITEMS, [
-        ("", 0.96, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
-        (" Framed", 0.62, None, True)])
+        ("", 0.96, None, False),
+        (" Outline", 0.96, None, False, True),
+        (" Framed", 0.80, None, True)])
 
 
 GENERATORS.update({"holidays": holidays, "videogame": videogame})
@@ -1427,9 +1587,9 @@ SPACE_ITEMS = [
 
 def space():
     return _recipe_category("space", SPACE_ITEMS, [
-        ("", 0.96, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.96, _squash(0.62), False), (" Tall", 0.96, _squash(1.55), False),
-        (" Framed", 0.62, None, True)], target=60)
+        ("", 0.96, None, False),
+        (" Outline", 0.96, None, False, True),
+        (" Framed", 0.80, None, True)], target=60)
 
 
 GENERATORS["space"] = space
@@ -1518,8 +1678,9 @@ def gems():
                        ("d", 0, 4.4, w_i * 0.42, 1)]
             items.append((f"{name} {ci + 1}", cols, ops))
     return _recipe_category("gems", items, [
-        ("", 0.94, None, False), (" Small", 0.72, None, False),
-        (" Wide", 0.94, _squash(0.66), False), (" Framed", 0.62, None, True)],
+        ("", 0.94, None, False),
+        (" Outline", 0.94, None, False, True),
+        (" Framed", 0.80, None, True)],
         target=120)
 
 

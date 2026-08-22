@@ -65,6 +65,176 @@ def _emit(cat, specs, build, target=100, near=NEAR_DUP):
 BIG = 60          # working canvas; the subject is auto-framed down onto S x S
 
 
+# ── species colour ──────────────────────────────────────────────────────────
+#
+# Colour belongs to the SPECIES, not to a rotating list. gen_objects learned
+# this for food long ago - "an apple that is not red and a banana that is not
+# yellow stop being identifiable" - and the creature categories never got the
+# same treatment, so the shipped library contained an orange zebra, an orange
+# flamingo, a rust-and-caramel cow and a tan tiger. Silhouette alone does not
+# carry a species: colour is half of what a maker recognises, and getting it
+# wrong undoes the drawing.
+#
+# Anything not named here falls back to the rotating list, which is fine for a
+# subject whose colour genuinely is a free choice.
+
+# (body, belly, dark markings)
+ANIMAL_PALETTE = {
+    "Cat":      ("orange", "cream", "dark_brown"),
+    "Dog":      ("caramel", "cream", "dark_brown"),
+    "Fox":      ("rust", "white", "dark_brown"),
+    "Wolf":     ("gray", "light_gray", "black"),
+    "Bear":     ("dark_brown", "tan", "black"),
+    "Panda":    ("white", "cream", "black"),
+    "Rabbit":   ("tan", "cream", "dark_brown"),
+    "Mouse":    ("silver", "cream", "dark_gray"),
+    "Squirrel": ("rust", "cream", "dark_brown"),
+    "Hedgehog": ("dark_brown", "tan", "black"),
+    "Pig":      ("light_pink", "blush", "pink"),
+    "Sheep":    ("cream", "white", "dark_gray"),
+    "Cow":      ("white", "cream", "black"),
+    "Horse":    ("brown", "cream", "dark_brown"),
+    "Zebra":    ("white", "cream", "black"),
+    "Giraffe":  ("banana", "cream", "caramel"),
+    "Deer":     ("caramel", "cream", "dark_brown"),
+    "Elephant": ("gray", "light_gray", "dark_gray"),
+    "Hippo":    ("dark_gray", "silver", "black"),
+    "Rhino":    ("silver", "light_gray", "dark_gray"),
+    "Lion":     ("caramel", "cream", "dark_brown"),
+    "Tiger":    ("orange", "cream", "black"),
+    "Monkey":   ("brown", "tan", "dark_brown"),
+    "Koala":    ("silver", "cream", "dark_gray"),
+    "Raccoon":  ("gray", "light_gray", "black"),
+}
+
+# (body, belly, beak and legs, wing)
+BIRD_PALETTE = {
+    "Wren":        ("brown", "cream", "orange", "dark_brown"),
+    "Finch":       ("banana", "cream", "orange", "olive"),
+    "Robin":       ("brown", "red", "orange", "dark_brown"),
+    "Cardinal":    ("red", "blush", "orange", "dark_red"),
+    "Owl":         ("brown", "cream", "banana", "dark_brown"),
+    "Parrot":      ("green", "banana", "orange", "dark_green"),
+    "Toucan":      ("black", "white", "orange", "dark_gray"),
+    "Duck":        ("cream", "white", "orange", "dark_green"),
+    "Swan":        ("white", "cream", "orange", "light_gray"),
+    "Heron":       ("silver", "white", "banana", "dark_gray"),
+    "Flamingo":    ("hot_pink", "light_pink", "black", "pink"),
+    "Penguin":     ("black", "white", "orange", "dark_gray"),
+    "Swallow":     ("navy", "cream", "black", "dark_blue"),
+    "Eagle":       ("dark_brown", "cream", "banana", "brown"),
+    "Hummingbird": ("teal", "banana", "black", "dark_green"),
+    "Peacock":     ("teal", "aqua", "banana", "navy"),
+    "Rooster":     ("dark_red", "orange", "banana", "red"),
+    "Pelican":     ("cream", "white", "banana", "light_gray"),
+    "Kingfisher":  ("aqua", "orange", "black", "navy"),
+    "Ostrich":     ("dark_gray", "cream", "blush", "black"),
+}
+
+# (body, dark, light)
+FISH_PALETTE = {
+    "Goldfish":  ("orange", "dark_red", "banana"),
+    "Koi":       ("orange", "dark_red", "white"),
+    "Clownfish": ("orange", "black", "white"),
+    "Angelfish": ("silver", "black", "banana"),
+    "Betta":     ("magenta", "dark_purple", "light_pink"),
+    "Puffer":    ("banana", "dark_brown", "cream"),
+    "Shark":     ("silver", "dark_gray", "cream"),
+    "Tuna":      ("navy", "black", "silver"),
+    "Swordfish": ("navy", "black", "silver"),
+    "Eel":       ("olive", "dark_green", "banana"),
+    "Guppy":     ("magenta", "purple", "aqua"),
+    "Catfish":   ("dark_brown", "black", "tan"),
+    "Trout":     ("olive", "dark_brown", "blush"),
+    "Flounder":  ("tan", "dark_brown", "cream"),
+    "Piranha":   ("silver", "dark_gray", "red"),
+    "Sunfish":   ("banana", "olive", "orange"),
+    "Barb":      ("silver", "black", "orange"),
+    "Tetra":     ("aqua", "navy", "red"),
+    "Marlin":    ("navy", "black", "aqua"),
+    "Grouper":   ("brown", "dark_brown", "cream"),
+    "Seahorse":  ("banana", "caramel", "cream"),
+    "Ray":       ("dark_gray", "black", "light_gray"),
+    "Carp":      ("caramel", "dark_brown", "banana"),
+    "Perch":     ("green", "dark_green", "banana"),
+    "Snapper":   ("red", "dark_red", "blush"),
+    "Bass":      ("dark_green", "olive", "light_green"),
+    "Minnow":    ("silver", "dark_gray", "cream"),
+    "Discus":    ("orange", "dark_red", "banana"),
+}
+
+# (crown, crown highlight, trunk)
+TREE_PALETTE = {
+    "Oak":        ("dark_green", "green", "brown"),
+    "Maple":      ("orange", "red", "dark_brown"),
+    "Pine":       ("forest", "dark_green", "dark_brown"),
+    "Fir":        ("forest", "dark_green", "dark_brown"),
+    "Spruce":     ("dark_green", "forest", "dark_brown"),
+    "Birch":      ("light_green", "green", "white"),
+    "Poplar":     ("dark_green", "olive", "brown"),
+    "Cypress":    ("forest", "dark_green", "brown"),
+    "Willow":     ("light_green", "green", "dark_brown"),
+    "Palm":       ("green", "light_green", "caramel"),
+    "Cactus":     ("green", "light_green", "green"),
+    "Bonsai":     ("dark_green", "green", "dark_brown"),
+    "Apple Tree": ("dark_green", "green", "brown"),
+    "Cherry":     ("light_pink", "blush", "dark_brown"),
+    "Baobab":     ("olive", "army_green", "tan"),
+    "Acacia":     ("olive", "army_green", "brown"),
+    "Bare Tree":  ("dark_brown", "brown", "dark_brown"),
+    "Bamboo":     ("light_green", "green", "olive"),
+    "Mushroom":   ("red", "white", "cream"),
+    "Topiary":    ("dark_green", "green", "brown"),
+    "Redwood":    ("forest", "dark_green", "rust"),
+    "Juniper":    ("dark_green", "teal", "brown"),
+    "Olive":      ("olive", "army_green", "brown"),
+    "Magnolia":   ("light_pink", "white", "brown"),
+    "Aspen":      ("banana", "light_green", "cream"),
+    "Yew":        ("forest", "dark_green", "rust"),
+    "Fern":       ("green", "light_green", "olive"),
+    "Dead Tree":  ("dark_brown", "brown", "dark_brown"),
+}
+
+# (body, dark, light)
+BUG_PALETTE = {
+    "Ladybug":      ("red", "black", "white"),
+    "Bee":          ("banana", "black", "white"),
+    "Hornet":       ("banana", "dark_brown", "cream"),
+    "Wasp":         ("banana", "black", "cream"),
+    "Beetle":       ("dark_green", "black", "light_green"),
+    "Stag Beetle":  ("dark_brown", "black", "tan"),
+    "Firefly":      ("dark_brown", "black", "neon_yellow"),
+    "Dragonfly":    ("aqua", "navy", "toothpaste"),
+    "Damselfly":    ("teal", "navy", "light_teal"),
+    "Butterfly":    ("orange", "black", "banana"),
+    "Moth":         ("tan", "dark_brown", "cream"),
+    "Ant":          ("dark_brown", "black", "caramel"),
+    "Termite":      ("cream", "caramel", "white"),
+    "Grasshopper":  ("green", "dark_green", "light_green"),
+    "Cricket":      ("dark_brown", "black", "olive"),
+    "Mantis":       ("light_green", "dark_green", "green"),
+    "Stick Insect": ("olive", "army_green", "light_green"),
+    "Caterpillar":  ("light_green", "dark_green", "banana"),
+    "Centipede":    ("rust", "dark_brown", "orange"),
+    "Millipede":    ("dark_brown", "black", "caramel"),
+    "Grub":         ("cream", "caramel", "white"),
+    "Spider":       ("black", "dark_gray", "red"),
+    "Tarantula":    ("dark_brown", "black", "rust"),
+    "Scorpion":     ("caramel", "dark_brown", "banana"),
+    "Snail":        ("caramel", "dark_brown", "cream"),
+    "Slug":         ("olive", "army_green", "banana"),
+    "Weevil":       ("dark_brown", "black", "tan"),
+    "Chafer":       ("olive", "dark_brown", "banana"),
+}
+
+
+def _species_cols(table, name, fallback):
+    """The species' own colours, or the rotating list for anything unnamed."""
+    return table.get(name, fallback)
+
+
+
+
 def _frame(draw, spec, bg, size=S, margin=1, fill=None):
     """Draw on a roomy canvas, then centre the ink on the real board.
 
@@ -326,9 +496,9 @@ def birds():
     # Every variant changes the DRAWING or the share of the board it takes.
     # A pure scale factor is cancelled by _frame's auto-fit.
     poses = [("", {"fill": 0.96}), (" Perched", {"legs": +2, "fill": 0.96}),
-             (" Calling", {"head": +0.9, "fill": 0.86}),
+             (" Calling", {"head": +0.9, "fill": 0.96}),
              (" Wings Out", {"wing": "spread", "fill": 0.96}),
-             (" Alert", {"neck": +3.0, "fill": 0.80})]
+             (" Alert", {"neck": +1.6, "fill": 0.96})]
     for pi, (suffix, tweak) in enumerate(poses):
         for si, (name, body, neck, head, beak, tail, legs, crest, wing) in enumerate(BIRD_SPECIES):
             parts = (body,
@@ -339,8 +509,11 @@ def birds():
                      tweak.get("wing", wing))
             specs.append(dict(
                 name=f"{name}{suffix}", parts=parts, fill=tweak["fill"],
-                cols=BIRD_COLOURS[(si + pi) % len(BIRD_COLOURS)],
-                bg=_pick_bg(BIRD_COLOURS[(si + pi) % len(BIRD_COLOURS)][0], BIRD_SKY, si + pi),
+                cols=_species_cols(BIRD_PALETTE, name,
+                                   BIRD_COLOURS[(si + pi) % len(BIRD_COLOURS)]),
+                bg=_pick_bg(_species_cols(BIRD_PALETTE, name,
+                                          BIRD_COLOURS[(si + pi) % len(BIRD_COLOURS)])[0],
+                            BIRD_SKY, si + pi),
                 tags=["bird", name.lower()]))
     return _emit("birds", specs, lambda sp: _frame(_draw_bird, sp, sp["bg"]), 100)
 
@@ -448,7 +621,13 @@ def _draw_fish(g, spec, cx, cy, scale):
         g.ellipse(cx + rx * 0.4, cy + ry * 0.2, rx * 0.24, ry * 0.3, accent)
 
     g.ellipse(cx - rx * 0.02, cy + ry * 0.22, rx * 0.26, ry * 0.24, accent)  # pectoral
-    _outline(g, "black" if main != "black" else "dark_gray", None)
+    # Outlined in the subject's OWN dark shade, not in black. A black edge is
+    # a bead wide all the way round a 28x28 animal, which is most of the
+    # animal: a cream sheep, a pink pig and a yellow giraffe all came out as
+    # black blobs with a little colour trapped inside. The species' dark tone
+    # separates it from the background just as well and reads as its own
+    # shadow.
+    _outline(g, accent if accent != main else "black", None)
     ex, ey = cx + rx * 0.62, cy - ry * 0.28
     g.disc(ex, ey, 1.3 * scale, "white")
     g.disc(ex + 0.4, ey, 0.8 * scale, "black")
@@ -456,10 +635,11 @@ def _draw_fish(g, spec, cx, cy, scale):
 
 def fish():
     specs = []
-    poses = [("", 0.96, {}), (" Small", 0.72, {}),
+    poses = [("", 0.96, {}),
              (" Finned", 0.96, {"dorsal": 1.2, "ventral": 1.0}),
-             (" Sleek", 0.78, {"dorsal": -0.4, "ventral": -0.35}),
-             (" Spotted", 0.96, {"stripe": "spots"})]
+             (" Sleek", 0.96, {"dorsal": -0.4, "ventral": -0.35}),
+             (" Spotted", 0.96, {"stripe": "spots"}),
+             (" Banded", 0.96, {"stripe": "bands"})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, body, tail, dor, ven, snout, stripe) in enumerate(FISH_SPECIES):
             specs.append(dict(
@@ -469,8 +649,11 @@ def fish():
                        max(0.0, dor + tw.get("dorsal", 0)),
                        max(0.0, ven + tw.get("ventral", 0)),
                        snout, tw.get("stripe", stripe)),
-                cols=FISH_COLOURS[(si * 3 + pi) % len(FISH_COLOURS)],
-                bg=_pick_bg(FISH_COLOURS[(si * 3 + pi) % len(FISH_COLOURS)][0], WATER, si + pi),
+                cols=_species_cols(FISH_PALETTE, name,
+                                   FISH_COLOURS[(si * 3 + pi) % len(FISH_COLOURS)]),
+                bg=_pick_bg(_species_cols(FISH_PALETTE, name,
+                                          FISH_COLOURS[(si * 3 + pi) % len(FISH_COLOURS)])[0],
+                            WATER, si + pi),
                 tags=["fish", name.lower()], scale=1.0))
     return _emit("fish", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_fish(g, s, x, y, k * s["scale"]),
@@ -623,7 +806,13 @@ def _draw_bug(g, spec, cx, cy, scale):
     for k in range(ants):
         sgn = -1 if k == 0 else 1
         g.limb(cx + sgn * 1.2 * u, hy - 1.4 * u, cx + sgn * 4.4 * u, hy - 6 * u, accent)
-    _outline(g, "black" if main != "black" else "dark_gray", None)
+    # Outlined in the subject's OWN dark shade, not in black. A black edge is
+    # a bead wide all the way round a 28x28 animal, which is most of the
+    # animal: a cream sheep, a pink pig and a yellow giraffe all came out as
+    # black blobs with a little colour trapped inside. The species' dark tone
+    # separates it from the background just as well and reads as its own
+    # shadow.
+    _outline(g, accent if accent != main else "black", None)
     for sgn in (-1, 1):
         g.set(cx + sgn * 1.1 * u, hy - 0.4 * u, hi)
 
@@ -634,10 +823,11 @@ def bugs():
     # A "Winged" spider is still a spider, so the first cut lost a third of the
     # category to structural collisions; leg count and segment count move
     # something in every plan.
-    poses = [("", 0.96, {}), (" Small", 0.72, {}),
+    poses = [("", 0.96, {}),
              (" Long", 0.96, {"segs": +3, "legs": +4}),
-             (" Slender", 0.78, {"segs": +1, "legs": -2}),
-             (" Antennaed", 0.96, {"ants": +2, "segs": +2})]
+             (" Slender", 0.96, {"segs": +1, "legs": -2}),
+             (" Antennaed", 0.96, {"ants": +2, "segs": +2}),
+             (" Winged", 0.96, {"wings": +2})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, plan, wings, legs, segs, ants, extra, body) in enumerate(BUG_SPECIES):
             w2 = wings + tw.get("wings", 0) if plan == "flier" else wings
@@ -646,8 +836,11 @@ def bugs():
                 parts=(plan, w2, max(4, legs + tw.get("legs", 0)),
                        max(1, segs + tw.get("segs", 0)),
                        ants + tw.get("ants", 0), extra, body),
-                cols=BUG_COLOURS[(si * 7 + pi) % len(BUG_COLOURS)],
-                bg=_pick_bg(BUG_COLOURS[(si * 7 + pi) % len(BUG_COLOURS)][0], LEAF, si + pi),
+                cols=_species_cols(BUG_PALETTE, name,
+                                   BUG_COLOURS[(si * 7 + pi) % len(BUG_COLOURS)]),
+                bg=_pick_bg(_species_cols(BUG_PALETTE, name,
+                                          BUG_COLOURS[(si * 7 + pi) % len(BUG_COLOURS)])[0],
+                            LEAF, si + pi),
                 fill=sc, tags=["bug", name.lower()], scale=1.0))
     return _emit("bugs", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_bug(g, s, x, y, k * s["scale"]),
@@ -789,17 +982,22 @@ def _draw_tree(g, spec, cx, cy, scale):
 
 def trees():
     specs = []
-    poses = [("", 0.96, {}), (" Sapling", 0.72, {}),
-             (" Tall", 0.96, {"trunk": 1.9}), (" Squat", 0.96, {"trunk": 0.45}),
-             (" Young", 0.78, {"trunk": 1.2, "tiers": -1})]
+    poses = [("", 0.96, {}),
+             (" Tall", 0.96, {"trunk": 1.45}),
+             (" Squat", 0.96, {"trunk": 0.7}),
+             (" Young", 0.96, {"trunk": 1.15, "tiers": -1}),
+             (" Full", 0.96, {"tiers": +1})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, crown, tiers, trunk, branch, extra) in enumerate(TREE_SPECIES):
             tr = (trunk[0], trunk[1] * tw.get("trunk", 1.0))
             specs.append(dict(
                 name=f"{name}{suffix}", fill=sc,
                 parts=(crown, max(1, tiers + tw.get("tiers", 0)), tr, branch, extra),
-                cols=TREE_COLOURS[(si * 3 + pi) % len(TREE_COLOURS)],
-                bg=_pick_bg(TREE_COLOURS[(si * 3 + pi) % len(TREE_COLOURS)][0], SKY, si + pi),
+                cols=_species_cols(TREE_PALETTE, name,
+                                   TREE_COLOURS[(si * 3 + pi) % len(TREE_COLOURS)]),
+                bg=_pick_bg(_species_cols(TREE_PALETTE, name,
+                                          TREE_COLOURS[(si * 3 + pi) % len(TREE_COLOURS)])[0],
+                            SKY, si + pi),
                 tags=["tree", name.lower()], scale=1.0))
     return _emit("trees", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_tree(g, s, x, y, k * s["scale"]),
@@ -997,24 +1195,40 @@ def _draw_animal(g, spec, cx, cy, scale):
     elif mark == "tip":
         g.disc(bx - 4.8 * u, cy + 0.6 * u, 1.5 * u, belly)
 
-    _outline(g, "black" if main != "black" else "dark_gray", None)
+    # Outlined in the subject's OWN dark shade, not in black. A black edge is
+    # a bead wide all the way round a 28x28 animal, which is most of the
+    # animal: a cream sheep, a pink pig and a yellow giraffe all came out as
+    # black blobs with a little colour trapped inside. The species' dark tone
+    # separates it from the background just as well and reads as its own
+    # shadow.
+    _outline(g, dark if dark != main else "black", None)
     g.set(hx + head * 0.25, hy - head * 0.3, "white")
     g.set(hx + head * 0.25 + 1, hy - head * 0.3, "black")
 
 
 def animals():
     specs = []
-    poses = [("", 0.96, {}), (" Cub", 0.72, {}),
-             (" Standing", 0.96, {"legs": 2.1}), (" Crouching", 0.96, {"legs": 0.3}),
-             (" Grazing", 0.78, {"legs": 1.4, "neck": -0.6})]
+    # Poses change the SUBJECT, not its size. Every pattern now ships small,
+    # medium and large boards, so a " Small" pose is a duplicate of the base
+    # one, and shrinking a subject to 0.72 of the board only makes it harder to
+    # recognise. The tweaks that survived are the ones that still leave the
+    # animal identifiable: legs x2.1 gave a rabbit stilts and legs x0.3 took a
+    # cow's legs off entirely.
+    poses = [("", 0.96, {}),
+             (" Walking", 0.96, {"legs": 1.25}),
+             (" Resting", 0.96, {"legs": 0.6}),
+             (" Head Up", 0.96, {"neck": 1.0}),
+             (" Grazing", 0.96, {"legs": 1.15, "neck": -0.5})]
     for pi, (suffix, sc, tw) in enumerate(poses):
         for si, (name, body, neck, head, ear, snout, tail, legs, mark) in enumerate(ANIMAL_SPECIES):
             specs.append(dict(
                 name=f"{name}{suffix}",
                 parts=(body, max(0.0, neck + tw.get("neck", 0)), head, ear, snout,
                        tail, legs * tw.get("legs", 1.0), mark),
-                cols=ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)],
-                bg=_pick_bg(ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)][0],
+                cols=_species_cols(ANIMAL_PALETTE, name,
+                                   ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)]),
+                bg=_pick_bg(_species_cols(ANIMAL_PALETTE, name,
+                                          ANIMAL_COLOURS[(si * 3 + pi) % len(ANIMAL_COLOURS)])[0],
                             FIELD, si + pi),
                 fill=sc, tags=["animal", name.lower()], scale=1.0))
     return _emit("animals", specs,
