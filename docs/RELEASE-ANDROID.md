@@ -73,12 +73,47 @@ the library does not require regenerating anything.
 > The **already-published 1.4.0** still has the single old URL compiled in, so
 > keep the feature branch until your users have moved to 1.5.0.
 
-### 0.4 Java 17
+### 0.4 Java, and why `gradlew` fails in a terminal
 
 The project compiles at `JavaVersion.VERSION_17` with Gradle 8.11.1 and
-AGP 8.7.3. Android Studio's embedded JDK is 17+ on any recent version; if you
-have pointed it elsewhere, check **Settings → Build, Execution, Deployment →
-Build Tools → Gradle → Gradle JDK**.
+AGP 8.7.3. Android Studio ships its own JDK and does **not** put it on your
+PATH, so running `gradlew` from a plain terminal usually fails with:
+
+> ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+That is not a broken install. Two ways round it, either is fine:
+
+**Run the tasks from inside the IDE.** The Gradle tool window (elephant icon)
+→ **app → Tasks** → `verification/test` and `build/bundleRelease`. The IDE
+already knows where its JDK is, so there is nothing to configure. This is the
+path of least resistance and the rest of this guide notes the task names as
+well as the command lines.
+
+**Or export JAVA_HOME.** Point it at Android Studio's bundled runtime — `jbr`
+on any recent version:
+
+```powershell
+# Windows PowerShell, this session only
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+
+# …or permanently, then reopen the terminal
+[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
+```
+
+```bash
+# macOS
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+```
+
+If that path does not exist, **Settings → Build, Execution, Deployment → Build
+Tools → Gradle → Gradle JDK** shows the one the IDE is actually using.
+
+### 0.5 Windows notes
+
+- Use `.\gradlew` (PowerShell) rather than `./gradlew`.
+- `scripts/publish-library.sh` is a bash script and will not run in PowerShell.
+  Use Git Bash — which ships with Git for Windows — or WSL. It is only needed
+  for publishing patterns without a store release (§8), not for a build.
 
 ---
 
