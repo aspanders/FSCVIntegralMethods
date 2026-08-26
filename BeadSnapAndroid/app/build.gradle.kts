@@ -120,7 +120,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.foundation)
     implementation(libs.androidx.foundation.layout)
-    implementation(libs.billing.ktx)
+    implementation(libs.billing)
     implementation(libs.mlkit.subject.segmentation)
     implementation(libs.androidx.exifinterface)
 
