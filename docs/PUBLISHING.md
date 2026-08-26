@@ -1,5 +1,9 @@
 # BeadSnap: Publishing Guide (Apple first, then Google Play)
 
+> This file covers **first-time** setup: accounts, listings, tip-jar products,
+> the store forms. For shipping a *subsequent* Android update — build, sign,
+> upload, roll out — see **[RELEASE-ANDROID.md](RELEASE-ANDROID.md)**.
+
 Both apps are **free** with a **tip jar** (in-app purchases). Keep versions in
 lockstep: `scripts/bump-version.sh <version>` updates both platforms.
 
