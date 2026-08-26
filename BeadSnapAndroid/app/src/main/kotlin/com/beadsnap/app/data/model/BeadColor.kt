@@ -1,6 +1,5 @@
 package com.beadsnap.app.data.model
 
-import android.graphics.Color as AndroidColor
 import androidx.compose.ui.graphics.Color
 import kotlinx.serialization.Serializable
 import kotlin.math.pow
@@ -9,14 +8,14 @@ import kotlin.math.sqrt
 @Serializable
 data class BeadColor(val id: String, val name: String, val hex: String) {
 
-    val androidColor: Int get() = AndroidColor.parseColor(hex)
+    val androidColor: Int get() = parseHex(hex)
     val composeColor: Color get() = Color(androidColor)
 
     fun lab(): Triple<Double, Double, Double> {
         val c = androidColor
-        val r = AndroidColor.red(c) / 255.0
-        val g = AndroidColor.green(c) / 255.0
-        val b = AndroidColor.blue(c) / 255.0
+        val r = ((c shr 16) and 0xFF) / 255.0
+        val g = ((c shr 8) and 0xFF) / 255.0
+        val b = (c and 0xFF) / 255.0
         return rgbToLab(r, g, b)
     }
 
@@ -27,6 +26,31 @@ data class BeadColor(val id: String, val name: String, val hex: String) {
     }
 
     companion object {
+
+        /**
+         * "#RRGGBB" (or "#AARRGGBB", or shorthand "#RGB") to a packed ARGB Int.
+         *
+         * Hand-rolled rather than android.graphics.Color.parseColor, because
+         * this class is otherwise pure arithmetic and pulling in Android for a
+         * hex parse made it untestable: in a JVM unit test every method on the
+         * real android.jar throws RuntimeException("Stub!"), so three
+         * BeadColorTest cases died on `distanceTo` - a function with no
+         * business touching the platform at all.
+         *
+         * Matches parseColor's behaviour for the forms the palette uses,
+         * including defaulting a 6-digit value to fully opaque.
+         */
+        fun parseHex(hex: String): Int {
+            val h = hex.removePrefix("#")
+            val expanded = when (h.length) {
+                3 -> "FF" + h.map { "$it$it" }.joinToString("")   // #RGB
+                6 -> "FF$h"                                       // #RRGGBB, opaque
+                8 -> h                                            // #AARRGGBB
+                else -> throw IllegalArgumentException("bad colour: $hex")
+            }
+            return expanded.toLong(16).toInt()
+        }
+
         fun rgbToLab(r: Double, g: Double, b: Double): Triple<Double, Double, Double> {
             fun linearize(c: Double) = if (c > 0.04045) ((c + 0.055) / 1.055).pow(2.4) else c / 12.92
             val rl = linearize(r); val gl = linearize(g); val bl = linearize(b)
