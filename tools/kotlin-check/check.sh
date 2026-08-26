@@ -38,7 +38,7 @@ python3 "$HERE/prepare_fixture.py" "$WORK"
 echo "==> compile engine"
 "$KOTLINC" -nowarn -d "$WORK/engine" "$HERE"/stubs/*.kt "${ENGINE[@]}"
 
-for main in Harness Cross Bench; do
+for main in Harness Cross Bench Decode; do
   echo "==> $main"
   "$KOTLINC" -nowarn -include-runtime -d "$WORK/$main.jar" \
     "$HERE"/stubs/*.kt "$HERE/$main.kt" "${ENGINE[@]}"

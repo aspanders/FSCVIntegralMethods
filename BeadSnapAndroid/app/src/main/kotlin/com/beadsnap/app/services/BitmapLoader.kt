@@ -41,11 +41,28 @@ object BitmapLoader {
     /** Decode with inSampleSize so the result is no larger than [maxDim] per side. */
     fun decodeSampled(open: () -> InputStream?, maxDim: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        open()?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+        // The bounds pass is run for its SIDE EFFECT on `bounds`. With
+        // inJustDecodeBounds set, decodeStream returns null by contract - it
+        // reads the header and fills in outWidth/outHeight without allocating
+        // any pixels. An earlier version wrote
+        //
+        //     open()?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+        //
+        // meaning to ask "did the stream open?", but `use` returns the lambda's
+        // value, so what it actually asked was "did the bounds pass return a
+        // bitmap?" - which is never. Every photo failed to decode, on both the
+        // camera and the gallery path. Open the stream first, and let the
+        // outWidth check below be the thing that decides.
+        val header = open() ?: return null
+        header.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
+        // Halve until BOTH sides are within maxDim. The previous condition
+        // compared outWidth / (sample * 2), which stops one halving early and
+        // leaves an image up to twice maxDim per side - four times the pixels,
+        // and four times the ~4 MB this is documented to produce.
         var sample = 1
-        while (bounds.outWidth / (sample * 2) >= maxDim || bounds.outHeight / (sample * 2) >= maxDim) {
+        while (bounds.outWidth / sample > maxDim || bounds.outHeight / sample > maxDim) {
             sample *= 2
         }
         val opts = BitmapFactory.Options().apply {
