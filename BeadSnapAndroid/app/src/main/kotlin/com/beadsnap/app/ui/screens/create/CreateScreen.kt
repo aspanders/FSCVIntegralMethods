@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -71,9 +72,32 @@ fun CreateScreen(
         if (uri != null) pendingImageUri = uri
     }
 
-    // Camera: captures go to a private cache file (never the user's gallery)
-    var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
-    var cameraImageFile by remember { mutableStateOf<java.io.File?>(null) }
+    // Camera: captures go to a private cache file (never the user's gallery).
+    //
+    // The path is held in rememberSaveable, not remember, and that is not
+    // decoration. The Activity Result docs say that between launch() and the
+    // result callback "it is possible - and, in cases of memory-intensive
+    // operations such as camera usage, almost certain - that your process and
+    // your activity will be destroyed", and that any state needed to handle the
+    // result must be saved separately. `remember` dies with the composition.
+    // The launcher registration itself survives, so after a kill the callback
+    // still fires with success = true - but the Uri it needs is back to null,
+    // the guard below falls to the else branch, and the user comes back from
+    // the camera to a screen where nothing at all happens and no error appears.
+    // The capture is orphaned in the cache too. Reproducible every time with
+    // Developer Options -> "Don't keep activities".
+    //
+    // A String path is what gets saved; the File and the Uri are derived, since
+    // neither survives a Bundle round trip as cheaply.
+    var cameraImagePath by rememberSaveable { mutableStateOf<String?>(null) }
+    val cameraImageFile = remember(cameraImagePath) { cameraImagePath?.let { java.io.File(it) } }
+    val cameraImageUri = remember(cameraImageFile) {
+        cameraImageFile?.let {
+            androidx.core.content.FileProvider.getUriForFile(
+                context, "${context.packageName}.fileprovider", it
+            )
+        }
+    }
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
@@ -81,15 +105,24 @@ fun CreateScreen(
             pendingImageUri = cameraImageUri
         } else {
             cameraImageFile?.delete()
-            cameraImageFile = null
-            cameraImageUri = null
+            cameraImagePath = null
         }
     }
 
     fun cleanUpCameraCapture() {
         cameraImageFile?.delete()
-        cameraImageFile = null
-        cameraImageUri = null
+        cameraImagePath = null
+    }
+
+    // Sweep anything a previous kill orphaned. Without this the cache grows by
+    // one full-resolution JPEG for every capture the system interrupted.
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val keep = cameraImagePath
+            java.io.File(context.cacheDir, "camera").listFiles()?.forEach {
+                if (it.absolutePath != keep) it.delete()
+            }
+        }
     }
 
     Scaffold(
@@ -161,8 +194,7 @@ fun CreateScreen(
                             val uri = androidx.core.content.FileProvider.getUriForFile(
                                 context, "${context.packageName}.fileprovider", file
                             )
-                            cameraImageFile = file
-                            cameraImageUri = uri
+                            cameraImagePath = file.absolutePath
                             cameraLauncher.launch(uri)
                         } catch (e: Exception) {
                             cleanUpCameraCapture()

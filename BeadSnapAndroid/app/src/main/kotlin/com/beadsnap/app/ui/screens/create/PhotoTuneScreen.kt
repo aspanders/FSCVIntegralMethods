@@ -596,20 +596,45 @@ private fun PhotoPane(
         val srcW = crop?.width()?.coerceAtLeast(1) ?: photo.width
         val srcH = crop?.height()?.coerceAtLeast(1) ?: photo.height
 
+        // The gesture handler must NOT be keyed on anything that changes while
+        // a finger is down. It used to be pointerInput(photo, crop, box), and
+        // `photo` is replaced by a brand-new ImageBitmap on every preview
+        // rebuild - which the first dab of the stroke itself triggers. Compose
+        // cancels and restarts the pointer coroutine whenever a key changes,
+        // and the restarted block waits at awaitFirstDown(), which only fires
+        // on a finger that goes from up to down. A finger already pressed never
+        // produces one, so the rest of the stroke went nowhere: the brush
+        // painted a single dab and then ignored the drag until you lifted and
+        // tapped again.
+        //
+        // So the handler is created once, and the values it needs are read at
+        // EVENT time instead of captured at composition time. `box` is already
+        // a snapshot state read through its delegate, so it is live as written;
+        // the parameters are not, and go through rememberUpdatedState.
+        val liveCrop by rememberUpdatedState(crop)
+        val liveImage by rememberUpdatedState(photo)
+        val livePaint by rememberUpdatedState(onPaint)
+
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { box = it }
-                .pointerInput(photo, crop, box) {
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         fun emit(pos: Offset) {
                             if (box.width == 0 || box.height == 0) return
+                            val img = liveImage
+                            val c = liveCrop
+                            val sx = c?.left ?: 0
+                            val sy = c?.top ?: 0
+                            val sw = c?.width()?.coerceAtLeast(1) ?: img.width
+                            val sh = c?.height()?.coerceAtLeast(1) ?: img.height
                             val scale = min(
-                                box.width.toFloat() / srcW,
-                                box.height.toFloat() / srcH
+                                box.width.toFloat() / sw,
+                                box.height.toFloat() / sh
                             )
-                            val drawW = srcW * scale
-                            val drawH = srcH * scale
+                            val drawW = sw * scale
+                            val drawH = sh * scale
                             val left = (box.width - drawW) / 2f
                             val top = (box.height - drawH) / 2f
                             val u = (pos.x - left) / drawW
@@ -617,9 +642,10 @@ private fun PhotoPane(
                             if (u !in 0f..1f || v !in 0f..1f) return
                             // Back out of the crop into whole-photo coordinates,
                             // which is what the studio's brush speaks.
-                            onPaint(
-                                (srcX + u * srcW) / photo.width,
-                                (srcY + v * srcH) / photo.height
+                            val paintNow = livePaint
+                            paintNow(
+                                (sx + u * sw) / img.width,
+                                (sy + v * sh) / img.height
                             )
                         }
                         val down = awaitFirstDown()
