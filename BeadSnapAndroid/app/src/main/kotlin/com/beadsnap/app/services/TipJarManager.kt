@@ -8,6 +8,7 @@ import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
 import com.android.billingclient.api.ConsumeParams
+import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
@@ -56,9 +57,26 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
     private val _shouldShowPrompt = MutableStateFlow(false)
     val shouldShowPrompt: StateFlow<Boolean> = _shouldShowPrompt.asStateFlow()
 
+    // Play Billing Library 9. Two things here are v8+ API and not optional:
+    //
+    // enablePendingPurchases() with no arguments was removed - it now takes a
+    // PendingPurchasesParams, and enableOneTimeProducts() on that builder is
+    // the app stating that it handles a purchase that is authorised but not
+    // yet paid for (cash at a kiosk, a parent's approval). Tips are one-time
+    // products, so that is the only flag we need.
+    //
+    // enableAutoServiceReconnection() is new in v8 and worth taking: the old
+    // onBillingServiceDisconnected callback below did nothing, so a dropped
+    // connection left the tip jar dead until something happened to call
+    // connect() again.
     private val billingClient = BillingClient.newBuilder(context)
         .setListener(this)
-        .enablePendingPurchases()
+        .enablePendingPurchases(
+            PendingPurchasesParams.newBuilder()
+                .enableOneTimeProducts()
+                .build()
+        )
+        .enableAutoServiceReconnection()
         .build()
 
     val hasTipped: Boolean get() = prefs.getBoolean(KEY_HAS_TIPPED, false)
@@ -107,7 +125,9 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
                     queryProducts()
                 }
             }
-            override fun onBillingServiceDisconnected() { /* retried on next connect() */ }
+            // The client reconnects itself now (enableAutoServiceReconnection
+            // above); this stays because the interface requires it.
+            override fun onBillingServiceDisconnected() { }
         })
     }
 
@@ -120,9 +140,14 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
                     .build()
             })
             .build()
-        billingClient.queryProductDetailsAsync(params) { result, details ->
+        // v8 changed this callback: the second argument is a
+        // QueryProductDetailsResult rather than a bare List<ProductDetails>,
+        // because a query can now come back with some products fetched and
+        // others not. We only need the ones that came back - a tier missing
+        // from Play Console simply does not appear in the sheet.
+        billingClient.queryProductDetailsAsync(params) { result, productDetailsResult ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                _products.value = details.sortedBy {
+                _products.value = productDetailsResult.productDetailsList.sortedBy {
                     it.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0
                 }
             }

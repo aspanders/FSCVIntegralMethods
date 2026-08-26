@@ -20,6 +20,8 @@ SRC="$REPO/BeadSnapAndroid/app/src/main/kotlin/com/beadsnap/app"
 WORK="${WORK:-/tmp/beadsnap-kcheck}"
 KOTLINC="${KOTLINC:-kotlinc}"
 
+COROUTINES="${COROUTINES:-$(dirname "$(dirname "$(command -v "$KOTLINC" || echo /opt/kotlinc/bin/kotlinc)")")/lib/kotlinx-coroutines-core-jvm.jar}"
+
 ENGINE=(
   "$SRC/data/model/BeadColor.kt"
   "$SRC/data/model/FusePattern.kt"
@@ -50,6 +52,17 @@ if diff -q <(tail -n +2 "$WORK/out_incremental.txt") \
 else
   echo "  DIFFER - the dirty-rect logic is dropping cells"; exit 1
 fi
+
+# Play Billing has no emulator here and no Android SDK, so this is a
+# TYPE check, not a behaviour one: stubs/BillingStubs.kt encodes the v9
+# signatures from the public API reference, and compiling TipJarManager
+# against them proves the call sites match the library the app declares.
+# Reverting either v8 migration - the no-argument enablePendingPurchases, or
+# treating the queryProductDetailsAsync callback's second argument as a list -
+# fails right here.
+echo "==> play billing call sites (v9 signatures)"
+"$KOTLINC" -nowarn -cp "$COROUTINES" -d "$WORK/billing" \
+  "$HERE"/stubs/*.kt "$SRC/services/TipJarManager.kt"
 
 echo "==> python reference"
 python3 "$HERE/compare.py" "$WORK"
