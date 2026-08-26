@@ -48,32 +48,30 @@ Keep the `.jks` **outside** the repo. If you lose it you cannot update the app
 under the same listing ever again, short of asking Google to reset your upload
 key. Back it up somewhere you would still have after losing this machine.
 
-### 0.3 One thing that is easy to get wrong: the library update URL
+### 0.3 The library update URL (already handled — read once)
 
-The app fetches pattern-library updates over the air, and the URL is a raw
-GitHub link that hardcodes **this branch**:
+The app fetches pattern-library updates over the air. That used to be a single
+raw-GitHub URL pinned to this feature branch, in both `RemoteLibraryService`
+and the generated `manifest.json` — so deleting the branch after a merge would
+have cut off pattern updates for every installed copy, with no fix short of
+shipping a new build.
 
-- `RemoteLibraryService.kt` → `manifestUrl`
-- `library/manifest.json` → `patternsUrl`
+Both apps now try a **list** of sources in order:
 
-```
-https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/claude/fuse-bead-converter-app-706h2s/library/…
-```
+1. `https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/main`
+2. `https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/claude/fuse-bead-converter-app-706h2s`
 
-The already-published 1.4.0 has the same URL baked in. **If you merge this
-branch to `main` and delete it, over-the-air library updates break for every
-installed copy of the app, old and new.** The bundled library still works
-offline, so nobody is left with an empty app — they just stop getting new
-patterns.
+The first that answers wins; a 404 falls through. `main` has no `library/`
+directory yet, so today source 2 serves everybody. Merge this branch to `main`
+and source 1 starts winning on its own, with no app update needed. The
+patterns file is fetched as a **sibling of the manifest that actually
+answered**, not from the absolute `patternsUrl` recorded inside it, so moving
+the library does not require regenerating anything.
 
-Pick one before you ship:
+`LibrarySourcesTest` pins this behaviour.
 
-- **Keep the branch alive.** Nothing to do.
-- **Move to `main`.** Change both URLs to `.../main/library/…`, rebuild the
-  manifest with `python3 tools/library/build_manifest.py --raw-base
-  https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/main`, then
-  merge. Installed 1.4.0 copies keep pointing at the old branch, so keep the
-  branch until they have updated.
+> The **already-published 1.4.0** still has the single old URL compiled in, so
+> keep the feature branch until your users have moved to 1.5.0.
 
 ### 0.4 Java 17
 
@@ -196,7 +194,27 @@ unrecognisable variants are gone. New line-drawing versions of many patterns.
 Plus three Steamboat Willie designs, and the usual fixes under the hood.
 ```
 
-## 8. After it is live
+## 8. Shipping new patterns *without* a store release
+
+New patterns do not need a Play release. The library is fetched over the air,
+so this is the whole flow:
+
+```bash
+scripts/publish-library.sh --push
+```
+
+It rebuilds the library, runs the 19 regression checks, bumps the version and
+the bundled-version constants in both apps, commits, and pushes. Installed apps
+pick it up on their next launch and show a "Pattern library updated" notice.
+
+Drop `--push` to stop at the commit and review first, or use `--dry-run` to
+build and verify without touching git.
+
+A store release is only needed when app **code** changes. Refreshing the
+bundled copy of the library — so first-run offline users get the new patterns
+too — happens automatically as part of the same script.
+
+## 9. After it is live
 
 - Tag the release: `git tag v1.5.0 && git push origin v1.5.0`.
 - Watch **Quality → Android vitals** for a day or two; a billing regression
@@ -216,4 +234,4 @@ Plus three Steamboat Willie designs, and the usual fixes under the hood.
 | "Version code 14 has already been used" | Someone uploaded a 14 already. Bump to 15 in `app/build.gradle.kts` and rebuild — version codes are permanently consumed even by deleted drafts. |
 | Tip sheet is empty in the release build | The six product IDs in `TipJarManager.kt` must exist and be **active** in Play Console, and your test account must be a licence tester. |
 | Billing warning still showing after rollout | An older build is still live on some other track. See §6. |
-| Library never updates over the air | The branch in the raw-GitHub URL was deleted. See §0.3. |
+| Library never updates over the air | Every source in `LibrarySources.BASES` is unreachable, or the hosted version is not greater than `BUNDLED_LIBRARY_VERSION`. See §0.3 and §8. |

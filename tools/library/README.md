@@ -68,14 +68,27 @@ higher version and commit `library/manifest.json` + `library/patterns.json`.
 ## Publish an update
 
 ```bash
+scripts/publish-library.sh --push
+```
+
+That rebuilds the library, runs the regression checks, bumps the version and
+the bundled-version constants in both apps, commits and pushes. Drop `--push`
+to review the commit first; `--dry-run` builds and verifies without touching
+git. The manual equivalent is:
+
+```bash
 cd tools/library
 python build_manifest.py            # auto-increments the version
 git add ../../library && git commit -m "Library update" && git push
 ```
 
-The `patternsUrl` in the manifest points at the raw GitHub file on the app's
-branch. Point it elsewhere (GitHub Pages, a CDN) with `--raw-base` if you host
-the library somewhere else.
+Both apps try a LIST of hosts (`LibrarySources.BASES` on Android, `sources` on
+iOS) and take the first that answers, fetching `patterns.json` as a sibling of
+whichever `manifest.json` responded. So re-hosting the library is a matter of
+adding the new home to the front of those lists in a future app release - the
+old host keeps serving everyone who has not updated. `--raw-base` still sets
+the absolute `patternsUrl` written into the manifest, which older app versions
+rely on.
 
 ## Add patterns from your own photos
 

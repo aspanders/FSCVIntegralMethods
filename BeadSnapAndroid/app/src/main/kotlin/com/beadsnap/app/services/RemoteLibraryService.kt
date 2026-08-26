@@ -17,6 +17,7 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -35,6 +36,53 @@ data class RemotePatterns(
 )
 
 /**
+ * Where to look for a hosted library, and in what order.
+ *
+ * Pure string work, kept out of [RemoteLibraryService] so it can be unit-tested
+ * without a network or an Android context - the same reason [TipPromptLogic]
+ * sits outside TipJarManager.
+ */
+object LibrarySources {
+
+    /**
+     * Bases tried in order until one answers, most-preferred first.
+     *
+     * A LIST, not a single URL, because a single URL pinned the library to one
+     * git branch: deleting that branch after a merge would have cut off pattern
+     * updates for every installed copy of the app, with no fix short of
+     * shipping a new build to the store. The library can now move between
+     * branches - or off GitHub entirely, onto Pages or a CDN - by adding the
+     * new home to the front of this list in a future release, while the old one
+     * keeps serving everybody who has not updated yet.
+     *
+     * A source that 404s costs one cheap request and falls through to the next.
+     * Keep in sync with the same list in the iOS RemoteLibraryService.
+     */
+    val BASES = listOf(
+        "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/main",
+        "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/" +
+            "claude/fuse-bead-converter-app-706h2s",
+    )
+
+    fun manifestUrl(base: String): String = "${base.trimEnd('/')}/library/manifest.json"
+
+    /**
+     * Where to look for the patterns file, best first.
+     *
+     * The sibling of the manifest we actually fetched comes before the absolute
+     * patternsUrl recorded inside it, and that ordering is the whole point: a
+     * manifest copied to a new home still names the OLD patternsUrl, so trusting
+     * the file would send the app straight back to the host it just moved off.
+     * The recorded URL stays as a fallback for a manifest served from somewhere
+     * its patterns file is not.
+     */
+    fun patternUrls(base: String, patternsUrl: String): List<String> =
+        listOf("${base.trimEnd('/')}/library/patterns.json", patternsUrl)
+            .filter { it.isNotBlank() }
+            .distinct()
+}
+
+/**
  * Keeps the app's pattern library up to date from a hosted manifest.
  *
  * Flow: fetch the tiny manifest.json → if its version is newer than what we
@@ -44,10 +92,7 @@ data class RemotePatterns(
  */
 class RemoteLibraryService private constructor(context: Context) {
 
-    // Point this at wherever manifest.json is hosted (raw GitHub, Pages, CDN…).
-    private val manifestUrl =
-        "https://raw.githubusercontent.com/aspanders/FSCVIntegralMethods/" +
-        "claude/fuse-bead-converter-app-706h2s/library/manifest.json"
+    private val sources = LibrarySources.BASES
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("remote_library", Context.MODE_PRIVATE)
@@ -73,29 +118,48 @@ class RemoteLibraryService private constructor(context: Context) {
      * offline (both silent, non-fatal).
      */
     suspend fun syncIfNeeded(): Int? {
-        val manifest = try {
-            json.decodeFromString<LibraryManifest>(get(manifestUrl))
-        } catch (_: Exception) {
-            return null   // offline or malformed: keep whatever we already have
-        }
-        // The app already ships library version BUNDLED_LIBRARY_VERSION as an
-        // asset, so only download when the hosted library is strictly newer.
-        if (manifest.version <= maxOf(appliedVersion, BUNDLED_LIBRARY_VERSION)) return null
+        for (base in sources) {
+            val manifest = try {
+                json.decodeFromString<LibraryManifest>(get(LibrarySources.manifestUrl(base)))
+            } catch (e: CancellationException) {
+                throw e       // the caller went away; not this source's fault
+            } catch (_: Exception) {
+                continue      // offline, 404, or malformed: try the next source
+            }
+            // The app already ships library version BUNDLED_LIBRARY_VERSION as
+            // an asset, so only download when the hosted library is strictly
+            // newer. A source that answered and is not newer means we are up to
+            // date - stop, rather than asking the others the same question.
+            if (manifest.version <= maxOf(appliedVersion, BUNDLED_LIBRARY_VERSION)) return null
 
-        val body = try {
-            get(manifest.patternsUrl)
-        } catch (_: Exception) {
-            return null   // couldn't download the patterns file: try again next launch
+            val body = fetchPatterns(base, manifest) ?: continue
+            val remote = try {
+                json.decodeFromString<RemotePatterns>(body)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                continue
+            }
+            store.applyRemoteLibrary(remote.patterns, body)  // caches raw text + merges
+            appliedVersion = manifest.version
+            _updateApplied.value = remote.patterns.size
+            return remote.patterns.size
         }
-        val remote = try {
-            json.decodeFromString<RemotePatterns>(body)
-        } catch (_: Exception) {
-            return null
+        return null
+    }
+
+    /** Downloads the patterns file, trying each candidate in turn. */
+    private suspend fun fetchPatterns(base: String, manifest: LibraryManifest): String? {
+        for (url in LibrarySources.patternUrls(base, manifest.patternsUrl)) {
+            try {
+                return get(url)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // try the next candidate
+            }
         }
-        store.applyRemoteLibrary(remote.patterns, body)  // caches the raw text + merges
-        appliedVersion = manifest.version
-        _updateApplied.value = remote.patterns.size
-        return remote.patterns.size
+        return null
     }
 
     private suspend fun get(url: String): String =
