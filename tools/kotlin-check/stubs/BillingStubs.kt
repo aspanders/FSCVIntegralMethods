@@ -16,6 +16,7 @@ import android.content.Context
 
 class BillingResult {
     val responseCode: Int = 0
+    val debugMessage: String = ""
 }
 
 interface PurchasesUpdatedListener {
@@ -100,6 +101,25 @@ class BillingFlowParams private constructor() {
     companion object { @JvmStatic fun newBuilder(): Builder = Builder() }
 }
 
+/** The v5+ shape: purchases are queried per product type. */
+class QueryPurchasesParams private constructor() {
+    class Builder internal constructor() {
+        fun setProductType(type: String): Builder = this
+        fun build(): QueryPurchasesParams = QueryPurchasesParams()
+    }
+    companion object { @JvmStatic fun newBuilder(): Builder = Builder() }
+}
+
+/**
+ * A Java interface in the real library, so a Kotlin lambda reaches it by SAM
+ * conversion. Modelled as a fun interface rather than a function type so the
+ * call site here is the same one the real library accepts. The list is
+ * non-null: "no purchases" is an empty list, not null.
+ */
+fun interface PurchasesResponseListener {
+    fun onQueryPurchasesResponse(result: BillingResult, purchases: List<Purchase>)
+}
+
 class ConsumeParams private constructor() {
     class Builder internal constructor() {
         fun setPurchaseToken(token: String): Builder = this
@@ -109,11 +129,22 @@ class ConsumeParams private constructor() {
 }
 
 class BillingClient private constructor() {
+    // The real values, from the reference. The negatives are client-side
+    // states (the service binding), the positives come back from Play.
     object BillingResponseCode {
+        const val SERVICE_TIMEOUT = -3
+        const val FEATURE_NOT_SUPPORTED = -2
+        const val SERVICE_DISCONNECTED = -1
         const val OK = 0
         const val USER_CANCELED = 1
-        const val ITEM_UNAVAILABLE = 4
+        const val SERVICE_UNAVAILABLE = 2
         const val BILLING_UNAVAILABLE = 3
+        const val ITEM_UNAVAILABLE = 4
+        const val DEVELOPER_ERROR = 5
+        const val ERROR = 6
+        const val ITEM_ALREADY_OWNED = 7
+        const val ITEM_NOT_OWNED = 8
+        const val NETWORK_ERROR = 12
     }
     object ProductType { const val INAPP = "inapp"; const val SUBS = "subs" }
 
@@ -135,6 +166,7 @@ class BillingClient private constructor() {
     ) {}
     fun launchBillingFlow(activity: Activity, params: BillingFlowParams): BillingResult =
         BillingResult()
+    fun queryPurchasesAsync(params: QueryPurchasesParams, listener: PurchasesResponseListener) {}
     fun consumeAsync(params: ConsumeParams, listener: (BillingResult, String) -> Unit) {}
 
     companion object {

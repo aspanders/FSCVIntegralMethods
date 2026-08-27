@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.beadsnap.app.data.model.FusePattern
 import com.beadsnap.app.data.store.PatternStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -120,7 +122,17 @@ class RemoteLibraryService private constructor(context: Context) {
     suspend fun syncIfNeeded(): Int? {
         for (base in sources) {
             val manifest = try {
-                json.decodeFromString<LibraryManifest>(get(LibrarySources.manifestUrl(base)))
+                // Off the UI thread. syncIfNeeded has no dispatcher of its own
+                // and its only caller is lifecycleScope.launch, which is
+                // Dispatchers.Main.immediate - so every decode below was
+                // happening on the main thread. patterns.json is 4.9 MB and
+                // 2,342 patterns: hundreds of milliseconds to seconds of parse
+                // on a mid-range phone, blocking input dispatch, on the first
+                // launch after any library publish. The input-dispatch ANR
+                // timeout is 5 seconds.
+                withContext(Dispatchers.Default) {
+                    json.decodeFromString<LibraryManifest>(get(LibrarySources.manifestUrl(base)))
+                }
             } catch (e: CancellationException) {
                 throw e       // the caller went away; not this source's fault
             } catch (_: Exception) {
@@ -134,13 +146,16 @@ class RemoteLibraryService private constructor(context: Context) {
 
             val body = fetchPatterns(base, manifest) ?: continue
             val remote = try {
-                json.decodeFromString<RemotePatterns>(body)
+                withContext(Dispatchers.Default) { json.decodeFromString<RemotePatterns>(body) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 continue
             }
-            store.applyRemoteLibrary(remote.patterns, body)  // caches raw text + merges
+            // Only record the version if the download reached DISK. Claiming a
+            // version the cache does not hold makes the next launch short
+            // circuit on it, so the update is lost and never retried.
+            if (!store.applyRemoteLibrary(remote.patterns, body)) return null
             appliedVersion = manifest.version
             _updateApplied.value = remote.patterns.size
             return remote.patterns.size
@@ -170,14 +185,29 @@ class RemoteLibraryService private constructor(context: Context) {
                 override fun onFailure(call: Call, e: IOException) {
                     if (!call.isCanceled()) cont.resumeWithException(e)
                 }
+                // Everything here has to resume the continuation EXACTLY once.
+                // body.string() loads the whole body into memory off the socket
+                // and is declared @Throws(IOException) - a dropped mobile link
+                // or the read timeout expiring part-way through a 5 MB download
+                // throws right here. OkHttp will not call onFailure for it: by
+                // the time onResponse runs it has already set signalledCallback,
+                // and its own catch only logs "Callback failure". So the throw
+                // escaped, nothing resumed, and syncIfNeeded stayed suspended
+                // for the life of the process - on precisely the flaky
+                // connection this code exists to cope with.
                 override fun onResponse(call: Call, response: Response) {
-                    response.use {
-                        if (!it.isSuccessful) {
-                            cont.resumeWithException(IOException("HTTP ${it.code}"))
-                        } else {
-                            cont.resume(it.body?.string() ?: "")
+                    val text = try {
+                        response.use {
+                            if (!it.isSuccessful) throw IOException("HTTP ${it.code}")
+                            it.body?.string() ?: ""
                         }
+                    } catch (e: Throwable) {
+                        if (cont.isActive) {
+                            cont.resumeWithException(if (e is IOException) e else IOException(e))
+                        }
+                        return
                     }
+                    if (cont.isActive) cont.resume(text)
                 }
             })
         }

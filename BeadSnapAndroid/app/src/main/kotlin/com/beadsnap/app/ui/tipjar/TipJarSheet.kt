@@ -31,10 +31,12 @@ fun TipJarSheet(
 ) {
     val products   by tipJar.products.collectAsState()
     val showThanks by tipJar.showThanks.collectAsState()
+    val pendingTip by tipJar.pendingTip.collectAsState()
+    val error      by tipJar.lastError.collectAsState()
     val context    = LocalContext.current
 
     LaunchedEffect(Unit) { tipJar.connect() }
-    DisposableEffect(Unit) { onDispose { tipJar.clearThanks() } }
+    DisposableEffect(Unit) { onDispose { tipJar.clearThanks(); tipJar.clearError() } }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -75,6 +77,32 @@ fun TipJarSheet(
                         Icon(Icons.Default.CheckCircle, contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary)
                         Text("Thank you so much! 💜", style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+                pendingTip -> {
+                    // Authorised but not paid for yet - cash at a kiosk, or a
+                    // parent still to approve it. Nothing has been charged, so
+                    // a thank-you here would be premature.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        Text("Your tip is waiting to be completed.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                // An empty list used to be the ONLY "not ready" state, so a
+                // failed connection or a store with no tiers configured spun
+                // here forever. If something went wrong, say what.
+                products.isEmpty() && error != null -> {
+                    Text(error.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center)
+                    TextButton(onClick = { tipJar.clearError(); tipJar.connect() }) {
+                        Text("Try again")
                     }
                 }
                 products.isEmpty() -> {
@@ -118,6 +146,14 @@ fun TipJarSheet(
                                 }
                             }
                         }
+                    }
+                    // The tiers loaded, but launching checkout failed. Without
+                    // this the tap was silent: no dialog, no message, nothing.
+                    error?.let { message ->
+                        Text(message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center)
                     }
                 }
             }

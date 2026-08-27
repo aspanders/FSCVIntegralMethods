@@ -13,6 +13,9 @@ import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
+import com.android.billingclient.api.QueryPurchasesParams
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +59,37 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
 
     private val _shouldShowPrompt = MutableStateFlow(false)
     val shouldShowPrompt: StateFlow<Boolean> = _shouldShowPrompt.asStateFlow()
+
+    /**
+     * Whatever went wrong last, in words a person can act on, or null.
+     *
+     * Every billing call can fail, and until this existed all of them failed
+     * silently: the sheet went on saying "Loading tip options..." forever and
+     * the tip buttons did nothing at all when tapped. Someone trying to give
+     * money was told nothing.
+     */
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+
+    /**
+     * A tip that is authorised but not yet paid for - cash at a kiosk, or a
+     * parent's approval still pending. We enable those (see
+     * [PendingPurchasesParams] below), so we have to say something about them:
+     * nothing has been charged yet and no thank-you is due until it clears.
+     */
+    private val _pendingTip = MutableStateFlow(false)
+    val pendingTip: StateFlow<Boolean> = _pendingTip.asStateFlow()
+
+    /**
+     * Tokens currently being consumed.
+     *
+     * [onPurchasesUpdated] and [refreshPurchases] can both hand us the same
+     * purchase within a moment of each other - the live callback and the
+     * reconciliation query see the same token - and consuming a token twice
+     * makes the second call fail with ITEM_NOT_OWNED for no reason.
+     */
+    private val consuming: MutableSet<String> =
+        Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
 
     // Play Billing Library 9. Two things here are v8+ API and not optional:
     //
@@ -110,6 +144,8 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
 
     fun clearThanks() { _showThanks.value = false }
 
+    fun clearError() { _lastError.value = null }
+
     private fun scheduleRetry() {
         val count = prefs.getInt(KEY_USE_COUNT, 0)
         prefs.edit().putInt(KEY_NEXT_PROMPT_AT, count + TipPromptLogic.LATER_RETRY_USES).apply()
@@ -117,12 +153,27 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
 
     // ─── Billing ──────────────────────────────────────────────────────────────
 
+    /**
+     * Connect, list the tiers, and reconcile anything Play already holds.
+     *
+     * Safe to call repeatedly; the app calls it on every launch as well as
+     * whenever the tip sheet opens, and [refreshPurchases] is the reason for
+     * the launch call.
+     */
     fun connect() {
-        if (billingClient.isReady) return
+        if (billingClient.isReady) {
+            queryProducts()
+            refreshPurchases()
+            return
+        }
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                    _lastError.value = null
                     queryProducts()
+                    refreshPurchases()
+                } else {
+                    _lastError.value = "Tips aren't available right now: ${describe(result)}"
                 }
             }
             // The client reconnects itself now (enableAutoServiceReconnection
@@ -146,15 +197,58 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
         // others not. We only need the ones that came back - a tier missing
         // from Play Console simply does not appear in the sheet.
         billingClient.queryProductDetailsAsync(params) { result, productDetailsResult ->
-            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                _products.value = productDetailsResult.productDetailsList.sortedBy {
-                    it.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0
-                }
+            if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+                _lastError.value = "Couldn't load the tip options: ${describe(result)}"
+                return@queryProductDetailsAsync
+            }
+            val fetched = productDetailsResult.productDetailsList.sortedBy {
+                it.oneTimePurchaseOfferDetails?.priceAmountMicros ?: 0
+            }
+            _products.value = fetched
+            // An OK response with nothing in it is the case that used to spin
+            // forever: the sheet's only "not loaded yet" state is an empty
+            // list, so a query that succeeds and returns no tiers - none
+            // configured, or a country they are not sold in - looked exactly
+            // like a query still in flight.
+            _lastError.value = if (fetched.isEmpty()) {
+                "Tips aren't available on this device right now."
+            } else {
+                null
             }
         }
     }
 
+    /**
+     * Deliver and consume anything Play is still holding for this user.
+     *
+     * A consumable that is bought but never consumed is refunded automatically
+     * after three days, so a tip paid while the app was killed mid-checkout -
+     * or one whose consume call failed - came back to the user as a refund and
+     * we never even said thank you. Play's own guidance is to query on every
+     * launch and on returning to the foreground, which is why the app calls
+     * [connect] at startup and not only when the sheet opens.
+     */
+    fun refreshPurchases() {
+        val params = QueryPurchasesParams.newBuilder()
+            .setProductType(BillingClient.ProductType.INAPP)
+            .build()
+        billingClient.queryPurchasesAsync(params) { result, purchases ->
+            if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                handlePurchases(purchases, authoritative = true)
+            }
+            // A failed reconciliation query is deliberately silent: the user
+            // did not ask for it, nothing is lost, and the next launch retries.
+        }
+    }
+
     fun purchase(activity: Activity, product: ProductDetails) {
+        if (!billingClient.isReady) {
+            // Tapping a tier before the connection is up used to do literally
+            // nothing. Say so, and start connecting so the retry works.
+            _lastError.value = "Not connected to the Play Store yet - try again in a moment."
+            connect()
+            return
+        }
         val flowParams = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(listOf(
                 BillingFlowParams.ProductDetailsParams.newBuilder()
@@ -162,25 +256,84 @@ class TipJarManager private constructor(context: Context) : PurchasesUpdatedList
                     .build()
             ))
             .build()
-        billingClient.launchBillingFlow(activity, flowParams)
+        // launchBillingFlow REPORTS FAILURE BY RETURN VALUE. Discarding it
+        // meant that when the checkout sheet did not open - stale
+        // ProductDetails, a device with no Play account, a broken service
+        // binding - the button was simply dead: no dialog, no message, no
+        // state change, nothing in the log.
+        val result = billingClient.launchBillingFlow(activity, flowParams)
+        _lastError.value = if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+            null
+        } else {
+            "Couldn't open the Play Store checkout: ${describe(result)}"
+        }
     }
 
     override fun onPurchasesUpdated(result: BillingResult, purchases: MutableList<Purchase>?) {
-        if (result.responseCode != BillingClient.BillingResponseCode.OK || purchases == null) return
+        when (result.responseCode) {
+            BillingClient.BillingResponseCode.OK -> {
+                _lastError.value = null
+                handlePurchases(purchases.orEmpty())
+            }
+            // Backing out of the sheet is a choice, not a failure.
+            BillingClient.BillingResponseCode.USER_CANCELED -> _lastError.value = null
+            // An earlier tip was paid for and never consumed, so Play thinks
+            // they still own it. Reconciling clears it and thanks them.
+            BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> refreshPurchases()
+            else -> _lastError.value = "That tip didn't go through: ${describe(result)}"
+        }
+    }
+
+    /**
+     * [authoritative] means this is Play's full list of what the user owns, not
+     * a single update, so it can clear [_pendingTip] as well as set it. A tip
+     * left pending and then abandoned would otherwise pin the sheet on "waiting
+     * to be completed" for good, with no way to tip again.
+     */
+    private fun handlePurchases(purchases: List<Purchase>, authoritative: Boolean = false) {
+        if (authoritative) {
+            _pendingTip.value = purchases.any { it.purchaseState == Purchase.PurchaseState.PENDING }
+        }
         for (purchase in purchases) {
-            if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
-                // Consume so the same tip can be given again later
-                val consumeParams = ConsumeParams.newBuilder()
-                    .setPurchaseToken(purchase.purchaseToken)
-                    .build()
-                billingClient.consumeAsync(consumeParams) { consumeResult, _ ->
-                    if (consumeResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                        prefs.edit().putBoolean(KEY_HAS_TIPPED, true).apply()
-                        _showThanks.value = true
-                    }
-                }
+            when (purchase.purchaseState) {
+                Purchase.PurchaseState.PURCHASED -> consume(purchase)
+                Purchase.PurchaseState.PENDING -> _pendingTip.value = true
             }
         }
+    }
+
+    /** Consume so the same tip can be given again later. */
+    private fun consume(purchase: Purchase) {
+        if (!consuming.add(purchase.purchaseToken)) return
+        val consumeParams = ConsumeParams.newBuilder()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
+        billingClient.consumeAsync(consumeParams) { consumeResult, _ ->
+            consuming.remove(purchase.purchaseToken)
+            if (consumeResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                prefs.edit().putBoolean(KEY_HAS_TIPPED, true).apply()
+                _pendingTip.value = false
+                _showThanks.value = true
+                _lastError.value = null
+            }
+            // A failed consume is not worth an error message: the money is
+            // paid, the token is still owned, and the next refreshPurchases()
+            // picks it up. Telling someone who just tipped that it failed
+            // would be both alarming and wrong.
+        }
+    }
+
+    /** Billing response codes as something a person can read. */
+    private fun describe(result: BillingResult): String = when (result.responseCode) {
+        BillingClient.BillingResponseCode.USER_CANCELED -> "cancelled"
+        BillingClient.BillingResponseCode.SERVICE_DISCONNECTED,
+        BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE -> "the Play Store isn't reachable"
+        BillingClient.BillingResponseCode.BILLING_UNAVAILABLE -> "this device can't make Play purchases"
+        BillingClient.BillingResponseCode.ITEM_UNAVAILABLE -> "that tip isn't available here"
+        BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> "a previous tip is still being processed"
+        BillingClient.BillingResponseCode.NETWORK_ERROR -> "no connection"
+        BillingClient.BillingResponseCode.FEATURE_NOT_SUPPORTED -> "this device doesn't support it"
+        else -> result.debugMessage.ifBlank { "error ${result.responseCode}" }
     }
 
     companion object {

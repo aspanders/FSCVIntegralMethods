@@ -7,6 +7,7 @@ import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.model.SeedPatterns
 import com.beadsnap.app.services.RemotePatterns
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +65,18 @@ class PatternStore private constructor(context: Context) {
             try {
                 val text = assets.open("library.json").bufferedReader().use { it.readText() }
                 json.decodeFromString<RemotePatterns>(text).patterns
-            } catch (_: Exception) { emptyList() }
+            // catch Throwable, not Exception. Loading the library builds its
+            // peak here - a ~5 MB String, the parsed tree, and then ~980,000
+            // Cell objects from materialized() - and the process heap on a
+            // 1 GB device is commonly 64 MB. Going over throws
+            // OutOfMemoryError, which is an Error, NOT an Exception: it would
+            // sail straight through `catch (_: Exception)`, out of the
+            // coroutine, and kill the app on every single launch, on exactly
+            // the devices least able to spare the memory. An empty library is
+            // survivable; a crash loop is not.
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) { emptyList() }
         }
         if (loaded.isNotEmpty()) {
             bundled = loaded.map { it.materialized().copy(createdBy = CreatorType.system) }
@@ -80,23 +92,37 @@ class PatternStore private constructor(context: Context) {
             if (!remoteCache.exists()) return@withContext emptyList<FusePattern>()
             try {
                 json.decodeFromString<RemotePatterns>(remoteCache.readText()).patterns
-            } catch (_: Exception) { emptyList() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) { emptyList() }   // see loadBundledLibrary
         }
         if (cached.isNotEmpty()) applyRemote(cached)
     }
 
-    /** Called by RemoteLibraryService after a fresh download. Persists + merges. */
-    fun applyRemoteLibrary(patterns: List<FusePattern>, rawJson: String) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                try {
-                    val tmp = File(remoteCache.parentFile, "remote_library.json.tmp")
-                    tmp.writeText(rawJson)
-                    tmp.renameTo(remoteCache)
-                } catch (_: Exception) { /* cache best-effort */ }
-            }
-            applyRemote(patterns)
+    /**
+     * Called by RemoteLibraryService after a fresh download. Persists + merges.
+     *
+     * Returns whether the download reached DISK. The caller records the applied
+     * version, and it must only do that when this says yes: File.renameTo
+     * reports failure by returning false rather than throwing, and a ~5 MB
+     * writeText onto a full disk throws before the rename is even reached. With
+     * both swallowed, the app ended up with a preference claiming version N was
+     * applied while the cache still held N-1 - and because the sync short
+     * circuits on that preference, the new patterns were never downloaded
+     * again. The library would simply stop updating, permanently and silently.
+     */
+    suspend fun applyRemoteLibrary(patterns: List<FusePattern>, rawJson: String): Boolean {
+        val saved = withContext(Dispatchers.IO) {
+            try {
+                val tmp = File(remoteCache.parentFile, "remote_library.json.tmp")
+                tmp.writeText(rawJson)
+                tmp.renameTo(remoteCache).also { if (!it) tmp.delete() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) { false }
         }
+        applyRemote(patterns)
+        return saved
     }
 
     private fun applyRemote(patterns: List<FusePattern>) {

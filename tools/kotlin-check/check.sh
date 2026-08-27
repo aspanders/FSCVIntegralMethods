@@ -77,6 +77,12 @@ echo "==> play billing call sites (v9 signatures)"
 "$KOTLINC" -nowarn -cp "$COROUTINES" -d "$WORK/billing" \
   "$HERE"/stubs/*.kt "$SRC/services/TipJarManager.kt"
 
+# Compiling proves the SIGNATURES match. It cannot prove the flow works, and
+# both faults found in the tip jar compiled perfectly - a discarded return value
+# and a call that was simply never made. This asserts the fixes are still there.
+echo "==> tip jar"
+python3 "$HERE/billing.py"
+
 echo "==> python reference"
 python3 "$HERE/compare.py" "$WORK"
 
