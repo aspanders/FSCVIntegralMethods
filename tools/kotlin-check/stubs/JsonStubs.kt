@@ -38,6 +38,10 @@ class JSONObject {
     fun optInt(key: String, fallback: Int = 0): Int = (map[key] as? Number)?.toInt() ?: fallback
     fun optJSONArray(key: String): JSONArray? = map[key] as? JSONArray
     fun optJSONObject(key: String): JSONObject? = map[key] as? JSONObject
+    fun optBoolean(key: String, fallback: Boolean = false): Boolean =
+        map[key] as? Boolean ?: fallback
+    /** Number of keys, matching org.json - not the length of anything. */
+    fun length(): Int = map.size
 
     override fun toString(): String =
         map.entries.joinToString(",", "{", "}") { (k, v) -> quote(k) + ":" + render(v) }

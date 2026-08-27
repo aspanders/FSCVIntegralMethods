@@ -44,16 +44,28 @@ class Request private constructor(
     }
 }
 
-class ResponseBody(private val text: String) {
-    fun string(): String = text
+/**
+ * [string] is declared @Throws(IOException) in real OkHttp: it reads the rest
+ * of the body off the socket, so a dropped link or an expired read timeout
+ * throws HERE, inside the callback, rather than at enqueue time. [failWith]
+ * lets a harness reproduce that - it is the case a callback is most likely to
+ * get wrong, because on a fast local connection it never happens.
+ */
+class ResponseBody(private val text: String, private val failWith: Throwable? = null) {
+    fun string(): String = failWith?.let { throw it } ?: text
 }
 
 class Response(
     val code: Int = 200,
-    private val text: String = ""
+    private val text: String = "",
+    // Throwable, not IOException. string() is DECLARED @Throws(IOException),
+    // but it also allocates a buffer the size of the whole body, so an
+    // OutOfMemoryError comes out of it too - and an Error is exactly what a
+    // `catch (e: Exception)` in a callback lets escape.
+    private val bodyFailure: Throwable? = null
 ) : java.io.Closeable {
     val isSuccessful: Boolean get() = code in 200..299
-    val body: ResponseBody? get() = ResponseBody(text)
+    val body: ResponseBody? get() = ResponseBody(text, bodyFailure)
     override fun close() {}
 }
 
@@ -75,9 +87,24 @@ class Call(val request: Request, private val canned: Response?, private val fail
         when {
             cancelled -> {}
             failure != null -> cb.onFailure(this, failure)
-            else -> cb.onResponse(this, canned ?: Response(200, ""))
+            // Real OkHttp catches whatever onResponse throws, logs
+            // "Callback failure for ...", and does NOT then call onFailure -
+            // by the time onResponse runs it has already set signalledCallback.
+            // So a handler that lets a throw escape simply never resumes its
+            // continuation, and the caller waits forever. Swallowing it here
+            // the same way is what lets a harness SEE that hang instead of
+            // getting a tidy exception the real library would never deliver.
+            else -> try {
+                cb.onResponse(this, canned ?: Response(200, ""))
+            } catch (t: Throwable) {
+                lastCallbackFailure = t
+            }
         }
     }
+
+    /** What the callback threw, if it threw. Nothing else is told. */
+    var lastCallbackFailure: Throwable? = null
+        private set
 }
 
 class OkHttpClient private constructor() {

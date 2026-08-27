@@ -3,7 +3,7 @@ import Foundation
 enum AIError: LocalizedError {
     case noAPIKey
     case networkError(Error)
-    case httpError(Int)
+    case httpError(Int, String?)
     case noContent
     case invalidJSON(String)
     case schemaViolation(String)
@@ -15,13 +15,21 @@ enum AIError: LocalizedError {
         switch self {
         case .noAPIKey:              return "No API key set. Tap 'Set Up AI' to add your Claude or ChatGPT API key."
         case .networkError(let e):   return "Network error: \(e.localizedDescription)"
-        case .httpError(let code):
+        case .httpError(let code, let detail):
+            let head: String
             switch code {
-            case 401: return "Invalid API key. Tap 'Set Up AI' to update it."
-            case 400: return "Bad request. Check your API key."
-            case 429: return "Rate limit reached. Please wait a moment and try again."
-            default:  return "Server error (\(code)). Please try again."
+            case 401: head = "Invalid API key. Tap 'Set Up AI' to update it."
+            case 402: head = "Your AI account is out of credit."
+            case 429: head = "Rate limit reached. Please wait a moment and try again."
+            case 500...599: head = "The AI service is having trouble (\(code)). Please try again."
+            default:  head = "The AI service rejected the request (\(code))."
             }
+            // The provider says WHY in the error body - "your credit balance is
+            // too low", "model not found", "invalid schema". Dropping it made
+            // every 400 read "Bad request. Check your API key.", which sent
+            // people off to re-paste a key that was never the problem.
+            guard let detail, !detail.isEmpty else { return head }
+            return head + " " + String(detail.prefix(200))
         case .noContent:             return "AI returned no content. Please try again."
         case .invalidJSON(let s):    return "AI returned invalid JSON: \(s)"
         case .schemaViolation(let s): return "Pattern validation failed: \(s)"
@@ -145,26 +153,48 @@ final class AIPatternService {
     """ }
 
     /// The shape the model must return. Enforced by the API, not by hope.
-    private func schema(width: Int, height: Int) -> [String: Any] {
-        [
+    ///
+    /// `itemCounts` is false for OpenAI. Its strict Structured Outputs mode
+    /// supports only a subset of JSON Schema and rejects minItems/maxItems
+    /// outright - the whole request comes back 400 "Invalid schema", so the
+    /// ChatGPT provider could never produce a single pattern. There the counts
+    /// live in the descriptions, and `buildPattern` enforces them on the way
+    /// in, which it does for both providers anyway.
+    private func schema(width: Int, height: Int, itemCounts: Bool = true) -> [String: Any] {
+        var palette: [String: Any] = [
+            "type": "array",
+            "description": "Between 2 and 16 bead ids from the supplied list, "
+                + "in the order the row characters index them",
+            "items": ["type": "string"]
+        ]
+        var rows: [String: Any] = [
+            "type": "array",
+            "description": "Exactly \(height) strings, each exactly \(width) characters",
+            "items": ["type": "string"]
+        ]
+        var tags: [String: Any] = [
+            "type": "array",
+            "description": "Up to 6 short keywords",
+            "items": ["type": "string"]
+        ]
+        if itemCounts {
+            palette["minItems"] = 2
+            palette["maxItems"] = 16
+            rows["minItems"] = height
+            rows["maxItems"] = height
+            tags["maxItems"] = 6
+        }
+        return [
             "type": "object",
             "additionalProperties": false,
             "required": ["title", "palette", "rows", "difficulty", "tags"],
             "properties": [
                 "title": ["type": "string",
                           "description": "Short name for the finished pattern, 1-4 words"],
-                "palette": [
-                    "type": "array", "minItems": 2, "maxItems": 16,
-                    "description": "Bead ids from the supplied list, in the order the row characters index them",
-                    "items": ["type": "string"]
-                ],
-                "rows": [
-                    "type": "array", "minItems": height, "maxItems": height,
-                    "description": "Exactly \(height) strings, each exactly \(width) characters",
-                    "items": ["type": "string"]
-                ],
+                "palette": palette,
+                "rows": rows,
                 "difficulty": ["type": "string", "enum": ["easy", "medium", "hard"]],
-                "tags": ["type": "array", "maxItems": 6, "items": ["type": "string"]]
+                "tags": tags
             ]
         ]
     }
@@ -254,7 +284,13 @@ final class AIPatternService {
             throw AIError.networkError(error)
         }
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw AIError.httpError(http.statusCode)
+            // Both providers use the same error envelope: {"error": {"message": ...}}
+            var detail: String?
+            if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let err = root["error"] as? [String: Any] {
+                detail = err["message"] as? String
+            }
+            throw AIError.httpError(http.statusCode, detail)
         }
         return data
     }
@@ -317,7 +353,8 @@ final class AIPatternService {
             "response_format": [
                 "type": "json_schema",
                 "json_schema": ["name": "bead_pattern", "strict": true,
-                                "schema": schema(width: grid.width, height: grid.height)]
+                                "schema": schema(width: grid.width, height: grid.height,
+                                                 itemCounts: false)]
             ],
             "messages": [
                 ["role": "system", "content": systemPrompt],
@@ -327,11 +364,22 @@ final class AIPatternService {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let data = try await send(req)
         struct R: Decodable {
-            struct Choice: Decodable { struct Msg: Decodable { let content: String }; let message: Msg }
+            struct Choice: Decodable {
+                struct Msg: Decodable { let content: String? }
+                let message: Msg
+                let finish_reason: String?
+            }
             let choices: [Choice]
         }
         guard let r = try? JSONDecoder().decode(R.self, from: data),
-              let t = r.choices.first?.message.content,
+              let choice = r.choices.first else {
+            throw AIError.noContent
+        }
+        // Android reported this and iOS did not, so the same cut-off reply said
+        // "try a smaller board" on one platform and "AI returned no content" on
+        // the other - advice that leads nowhere.
+        if choice.finish_reason == "length" { throw AIError.truncated }
+        guard let t = choice.message.content,
               !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw AIError.noContent
         }

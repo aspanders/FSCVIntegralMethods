@@ -29,12 +29,20 @@ sealed class AIError : Exception() {
     data class NetworkError(override val cause: Exception) : AIError() {
         override val message = "Network error: ${cause.message}"
     }
-    data class HttpError(val code: Int) : AIError() {
-        override val message = when (code) {
-            401  -> "Invalid API key. Tap 'Set Up AI' to update it."
-            400  -> "Bad request. Check your API key."
-            429  -> "Rate limit reached. Please wait a moment and try again."
-            else -> "Server error ($code). Please try again."
+    data class HttpError(val code: Int, val detail: String? = null) : AIError() {
+        override val message: String = buildString {
+            append(when (code) {
+                401 -> "Invalid API key. Tap 'Set Up AI' to update it."
+                402 -> "Your AI account is out of credit."
+                429 -> "Rate limit reached. Please wait a moment and try again."
+                in 500..599 -> "The AI service is having trouble ($code). Please try again."
+                else -> "The AI service rejected the request ($code)."
+            })
+            // The provider says WHY in the error body - "your credit balance is
+            // too low", "model not found", "invalid schema". Throwing that away
+            // made every 400 read "Bad request. Check your API key.", which
+            // sent people off to re-paste a key that was never the problem.
+            if (!detail.isNullOrBlank()) append(" ").append(detail.take(200))
         }
     }
     data object NoContent : AIError() {
@@ -176,8 +184,17 @@ class AIPatternService private constructor() {
         board.
     """.trimIndent()
 
-    /** The shape the model must return. Enforced by the API, not by hope. */
-    private fun schema(width: Int, height: Int): JSONObject = JSONObject().apply {
+    /**
+     * The shape the model must return. Enforced by the API, not by hope.
+     *
+     * [itemCounts] is false for OpenAI. Its strict Structured Outputs mode
+     * supports only a subset of JSON Schema and rejects minItems/maxItems
+     * outright - the whole request comes back 400 "Invalid schema", so the
+     * ChatGPT provider could never produce a single pattern. There the counts
+     * live in the descriptions, and buildPattern enforces them on the way in,
+     * which it does for both providers anyway.
+     */
+    private fun schema(width: Int, height: Int, itemCounts: Boolean = true): JSONObject = JSONObject().apply {
         put("type", "object")
         put("additionalProperties", false)
         put("required", JSONArray(listOf("title", "palette", "rows", "difficulty", "tags")))
@@ -188,15 +205,14 @@ class AIPatternService private constructor() {
             })
             put("palette", JSONObject().apply {
                 put("type", "array")
-                put("minItems", 2)
-                put("maxItems", 16)
-                put("description", "Bead ids from the supplied list, in the order the row characters index them")
+                if (itemCounts) { put("minItems", 2); put("maxItems", 16) }
+                put("description", "Between 2 and 16 bead ids from the supplied list, " +
+                    "in the order the row characters index them")
                 put("items", JSONObject().put("type", "string"))
             })
             put("rows", JSONObject().apply {
                 put("type", "array")
-                put("minItems", height)
-                put("maxItems", height)
+                if (itemCounts) { put("minItems", height); put("maxItems", height) }
                 put("description", "Exactly $height strings, each exactly $width characters")
                 put("items", JSONObject().put("type", "string"))
             })
@@ -206,7 +222,8 @@ class AIPatternService private constructor() {
             })
             put("tags", JSONObject().apply {
                 put("type", "array")
-                put("maxItems", 6)
+                if (itemCounts) put("maxItems", 6)
+                put("description", "Up to 6 short keywords")
                 put("items", JSONObject().put("type", "string"))
             })
         })
@@ -281,9 +298,16 @@ class AIPatternService private constructor() {
             }
 
             override fun onResponse(call: Call, response: Response) {
+                // Throwable, not Exception. body.string() pulls the whole reply
+                // into memory and can throw OutOfMemoryError, which is an Error
+                // - and OkHttp will not call onFailure for anything thrown in
+                // here: by this point signalledCallback is set and its own catch
+                // only logs "Callback failure". An escaping throw therefore left
+                // the continuation suspended for good, and the AI Studio spinner
+                // turned until the user killed the app.
                 val result = try {
                     Result.success(parseResponse(response, grid, sourcePrompt, category))
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     Result.failure(e)
                 }
                 result.fold(
@@ -347,7 +371,7 @@ class AIPatternService private constructor() {
                 put("json_schema", JSONObject().apply {
                     put("name", "bead_pattern")
                     put("strict", true)
-                    put("schema", schema(grid.width, grid.height))
+                    put("schema", schema(grid.width, grid.height, itemCounts = false))
                 })
             })
             put("messages", JSONArray().apply {
@@ -372,7 +396,13 @@ class AIPatternService private constructor() {
         category: PatternCategory
     ): FusePattern {
         response.use { resp ->
-            if (!resp.isSuccessful) throw AIError.HttpError(resp.code)
+            if (!resp.isSuccessful) {
+                val detail = try {
+                    JSONObject(resp.body?.string().orEmpty())
+                        .optJSONObject("error")?.optString("message")
+                } catch (_: Throwable) { null }
+                throw AIError.HttpError(resp.code, detail)
+            }
             val raw = resp.body?.string() ?: throw AIError.NoContent
             val root = try { JSONObject(raw) } catch (_: Exception) { throw AIError.NoContent }
 

@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
 import com.beadsnap.app.services.ImageConverter
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val MIN_CELL_PX = 18
@@ -151,7 +152,12 @@ fun EditorScreen(
                             scope.launch {
                                 isExporting = true
                                 try { exportPng(context, viewModel) }
-                                catch (e: Exception) { exportError = e.message }
+                                catch (e: Exception) {
+                                    // message is null for plenty of exceptions,
+                                    // and an empty Export Failed dialog helps
+                                    // nobody.
+                                    exportError = e.message ?: e.toString()
+                                }
                                 finally { isExporting = false }
                             }
                         },
@@ -420,6 +426,23 @@ private fun BeadGridCanvas(
     val hScroll = rememberScrollState()
     val vScroll = rememberScrollState()
 
+    // The gesture handler must NOT be keyed on anything that changes while a
+    // finger is down - and cellSizePx was BOTH a key and the thing the pinch
+    // below changes. Compose cancels and restarts the pointer coroutine when a
+    // key changes, and the restarted block waits at awaitFirstDown(), which a
+    // finger already pressed never produces. So the first zoom step that moved
+    // the rounded pixel size killed the gesture that produced it: pinch-to-zoom
+    // jumped once and then ignored the fingers until every one of them lifted.
+    // Same fault and same fix as the brush in PhotoTuneScreen - create the
+    // handler once, and read what it needs at EVENT time.
+    val liveStep    by rememberUpdatedState(step)
+    val liveGutter  by rememberUpdatedState(gutter)
+    val liveErasing by rememberUpdatedState(isErasing)
+    val liveCols    by rememberUpdatedState(cols)
+    val liveRows    by rememberUpdatedState(rows)
+    val liveShape   by rememberUpdatedState(shape)
+    val liveZoom    by rememberUpdatedState(onZoom)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -429,22 +452,49 @@ private fun BeadGridCanvas(
         Canvas(
             modifier = Modifier
                 .size(totalW, totalH)
-                .pointerInput(cellSizePx, cols, rows, scrollMode, isErasing, shape) {
+                // scrollMode is the one safe key: it is toggled by a chip in
+                // the toolbar, so it cannot change with a finger on the canvas.
+                .pointerInput(scrollMode) {
                     if (scrollMode) return@pointerInput
                     awaitEachGesture {
                         // Positions are in full-canvas coordinates, so painting
                         // works at any scroll offset. Taps toggle; drags paint
                         // set-only with a single undo entry per stroke.
                         fun cellAt(pos: Offset): Pair<Int, Int>? {
-                            if (pos.x < gutter || pos.y < gutter) return null
-                            val x = ((pos.x - gutter) / step).toInt()
-                            val y = ((pos.y - gutter) / step).toInt()
+                            if (pos.x < liveGutter || pos.y < liveGutter) return null
+                            val x = ((pos.x - liveGutter) / liveStep).toInt()
+                            val y = ((pos.y - liveGutter) / liveStep).toInt()
                             // Off a round board there is no peg to paint.
-                            return if (shape.contains(x, y, cols, rows)) x to y else null
+                            return if (liveShape.contains(x, y, liveCols, liveRows)) x to y else null
                         }
-                        fun apply(cell: Pair<Int, Int>) {
-                            if (isErasing) viewModel.strokeErase(cell.first, cell.second)
-                            else viewModel.strokePaint(cell.first, cell.second)
+                        fun apply(cells: List<Pair<Int, Int>>) {
+                            viewModel.strokeCells(cells, erase = liveErasing)
+                        }
+                        // Pointer events arrive once a frame, not continuously.
+                        // A quick swipe moves several beads between samples, and
+                        // painting only the sampled cells drew a dotted line
+                        // with holes in it - worse the faster you drew. Walk the
+                        // cells between the last sample and this one so a stroke
+                        // comes out as a stroke. Bresenham, skipping the cell we
+                        // came from (already painted) and any peg the board
+                        // does not have.
+                        fun cellsBetween(from: Pair<Int, Int>?, to: Pair<Int, Int>): List<Pair<Int, Int>> {
+                            if (from == null) return listOf(to)
+                            val out = ArrayList<Pair<Int, Int>>()
+                            var x = from.first
+                            var y = from.second
+                            val dx = abs(to.first - x)
+                            val dy = -abs(to.second - y)
+                            val sx = if (x < to.first) 1 else -1
+                            val sy = if (y < to.second) 1 else -1
+                            var err = dx + dy
+                            while (x != to.first || y != to.second) {
+                                val e2 = 2 * err
+                                if (e2 >= dy) { err += dy; x += sx }
+                                if (e2 <= dx) { err += dx; y += sy }
+                                if (liveShape.contains(x, y, liveCols, liveRows)) out.add(x to y)
+                            }
+                            return out
                         }
 
                         val down = awaitFirstDown()
@@ -467,7 +517,7 @@ private fun BeadGridCanvas(
                                 pinching = true
                                 strokeActive = true
                                 val span = (pressed[0].position - pressed[1].position).getDistance()
-                                if (lastSpan > 0f && span > 0f) onZoom(span / lastSpan)
+                                if (lastSpan > 0f && span > 0f) liveZoom(span / lastSpan)
                                 lastSpan = span
                                 pressed.forEach { it.consume() }
                                 continue
@@ -487,18 +537,18 @@ private fun BeadGridCanvas(
                                     if (cell == downCell) return@forEach
                                     viewModel.beginStroke()
                                     strokeActive = true
-                                    downCell?.let { apply(it) }
+                                    downCell?.let { apply(listOf(it)) }
                                 }
                                 if (cell != lastCell) {
+                                    apply(cellsBetween(lastCell, cell))
                                     lastCell = cell
-                                    apply(cell)
                                 }
                             }
                         }
 
                         // finger never left the starting cell → it's a tap
                         if (!strokeActive && downCell != null) {
-                            if (isErasing) viewModel.clearCell(downCell.first, downCell.second)
+                            if (liveErasing) viewModel.clearCell(downCell.first, downCell.second)
                             else viewModel.tapCell(downCell.first, downCell.second)
                         }
                     }
@@ -837,14 +887,35 @@ private fun BeadCountSheet(
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
 private suspend fun exportPng(context: Context, viewModel: EditorViewModel) {
+    val pattern = viewModel.pattern.value
     val bitmap = withContext(Dispatchers.Default) {
-        ImageConverter.renderToBitmap(viewModel.pattern.value, cellSizePx = 16)
+        ImageConverter.renderToBitmap(pattern, cellSizePx = 16)
     }
     val file = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val f   = File(dir, "beadsnap_export.png")
-        f.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
+        // One file per pattern, not one shared name. A single
+        // beadsnap_export.png was rewritten under whichever app was still
+        // reading the previous share, which then read a half-written file.
+        // Ids are UUIDs today, but a path separator arriving in one would
+        // write outside the shared directory, so it never gets the chance.
+        val safeId = pattern.id.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.take(64)
+        val f = File(dir, "beadsnap_$safeId.png")
+        try {
+            // compress REPORTS FAILURE BY RETURN VALUE - a full cache
+            // partition returns false rather than throwing. Ignoring it meant
+            // handing the share target a truncated PNG and calling it a
+            // success: the other app showed a broken image and nothing here
+            // ever said why.
+            val ok = f.outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            if (!ok) {
+                f.delete()
+                throw java.io.IOException("Could not write the PNG - the device may be out of space")
+            }
+        } finally {
+            bitmap.recycle()
+        }
         f
     }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)

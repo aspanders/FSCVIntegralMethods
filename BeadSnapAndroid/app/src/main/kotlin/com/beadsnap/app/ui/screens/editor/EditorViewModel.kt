@@ -49,6 +49,9 @@ class EditorViewModel(
     private val maxUndoDepth = 50
     private var autosaveJob: Job? = null
 
+    /** Set by [beginStroke]; cleared by the first change the stroke makes. */
+    private var strokeArmed = false
+
     // ─── Write operations ─────────────────────────────────────────────────────
 
     fun selectColor(color: BeadColor) { _selectedColor.value = color }
@@ -76,22 +79,48 @@ class EditorViewModel(
     // A stroke is one undo entry; painting is set-only so dragging over
     // already-painted cells never erases them (tap keeps toggle semantics).
 
+    /**
+     * Arms the undo entry; it is only pushed if the stroke actually changes
+     * something.
+     *
+     * Pushing it here unconditionally meant that dragging across beads that
+     * were already the selected colour - or across a round board's empty
+     * corner - recorded an undo step that undid nothing, and lit the Undo
+     * button to say so. Tapping it then appeared to do nothing at all, and the
+     * user had to tap again to reach the edit they actually wanted back.
+     */
     fun beginStroke() {
-        pushUndo()
+        strokeArmed = true
     }
 
-    fun strokePaint(x: Int, y: Int) {
-        val k = key(x, y)
-        if (_cellMap.value[k] == _selectedColor.value.id) return
-        _cellMap.value = _cellMap.value + (k to _selectedColor.value.id)
-        commitCells()
-        scheduleAutosave()
-    }
+    fun strokePaint(x: Int, y: Int) = strokeCells(listOf(x to y), erase = false)
 
-    fun strokeErase(x: Int, y: Int) {
-        val k = key(x, y)
-        if (k !in _cellMap.value) return
-        _cellMap.value = _cellMap.value - k
+    fun strokeErase(x: Int, y: Int) = strokeCells(listOf(x to y), erase = true)
+
+    /**
+     * Apply one segment of a stroke - every cell the finger crossed since the
+     * last pointer event - as a single map mutation and a single commit.
+     *
+     * One event can cover a dozen cells once the caller fills in the gaps
+     * between samples, and committing per cell meant rebuilding the whole cell
+     * list (up to 841 objects on a full board) a dozen times inside one frame,
+     * each rebuild also waking every collector of the pattern. Once per event
+     * is the same result for a fraction of the work.
+     */
+    fun strokeCells(cells: List<Pair<Int, Int>>, erase: Boolean) {
+        if (cells.isEmpty()) return
+        val current = _cellMap.value
+        val next = current.toMutableMap()
+        val id = _selectedColor.value.id
+        for ((x, y) in cells) {
+            val k = key(x, y)
+            if (erase) next.remove(k) else next[k] = id
+        }
+        // Dragging over beads that are already right changes nothing, and must
+        // not cost an undo entry or a save.
+        if (next == current) return
+        pushStrokeUndo()
+        _cellMap.value = next
         commitCells()
         scheduleAutosave()
     }
@@ -163,9 +192,16 @@ class EditorViewModel(
     private fun key(x: Int, y: Int) = "$x,$y"
 
     private fun pushUndo() {
+        strokeArmed = false          // a discrete edit ends any armed stroke
         undoStack.addLast(_cellMap.value)
         if (undoStack.size > maxUndoDepth) undoStack.removeFirst()
         _canUndo.value = true
+    }
+
+    /** One undo entry per stroke, recorded at its first real change. */
+    private fun pushStrokeUndo() {
+        if (!strokeArmed) return
+        pushUndo()
     }
 
     private fun commitCells() {

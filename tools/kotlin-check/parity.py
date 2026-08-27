@@ -70,6 +70,9 @@ AI_MUST_MATCH = [
     ("adaptive", "thinking mode"),
     ("json_schema", "structured output rather than JSON hunted out of prose"),
     ("EDGES meet", "the fusing rule the pattern has to obey to be buildable"),
+    ("itemCounts", "the OpenAI schema must drop minItems/maxItems - strict mode 400s on them"),
+    ("finish_reason", "a cut-off OpenAI reply has to say so, not 'no content'"),
+    ("out of credit", "an HTTP failure has to repeat what the provider said"),
 ]
 
 # Things whose PRESENCE means the old broken design is still there.
@@ -77,6 +80,7 @@ AI_MUST_BE_GONE = [
     ('"cells": [{"x"', "the per-cell schema that could not fit in max_tokens"),
     ("4096", "the old max_tokens"),
     ("claude-haiku-4-5", "the old model"),
+    ("Bad request. Check your API key", "the 400 message that sent people to the wrong fix"),
 ]
 
 
@@ -113,7 +117,11 @@ def check_ai() -> list:
         if not os.path.exists(path):
             problems.append(f"{label} AIPatternService is missing")
             continue
-        src = open(path).read()
+        # Comments quote both the settings and the mistakes they replaced, so
+        # the check has to read the CODE. Otherwise a setting described in a
+        # comment counts as present, and a message a comment says was removed
+        # counts as still there.
+        src = strip_comments(open(path).read())
         for needle, why in AI_MUST_MATCH:
             if needle not in src:
                 problems.append(f"{label} AI service is missing '{needle}' ({why})")
