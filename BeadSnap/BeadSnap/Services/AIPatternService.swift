@@ -8,6 +8,8 @@ enum AIError: LocalizedError {
     case invalidJSON(String)
     case schemaViolation(String)
     case tooComplex
+    case truncated
+    case refused
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +26,8 @@ enum AIError: LocalizedError {
         case .invalidJSON(let s):    return "AI returned invalid JSON: \(s)"
         case .schemaViolation(let s): return "Pattern validation failed: \(s)"
         case .tooComplex: return "Pattern is too large for AI refinement. Use a smaller grid or fill fewer cells."
+        case .truncated:  return "The pattern came back unfinished. Try a smaller board."
+        case .refused:    return "The AI declined that request. Try describing something else."
         }
     }
 }
@@ -48,16 +52,19 @@ final class AIPatternService {
 
     private let claudeURL = URL(string: "https://api.anthropic.com/v1/messages")!
     private let openAIURL = URL(string: "https://api.openai.com/v1/chat/completions")!
-    private let claudeModel = "claude-haiku-4-5"
-    private let openAIModel = "gpt-4o-mini"
+    /// Spatial layout is the hard part of this task and the part a small model
+    /// is worst at. Keep in step with AIPatternService.CLAUDE_MODEL on Android.
+    static let claudeModel = "claude-opus-5"
+    /// Not verified against OpenAI's current lineup - review before relying on it.
+    static let openAIModel = "gpt-4o"
 
     private let providerKey = "ai_provider"
 
     // Bounded timeouts matching Android's OkHttp config (30s connect / 60s read)
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 90
+        config.timeoutIntervalForRequest = 120
+        config.timeoutIntervalForResource = 180
         return URLSession(configuration: config)
     }()
 
@@ -87,31 +94,80 @@ final class AIPatternService {
 
     // MARK: - System Prompt
 
-    private let systemPrompt = """
-    Generate fuse bead pixel-art patterns as JSON only. No commentary. No prose. No markdown.
-    Output must be a single valid JSON object matching this exact schema:
-    {
-      "id": "<uuid-string>",
-      "title": "<short title>",
-      "category": "<animals|space|food|emoji|holidays|icons|custom>",
-      "createdBy": "ai",
-      "grid": {"width": <8-64>, "height": <8-64>},
-      "palette": [{"id": "<id>", "name": "<name>", "hex": "<#RRGGBB>"}],
-      "cells": [{"x": <int>, "y": <int>, "colorId": "<id>"}],
-      "difficulty": "<easy|medium|hard>",
-      "tags": ["<tag>"],
-      "sourcePrompt": "<prompt used>",
-      "version": 1
+    /// Every real bead, as the model is allowed to refer to them.
+    private var paletteList: String {
+        PaletteColor.full.map { "  \($0.id) = \($0.name) \($0.hex)" }.joined(separator: "\n")
     }
-    Rules (strictly enforced):
-    - Grid: width and height each between 8 and 64. Default 32x32 unless asked.
-    - Palette: exactly 4 to 16 colors. Use only real Perler/Hama bead colors.
-    - Cells: sparse list. Include only filled cells: omit empty/background positions.
-    - All colorId values in cells must match an id in palette.
-    - Pixel-art style only. Bold simple shapes. No gradients. No realism.
-    - Safe for children ages 4+. No violence, weapons, or inappropriate content.
-    - Pattern must be physically buildable as real fuse bead art.
-    """
+
+    /// Keep in step with the Android systemPrompt - the two platforms should
+    /// produce comparable patterns from the same words.
+    private var systemPrompt: String { """
+    You design fuse bead patterns (Perler / Hama). A pattern is a rectangular peg
+    board; the maker places one bead per peg, then irons them so touching beads
+    fuse together.
+
+    You return the board as ROWS OF CHARACTERS - one string per row of the board,
+    one character per peg:
+      - '.' means leave that peg empty.
+      - '0'-'9' then 'a'-'z' then 'A'-'Z' select a colour, by its position in the
+        palette you chose: '0' is the first colour, '1' the second, and so on.
+    Every row string must be exactly `width` characters long, and there must be
+    exactly `height` of them. This is a picture drawn in text - lay the subject
+    out on the grid and read your own rows back to check the shape before you
+    answer.
+
+    Choose colours only from this list of real beads, by id:
+    \(paletteList)
+
+    What makes a bead pattern good, in priority order:
+
+    1. RECOGNISABLE AT THIS SIZE. A 16x16 board holds a symbol, not a scene.
+       Cover the title and ask whether the shape alone says what it is. Bold
+       silhouettes beat detail. If the subject will not read at the size asked
+       for, draw the most recognisable PART of it filling the board - a face
+       rather than a whole animal - instead of shrinking the whole thing to mush.
+    2. BUILDABLE. Beads fuse where their EDGES meet, not at their corners, so
+       every filled peg must touch another filled peg up, down, left or right. A
+       bead joined to the rest only diagonally falls off when lifted. One
+       connected piece, no floating islands. A one-bead-wide leg, antenna or stem
+       is fine - it fuses into a solid strand.
+    3. FLAT COLOUR. No gradients, no dithering, no anti-aliasing, no shading
+       ramps. Large blocks of one colour. Use an outline in a darker bead where
+       the subject needs to stand out.
+    4. FEW COLOURS. Two to eight is normal. Every extra colour is another bag the
+       maker has to own.
+    5. CENTRED, with the subject filling most of the board. Do not leave a wide
+       empty margin.
+    6. Suitable for children aged 4 and up.
+
+    Leave the background empty ('.') unless the prompt asks for one - a pattern
+    with no background is quicker to build and looks better on the board.
+    """ }
+
+    /// The shape the model must return. Enforced by the API, not by hope.
+    private func schema(width: Int, height: Int) -> [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["title", "palette", "rows", "difficulty", "tags"],
+            "properties": [
+                "title": ["type": "string",
+                          "description": "Short name for the finished pattern, 1-4 words"],
+                "palette": [
+                    "type": "array", "minItems": 2, "maxItems": 16,
+                    "description": "Bead ids from the supplied list, in the order the row characters index them",
+                    "items": ["type": "string"]
+                ],
+                "rows": [
+                    "type": "array", "minItems": height, "maxItems": height,
+                    "description": "Exactly \(height) strings, each exactly \(width) characters",
+                    "items": ["type": "string"]
+                ],
+                "difficulty": ["type": "string", "enum": ["easy", "medium", "hard"]],
+                "tags": ["type": "array", "maxItems": 6, "items": ["type": "string"]]
+            ]
+        ]
+    }
 
     // MARK: - Public API
 
@@ -121,53 +177,69 @@ final class AIPatternService {
         gridSize: GridSize = .large
     ) async throws -> FusePattern {
         guard hasAPIKey else { throw AIError.noAPIKey }
-        let catHint = category.map { " Category: \($0.rawValue)." } ?? ""
-        let msg = "Create a fuse bead pattern of: \(prompt).\(catHint) Grid: \(gridSize.width)x\(gridSize.height)."
-        return try await callAPI(userMessage: msg)
+        let catHint = category.map { " It belongs in the \($0.displayName) category." } ?? ""
+        let msg = "Design a fuse bead pattern of: \(prompt).\(catHint) " +
+            "The board is \(gridSize.width) wide and \(gridSize.height) tall."
+        return try await callAPI(userMessage: msg, grid: gridSize,
+                                 sourcePrompt: prompt, category: category ?? .custom)
     }
 
     func iterate(pattern: FusePattern, instruction: String) async throws -> FusePattern {
         guard hasAPIKey else { throw AIError.noAPIKey }
-        guard pattern.cells.count <= 400 else { throw AIError.tooComplex }
-        let paletteDesc = pattern.palette
-            .map { "\($0.id): \($0.name) (\($0.hex))" }
-            .joined(separator: ", ")
-        let cellsDesc = pattern.cells
-            .map { "(\($0.x),\($0.y))=\($0.colorId ?? "?")" }
-            .joined(separator: " ")
+        // No size limit any more. The old one refused anything over 400 cells
+        // because it pasted every cell in as "(x,y)=colorId" text; the board now
+        // goes back as the same rows the model produces.
+        let ids = pattern.palette.map(\.id)
+        let rows = renderRows(pattern, ids: ids)
         let msg = """
-        Modify this fuse bead pattern per this instruction: \(instruction)
-        Grid: \(pattern.grid.width)×\(pattern.grid.height). Title: \(pattern.title). Category: \(pattern.category.rawValue).
-        Palette: \(paletteDesc)
-        Filled cells as (x,y)=colorId: \(cellsDesc)
-        Return only the full updated JSON object matching the schema.
+        Here is an existing fuse bead pattern. Change it as follows: \(instruction)
+
+        Title: \(pattern.title)
+        Board: \(pattern.grid.width) wide, \(pattern.grid.height) tall
+        Palette, in row-character order: \(ids.joined(separator: ", "))
+        Rows:
+        \(rows.joined(separator: "\n"))
+
+        Return the complete updated pattern. Keep everything the instruction did
+        not ask you to change.
         """
-        var updated = try await callAPI(userMessage: msg)
+        var updated = try await callAPI(userMessage: msg, grid: pattern.grid,
+                                        sourcePrompt: instruction, category: pattern.category)
         updated.id = pattern.id
+        updated.title = pattern.title
         return updated
+    }
+
+    /// The pattern's cells as row strings, for handing back to the model.
+    private func renderRows(_ p: FusePattern, ids: [String]) -> [String] {
+        var grid = Array(repeating: Array(repeating: Character("."), count: p.grid.width),
+                         count: p.grid.height)
+        let chars = Array(FusePattern.rowChars)
+        for c in p.cells {
+            guard let id = c.colorId, let i = ids.firstIndex(of: id), i < chars.count,
+                  c.y >= 0, c.y < p.grid.height, c.x >= 0, c.x < p.grid.width else { continue }
+            grid[c.y][c.x] = chars[i]
+        }
+        return grid.map { String($0) }
     }
 
     // MARK: - Private
 
-    private func callAPI(userMessage: String) async throws -> FusePattern {
-        let text = try await requestText(user: userMessage)
-        let jsonData = try extractJSON(from: text)
-        let pattern: FusePattern
-        let decoder = JSONDecoder()
-        decoder.allowsJSON5 = true   // tolerate lenient model output like Android's isLenient
-        do { pattern = try decoder.decode(FusePattern.self, from: jsonData) }
-        catch { throw AIError.invalidJSON(error.localizedDescription) }
-
-        var mutable = pattern
-        try validate(&mutable)
-        return mutable
+    private func callAPI(userMessage: String, grid: GridSize,
+                         sourcePrompt: String, category: PatternCategory) async throws -> FusePattern {
+        let text = try await requestText(user: userMessage, grid: grid)
+        guard let data = text.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw AIError.invalidJSON("not an object")
+        }
+        return try buildPattern(obj, grid: grid, sourcePrompt: sourcePrompt, category: category)
     }
 
     /// Get the raw model text from whichever provider is selected.
-    private func requestText(user: String) async throws -> String {
+    private func requestText(user: String, grid: GridSize) async throws -> String {
         switch provider {
-        case .claude: return try await callClaude(user: user)
-        case .openai: return try await callOpenAI(user: user)
+        case .claude: return try await callClaude(user: user, grid: grid)
+        case .openai: return try await callOpenAI(user: user, grid: grid)
         }
     }
 
@@ -187,39 +259,66 @@ final class AIPatternService {
         return data
     }
 
-    private func callClaude(user: String) async throws -> String {
+    private func callClaude(user: String, grid: GridSize) async throws -> String {
         var req = URLRequest(url: claudeURL)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         let body: [String: Any] = [
-            "model": claudeModel,
-            "max_tokens": 4096,
+            "model": Self.claudeModel,
+            // 4,096 could not finish a default board even in the compact
+            // encoding once thinking tokens are counted.
+            "max_tokens": 16000,
             "system": systemPrompt,
+            // Laying a subject out on a grid is spatial reasoning, and it is what
+            // the model is worst at when it answers straight away.
+            "thinking": ["type": "adaptive"],
+            "output_config": [
+                "effort": "high",
+                // Structured output, instead of asking for JSON in prose and
+                // hunting for the outermost braces.
+                "format": ["type": "json_schema",
+                           "schema": schema(width: grid.width, height: grid.height)]
+            ],
             "messages": [["role": "user", "content": user]]
         ]
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let data = try await send(req)
-        struct R: Decodable { struct C: Decodable { let text: String }; let content: [C] }
-        guard let r = try? JSONDecoder().decode(R.self, from: data),
-              let t = r.content.first?.text,
-              !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw AIError.noContent
         }
-        return t
+        // A refusal or a token cut-off is an HTTP 200 with an empty content
+        // array; reading content[0] would surface as a confusing JSON error.
+        switch root["stop_reason"] as? String {
+        case "refusal":    throw AIError.refused
+        case "max_tokens": throw AIError.truncated
+        default:           break
+        }
+        // NOT content[0]. With thinking on, the first block is a thinking block
+        // and the pattern is in a later text block.
+        guard let blocks = root["content"] as? [[String: Any]],
+              let text = blocks.first(where: { $0["type"] as? String == "text" })?["text"] as? String,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AIError.noContent
+        }
+        return text
     }
 
-    private func callOpenAI(user: String) async throws -> String {
+    private func callOpenAI(user: String, grid: GridSize) async throws -> String {
         var req = URLRequest(url: openAIURL)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         let body: [String: Any] = [
-            "model": openAIModel,
-            "max_tokens": 4096,
-            // Force strict JSON output so extractJSON always has a clean object.
-            "response_format": ["type": "json_object"],
+            "model": Self.openAIModel,
+            "max_tokens": 16000,
+            "response_format": [
+                "type": "json_schema",
+                "json_schema": ["name": "bead_pattern", "strict": true,
+                                "schema": schema(width: grid.width, height: grid.height)]
+            ],
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": user]
@@ -239,44 +338,97 @@ final class AIPatternService {
         return t
     }
 
-    private func extractJSON(from text: String) throws -> Data {
-        var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if s.hasPrefix("```") {
-            let lines = s.components(separatedBy: "\n")
-            s = lines.dropFirst().dropLast().joined(separator: "\n")
+    /// Turns the model's rows into a real pattern, or explains why it cannot.
+    private func buildPattern(_ obj: [String: Any], grid: GridSize,
+                              sourcePrompt: String, category: PatternCategory) throws -> FusePattern {
+        guard let ids = obj["palette"] as? [String], ids.count >= 2 else {
+            throw AIError.schemaViolation("A pattern needs at least two colours")
         }
-        guard let start = s.firstIndex(of: "{"), let end = s.lastIndex(of: "}") else {
-            throw AIError.invalidJSON("No JSON object found")
+        // Resolve against the REAL bead list. An invented id is the failure this
+        // catches: a colour nobody sells cannot be bought or built.
+        var beads: [PaletteColor] = []
+        for id in ids {
+            guard let bead = PaletteColor.full.first(where: { $0.id == id }) else {
+                throw AIError.schemaViolation("'\(id)' is not a real bead colour")
+            }
+            beads.append(bead)
         }
-        guard let data = String(s[start...end]).data(using: .utf8) else {
-            throw AIError.invalidJSON("Encoding error")
+
+        guard let rows = obj["rows"] as? [String] else {
+            throw AIError.schemaViolation("No rows")
         }
-        return data
+        guard rows.count == grid.height else {
+            throw AIError.schemaViolation("Expected \(grid.height) rows, got \(rows.count)")
+        }
+        let chars = Array(FusePattern.rowChars)
+        var cells: [Cell] = []
+        for (y, row) in rows.enumerated() {
+            let line = Array(row)
+            guard line.count == grid.width else {
+                throw AIError.schemaViolation("Row \(y) is \(line.count) wide, expected \(grid.width)")
+            }
+            for (x, ch) in line.enumerated() {
+                if ch == "." { continue }
+                guard let i = chars.firstIndex(of: ch), i < beads.count else {
+                    throw AIError.schemaViolation("Row \(y) uses '\(ch)', which is not a palette position")
+                }
+                cells.append(Cell(x: x, y: y, colorId: beads[i].id))
+            }
+        }
+        guard !cells.isEmpty else { throw AIError.schemaViolation("The board came back empty") }
+
+        let solid = dropFloatingIslands(cells)
+        let usedIDs = Set(solid.compactMap(\.colorId))
+
+        return FusePattern(
+            id: UUID().uuidString,
+            title: (obj["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? String(sourcePrompt.prefix(40)),
+            category: category,
+            createdBy: .ai,
+            grid: grid,
+            palette: beads.filter { usedIDs.contains($0.id) },
+            cells: solid,
+            difficulty: Difficulty(rawValue: obj["difficulty"] as? String ?? "") ?? .medium,
+            tags: obj["tags"] as? [String] ?? [],
+            sourcePrompt: sourcePrompt,
+            version: 1
+        )
     }
 
-    private func validate(_ p: inout FusePattern) throws {
-        guard p.grid.width >= 8, p.grid.width <= 64,
-              p.grid.height >= 8, p.grid.height <= 64 else {
-            throw AIError.schemaViolation("Grid \(p.grid.width)×\(p.grid.height) out of 8-64 range")
-        }
-        guard p.palette.count >= 4, p.palette.count <= 16 else {
-            throw AIError.schemaViolation("Palette must have 4-16 colors, got \(p.palette.count)")
-        }
-        let ids = Set(p.palette.map(\.id))
-        for cell in p.cells {
-            if let id = cell.colorId, !ids.contains(id) {
-                throw AIError.schemaViolation("Cell references unknown colorId '\(id)'")
+    /// Removes beads not attached to the main body of the pattern.
+    ///
+    /// Fused beads bond where their edges meet, so a bead touching the rest only
+    /// at a corner - or not at all - falls off the moment the piece is lifted.
+    /// Islands of three or more are kept: usually a deliberate detail such as an
+    /// eye, which the maker can iron separately. Anything smaller is a stray.
+    private func dropFloatingIslands(_ cells: [Cell]) -> [Cell] {
+        struct P: Hashable { let x: Int; let y: Int }
+        var filled = Set<P>()
+        for c in cells { filled.insert(P(x: c.x, y: c.y)) }
+
+        var seen = Set<P>()
+        var islands: [[P]] = []
+        for start in filled where !seen.contains(start) {
+            var island: [P] = []
+            var stack = [start]
+            seen.insert(start)
+            while let p = stack.popLast() {
+                island.append(p)
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    let n = P(x: p.x + dx, y: p.y + dy)
+                    if filled.contains(n), !seen.contains(n) { seen.insert(n); stack.append(n) }
+                }
             }
-            guard cell.x >= 0, cell.x < p.grid.width,
-                  cell.y >= 0, cell.y < p.grid.height else {
-                throw AIError.schemaViolation("Cell (\(cell.x),\(cell.y)) out of bounds")
-            }
+            islands.append(island)
         }
-        // Deduplicate cells: last writer wins; prevents EditorViewModel crash
-        var seen = Set<String>()
-        p.cells = p.cells.reversed().filter { cell in
-            let key = "\(cell.x),\(cell.y)"
-            return seen.insert(key).inserted
-        }.reversed()
+        guard islands.count > 1 else { return cells }
+
+        let biggest = islands.map(\.count).max() ?? 0
+        var keep = Set<P>()
+        for island in islands where island.count >= 3 || island.count == biggest {
+            keep.formUnion(island)
+        }
+        let solid = cells.filter { keep.contains(P(x: $0.x, y: $0.y)) }
+        return solid.isEmpty ? cells : solid
     }
 }

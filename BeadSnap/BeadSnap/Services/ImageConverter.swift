@@ -21,11 +21,11 @@ final class ImageConverter {
     ) throws -> FusePattern {
         let cols = gridSize.width
         let rows = gridSize.height
-        guard let pixels = samplePixels(from: image, cols: cols, rows: rows) else {
+        guard let cells0 = sampleCells(from: image, cols: cols, rows: rows) else {
             throw ConversionError.unreadableImage
         }
         let (palette, assignments) = quantizeBeadSafe(
-            pixels: pixels, cols: cols, rows: rows, maxColors: min(maxColors, 16)
+            cells: cells0, cols: cols, rows: rows, maxColors: min(maxColors, 16)
         )
         var cells: [Cell] = []
         for y in 0..<rows {
@@ -92,64 +92,170 @@ final class ImageConverter {
 
     // MARK: - Pixel Sampling
 
-    private func samplePixels(from image: UIImage, cols: Int, rows: Int) -> [[[CGFloat]]]? {
-        guard let cgImage = image.cgImage else { return nil }
-        var rawData = [UInt8](repeating: 0, count: cols * rows * 4)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
+    /// The photo, upright and no larger than this on its long side.
+    ///
+    /// `UIImage.cgImage` throws away `imageOrientation`, so drawing it directly
+    /// renders a photo taken in portrait on its side - which is what iOS was
+    /// doing to every camera capture. Redrawing through UIGraphics bakes the
+    /// orientation into the pixels.
+    private static let workMaxDim: CGFloat = 1024
+
+    private func upright(_ image: UIImage) -> CGImage? {
+        let scale = min(1.0, ImageConverter.workMaxDim / max(image.size.width, image.size.height))
+        let target = CGSize(width: (image.size.width * scale).rounded(),
+                            height: (image.size.height * scale).rounded())
+        guard target.width >= 1, target.height >= 1 else { return image.cgImage }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let drawn = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        return drawn.cgImage
+    }
+
+    /// Straight (un-premultiplied) 8-bit RGBA of the upright photo.
+    private func rgba(from image: UIImage) -> (px: [UInt8], w: Int, h: Int)? {
+        guard let cg = upright(image) else { return nil }
+        let w = cg.width, h = cg.height
+        guard w > 0, h > 0 else { return nil }
+        var raw = [UInt8](repeating: 0, count: w * h * 4)
         guard let ctx = CGContext(
-            data: &rawData, width: cols, height: rows,
-            bitsPerComponent: 8, bytesPerRow: cols * 4, space: colorSpace,
+            data: &raw, width: w, height: h,
+            bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
-        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: cols, height: rows))
-        var pixels = Array(repeating: Array(repeating: [CGFloat](repeating: 0, count: 4), count: cols), count: rows)
-        for y in 0..<rows {
-            for x in 0..<cols {
-                let i = (y * cols + x) * 4
-                let a = CGFloat(rawData[i + 3]) / 255
-                if a < 0.15 {
-                    pixels[y][x] = [-1, -1, -1, -1]
-                } else {
-                    // buffer is premultiplied: divide by alpha to recover straight color
-                    let scale = a > 0 ? 1 / (255 * a) : 0
-                    pixels[y][x] = [
-                        min(CGFloat(rawData[i])   * scale, 1),
-                        min(CGFloat(rawData[i+1]) * scale, 1),
-                        min(CGFloat(rawData[i+2]) * scale, 1),
-                        a
-                    ]
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        return (raw, w, h)
+    }
+
+    /// One linear-light colour per bead, or nil where the cell is see-through.
+    ///
+    /// The old version handed the whole photo to Core Graphics at cols x rows and
+    /// let it box-average, which is right for a shaded surface and wrong at a
+    /// boundary: a cell covering 60% muzzle and 40% nose averages to a muddy
+    /// brown belonging to neither. Sampling the real pixels and letting
+    /// `ColorMath.resolveCell` choose between averaging and snapping is what
+    /// keeps small dark features - an eye, a nostril - from dissolving.
+    private func sampleCells(from image: UIImage, cols: Int, rows: Int) -> [[(Double, Double, Double)?]]? {
+        guard let (px, w, h) = rgba(from: image) else { return nil }
+
+        // sRGB byte -> linear light, once.
+        var lin = [Double](repeating: 0, count: 256)
+        for i in 0..<256 { lin[i] = ColorMath.srgbToLinear(Double(i) / 255.0) }
+
+        var out = Array(repeating: Array<(Double, Double, Double)?>(repeating: nil, count: cols), count: rows)
+
+        for cy in 0..<rows {
+            let sy0 = cy * h / rows
+            let sy1 = max(sy0 + 1, (cy + 1) * h / rows)
+            for cx in 0..<cols {
+                let sx0 = cx * w / cols
+                let sx1 = max(sx0 + 1, (cx + 1) * w / cols)
+
+                var rAcc = 0.0, gAcc = 0.0, bAcc = 0.0, aAcc = 0.0, lAcc = 0.0
+                var n = 0
+                var lMin = Double.greatestFiniteMagnitude
+                var lMax = -Double.greatestFiniteMagnitude
+
+                for sy in sy0..<sy1 {
+                    for sx in sx0..<sx1 {
+                        let i = (sy * w + sx) * 4
+                        let a = Int(px[i + 3])
+                        n += 1
+                        if a == 0 { continue }
+                        // The buffer is premultiplied; recover straight colour.
+                        let inv = 255.0 / Double(a)
+                        let pr = lin[min(255, Int(Double(px[i]) * inv))]
+                        let pg = lin[min(255, Int(Double(px[i + 1]) * inv))]
+                        let pb = lin[min(255, Int(Double(px[i + 2]) * inv))]
+                        let y = ColorMath.luma(pr, pg, pb)
+                        if y < lMin { lMin = y }
+                        if y > lMax { lMax = y }
+                        let wgt = Double(a) / 255.0
+                        aAcc += wgt; lAcc += y * wgt
+                        rAcc += pr * wgt; gAcc += pg * wgt; bAcc += pb * wgt
+                    }
                 }
+                // Mostly-transparent cells stay empty, so a cut-out leaves real
+                // holes instead of muddy edges.
+                if n == 0 || aAcc / Double(n) < 0.35 { continue }
+
+                let mR = rAcc / aAcc, mG = gAcc / aAcc, mB = bAcc / aAcc
+                if lMax - lMin < ColorMath.edgeMinLumaRange {
+                    out[cy][cx] = (mR, mG, mB)
+                    continue
+                }
+
+                // Second pass, only where the cell could straddle an edge.
+                let midL = lAcc / aAcc
+                var dr = 0.0, dg = 0.0, db = 0.0, dw = 0.0
+                var xr = 0.0, xg = 0.0, xb = 0.0, xw = 0.0
+                for sy in sy0..<sy1 {
+                    for sx in sx0..<sx1 {
+                        let i = (sy * w + sx) * 4
+                        let a = Int(px[i + 3])
+                        if a == 0 { continue }
+                        let inv = 255.0 / Double(a)
+                        let pr = lin[min(255, Int(Double(px[i]) * inv))]
+                        let pg = lin[min(255, Int(Double(px[i + 1]) * inv))]
+                        let pb = lin[min(255, Int(Double(px[i + 2]) * inv))]
+                        let wgt = Double(a) / 255.0
+                        if ColorMath.luma(pr, pg, pb) <= midL {
+                            dr += pr * wgt; dg += pg * wgt; db += pb * wgt; dw += wgt
+                        } else {
+                            xr += pr * wgt; xg += pg * wgt; xb += pb * wgt; xw += wgt
+                        }
+                    }
+                }
+                out[cy][cx] = ColorMath.resolveCell(
+                    meanR: mR, meanG: mG, meanB: mB,
+                    darkR: dr, darkG: dg, darkB: db, darkW: dw,
+                    liteR: xr, liteG: xg, liteB: xb, liteW: xw
+                )
             }
         }
-        return pixels
+        return out
     }
 
     // MARK: - Bead-Safe Nearest-Color Quantization
 
+    /// Assigns a bead to every cell, then narrows to `maxColors`.
+    ///
+    /// Distance is `ColorMath.beadDistance` - CIEDE2000 with a penalty for
+    /// draining chroma - not the squared Euclidean dE76 this used before. Plain
+    /// dE76 weights a unit of lightness exactly like a unit of chroma, and
+    /// against a palette holding nine pure neutrals it kept scoring a grey of
+    /// the right lightness as closer than a bead of the right hue. That is why
+    /// photos converted grey.
     private func quantizeBeadSafe(
-        pixels: [[[CGFloat]]],
+        cells: [[(Double, Double, Double)?]],
         cols: Int, rows: Int,
         maxColors: Int
     ) -> ([PaletteColor], [[String?]]) {
         let full = PaletteColor.full
-        let fullLAB = full.map { c -> (Double, Double, Double) in
+        let fullLAB: [(Double, Double, Double)] = full.map { c in
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
             c.uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-            return rgbToLAB(r: Double(r), g: Double(g), b: Double(b))
+            return ColorMath.srgbToLab(Double(r), Double(g), Double(b))
         }
         let paletteIndex = Dictionary(uniqueKeysWithValues: full.enumerated().map { ($1.id, $0) })
 
         var assignments = Array(repeating: Array<String?>(repeating: nil, count: cols), count: rows)
         var counts: [String: Int] = [:]
 
+        // The cell colours are LINEAR light, so they go to LAB directly.
+        var labs = Array(repeating: Array<(Double, Double, Double)?>(repeating: nil, count: cols), count: rows)
+
         for y in 0..<rows {
             for x in 0..<cols {
-                let p = pixels[y][x]
-                guard p[3] >= 0 else { continue }
-                let lab = rgbToLAB(r: Double(p[0]), g: Double(p[1]), b: Double(p[2]))
-                var bestIdx = 0; var bestD = Double.infinity
+                guard let c = cells[y][x] else { continue }
+                let lab = ColorMath.linearRgbToLab(c.0, c.1, c.2)
+                labs[y][x] = lab
+                var bestIdx = 0, bestD = Double.infinity
                 for (i, pLAB) in fullLAB.enumerated() {
-                    let d = pow(lab.0-pLAB.0,2)+pow(lab.1-pLAB.1,2)+pow(lab.2-pLAB.2,2)
+                    let d = ColorMath.beadDistance(lab, pLAB)
                     if d < bestD { bestD = d; bestIdx = i }
                 }
                 let id = full[bestIdx].id
@@ -158,8 +264,8 @@ final class ImageConverter {
             }
         }
 
-        // Limit palette to maxColors most-used; break count ties by palette order
-        // so the same photo always yields the same palette.
+        // Keep the most-used colours; break ties by palette order so the same
+        // photo always yields the same palette.
         let topIDs = Set(
             counts.sorted {
                 $0.value != $1.value
@@ -171,19 +277,18 @@ final class ImageConverter {
 
         if counts.count > maxColors {
             let topPalette = full.filter { topIDs.contains($0.id) }
-            let topLAB = topPalette.map { c -> (Double, Double, Double) in
+            let topLAB: [(Double, Double, Double)] = topPalette.map { c in
                 var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
                 c.uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-                return rgbToLAB(r: Double(r), g: Double(g), b: Double(b))
+                return ColorMath.srgbToLab(Double(r), Double(g), Double(b))
             }
             for y in 0..<rows {
                 for x in 0..<cols {
-                    guard let id = assignments[y][x], !topIDs.contains(id) else { continue }
-                    let p = pixels[y][x]
-                    let lab = rgbToLAB(r: Double(p[0]), g: Double(p[1]), b: Double(p[2]))
-                    var bestIdx = 0; var bestD = Double.infinity
+                    guard let id = assignments[y][x], !topIDs.contains(id),
+                          let lab = labs[y][x] else { continue }
+                    var bestIdx = 0, bestD = Double.infinity
                     for (i, pLAB) in topLAB.enumerated() {
-                        let d = pow(lab.0-pLAB.0,2)+pow(lab.1-pLAB.1,2)+pow(lab.2-pLAB.2,2)
+                        let d = ColorMath.beadDistance(lab, pLAB)
                         if d < bestD { bestD = d; bestIdx = i }
                     }
                     assignments[y][x] = topPalette[bestIdx].id
@@ -196,10 +301,4 @@ final class ImageConverter {
         return (palette, assignments)
     }
 
-    // MARK: - CIE LAB
-
-    private func rgbToLAB(r: Double, g: Double, b: Double) -> (Double, Double, Double) {
-        let lab = BeadColor.rgbToLAB(r: r, g: g, b: b)
-        return (lab.l, lab.a, lab.b)
-    }
 }

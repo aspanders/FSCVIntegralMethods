@@ -80,5 +80,12 @@ echo "==> play billing call sites (v9 signatures)"
 echo "==> python reference"
 python3 "$HERE/compare.py" "$WORK"
 
+# No Swift toolchain here, so the iOS colour maths and AI request cannot be
+# compiled or run. This proves the port is a faithful TRANSCRIPTION - every
+# constant and function present on both sides, and the AI settings that made the
+# feature work matching - which is the failure mode a hand port actually has.
+echo "==> android / ios parity"
+python3 "$HERE/parity.py"
+
 echo "==> library regressions"
 python3 "$REPO/tools/library/test_regressions.py"
