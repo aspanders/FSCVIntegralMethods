@@ -140,18 +140,30 @@ fun PhotoTuneScreen(
         if (autoSegment) {
             autoRunning = true
             try {
-                val work = withContext(Dispatchers.Default) { built.sourceBitmap() }
-                val mw = work.width
-                val mh = work.height
-                val mask = BackgroundRemover.subjectMask(work)
-                work.recycle()
+                // Segment the FULL-RESOLUTION photo, not the studio's working
+                // buffer. That buffer is capped at PhotoStudio.WORK_MAX_DIM =
+                // 384 on its long side, and ML Kit's subject segmentation guide
+                // asks for at least 512x512 for an accurate result - so every
+                // cut-out in the app was run under the floor on both axes, on
+                // every photo, forever. The symptom is not an error: the
+                // segmenter still returns a mask, just a coarse one, with thin
+                // features like a handle or an ear dropped. When it degrades far
+                // enough that the guard below rejects it, the app reports the
+                // feature as unavailable on hardware where it works fine.
+                //
+                // Nothing else has to change: adoptMask already nearest-neighbour
+                // resamples a mask of any size onto the working grid, which until
+                // now was dead code because it was only ever handed a mask that
+                // was already the working size. `source` is owned by CreateScreen
+                // and stays alive, so it must not be recycled here.
+                val mask = BackgroundRemover.subjectMask(source)
                 val kept = mask?.count { it } ?: 0
                 if (mask == null || kept == 0 || kept == mask.size) {
                     // A mask that keeps everything, or nothing, is not a usable
                     // result even when the segmenter reports success.
                     autoUnavailable = true
                 } else {
-                    built.adoptMask(mask, mw, mh)
+                    built.adoptMask(mask, source.width, source.height)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -422,16 +434,16 @@ fun PhotoTuneScreen(
                                     autoRunning = true
                                     autoUnavailable = false
                                     try {
-                                        val work = withContext(Dispatchers.Default) { s.sourceBitmap() }
-                                        val mw = work.width
-                                        val mh = work.height
-                                        val mask = BackgroundRemover.subjectMask(work)
-                                        work.recycle()
+                                        // Full resolution, for the reason given
+                                        // at the first call site above.
+                                        val mask = BackgroundRemover.subjectMask(source)
                                         val kept = mask?.count { it } ?: 0
                                         if (mask == null || kept == 0 || kept == mask.size) {
                                             autoUnavailable = true
                                         } else {
-                                            post { st -> st.adoptMask(mask, mw, mh) }
+                                            post { st ->
+                                                st.adoptMask(mask, source.width, source.height)
+                                            }
                                         }
                                     } catch (e: CancellationException) {
                                         throw e

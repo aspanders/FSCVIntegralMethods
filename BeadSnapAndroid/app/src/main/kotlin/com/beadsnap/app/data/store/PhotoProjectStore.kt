@@ -10,12 +10,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 
 /** One pattern derived from a project's photo, with the settings that made it. */
 @Serializable
@@ -135,8 +139,36 @@ class PhotoProjectStore private constructor(context: Context) {
     private fun detach(bmp: Bitmap): Bitmap? =
         try { bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null }
 
+    /**
+     * Writes [bmp] to [target], or throws.
+     *
+     * Two things the previous one-liner got wrong. Bitmap.compress reports
+     * failure through its RETURN VALUE, not an exception - the native encoder
+     * catches the IOException from the stream, clears it, and returns false -
+     * so an out-of-space device produced a truncated PNG that the caller
+     * recorded as a success. The project row was already in the index by then,
+     * and loadSource takes the decode path because the file exists, so the
+     * photo came back null forever: a project with a blank thumbnail that could
+     * never re-derive a pattern, and no error ever shown.
+     *
+     * And it compressed straight into the destination, so a failed re-save
+     * destroyed the good file that was already there. Write beside it and
+     * rename, which is atomic on POSIX.
+     */
     private fun writePng(bmp: Bitmap, target: File) {
-        target.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val tmp = File(target.parentFile, "${target.name}.${UUID.randomUUID()}.tmp")
+        val ok = try {
+            tmp.outputStream().use { out ->
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, out).also { if (it) out.flush() }
+            }
+        } catch (e: Exception) {
+            tmp.delete()
+            throw e
+        }
+        if (!ok || !tmp.renameTo(target)) {
+            tmp.delete()
+            throw IOException("Could not write ${target.name} - the device may be out of space")
+        }
     }
 
     fun addVariant(projectId: String, patternId: String, label: String) {
@@ -172,21 +204,46 @@ class PhotoProjectStore private constructor(context: Context) {
 
     fun clearLastError() { _lastError.value = null }
 
+    // Index writes are serialised and last-one-wins.
+    //
+    // persist() used to launch straight onto Dispatchers.IO - a pool that runs
+    // its work concurrently, in no guaranteed order - and every launch wrote
+    // the same hard-coded projects.json.tmp. Saving a photo fires two persists
+    // in one frame (createProject then addVariant), so this was hit on every
+    // conversion, not rarely. Either the second rename found the tmp already
+    // taken away and reported a spurious "could not save" over a save that had
+    // worked, leaving the older snapshot on disk and losing the variant on
+    // restart; or one write truncated the tmp another was mid-rename on, and
+    // the next cold start hit a JSON parse error which load() swallows into an
+    // empty list - at which point the following mutation persists that empty
+    // list and every project is gone for good, PNGs orphaned.
+    //
+    // The mutex removes the interleaving; the sequence number means a snapshot
+    // that has already been superseded in memory is not written at all, so the
+    // last state on disk is the last state the user actually produced.
+    private val indexLock = Mutex()
+    private val writeSeq = AtomicLong(0)
+
     private fun persist(next: List<PhotoProject>) {
         val sorted = next.sortedByDescending { it.createdAt }
         _projects.value = sorted
+        val seq = writeSeq.incrementAndGet()
         scope.launch(Dispatchers.IO) {
-            try {
-                val tmp = File(dir, "projects.json.tmp")
-                tmp.writeText(json.encodeToString(sorted))
-                if (!tmp.renameTo(indexFile)) {
-                    tmp.delete()
-                    _lastError.value = "Could not save your photo projects"
-                    return@launch
+            indexLock.withLock {
+                if (seq < writeSeq.get()) return@withLock   // superseded before it ran
+                val tmp = File(dir, "projects.json.$seq.tmp")
+                try {
+                    tmp.writeText(json.encodeToString(sorted))
+                    if (!tmp.renameTo(indexFile)) {
+                        _lastError.value = "Could not save your photo projects"
+                        return@withLock
+                    }
+                    _lastError.value = null
+                } catch (e: Exception) {
+                    _lastError.value = "Could not save your photo projects: ${e.message}"
+                } finally {
+                    tmp.delete()   // no-op once the rename has moved it
                 }
-                _lastError.value = null
-            } catch (e: Exception) {
-                _lastError.value = "Could not save your photo projects: ${e.message}"
             }
         }
     }

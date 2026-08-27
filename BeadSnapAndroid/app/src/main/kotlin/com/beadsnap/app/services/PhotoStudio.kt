@@ -308,9 +308,6 @@ class PhotoStudio private constructor(
             return false
         }
 
-    /** The working photo, unmasked - what the automatic segmenter is handed. */
-    fun sourceBitmap(): Bitmap =
-        Bitmap.createBitmap(srgb, width, height, Bitmap.Config.ARGB_8888)
 
     /** The full-resolution photo with everything the user removed made transparent. */
     fun maskedFullRes(src: Bitmap): Bitmap {

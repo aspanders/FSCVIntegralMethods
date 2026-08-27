@@ -127,6 +127,40 @@ Tools → Gradle → Gradle JDK** shows the one the IDE is actually using.
    cause is almost always a missing `android.useAndroidX=true` — it is in
    `gradle.properties`, so check you opened the right folder.
 
+## 1b. Pulling a change while you are mid-release
+
+Fixes land on the branch during a release more often than you would like. The
+loop is short:
+
+```powershell
+git pull
+```
+
+Then, in Android Studio:
+
+1. If the yellow **"Gradle files have changed"** banner appears, click **Sync
+   Now**. It only appears when `build.gradle.kts`, `libs.versions.toml` or the
+   wrapper changed — a pure Kotlin change needs no sync.
+2. **Build → Clean Project** is *not* normally needed. Gradle tracks inputs
+   properly. Reach for it only if a build fails in a way that makes no sense
+   against the source you are looking at.
+3. Re-run whichever step you were on:
+
+```powershell
+.\gradlew test              # if the change touched logic
+.\gradlew assembleRelease   # to re-test on a device
+.\gradlew bundleRelease     # to rebuild the upload artifact
+```
+
+Two things that catch people out:
+
+- **`git pull` will refuse if you have local edits** to a file the pull wants to
+  change. `git stash`, pull, `git stash pop`. Your `keystore.properties` is
+  gitignored and is never involved.
+- **Reinstalling over an existing build keeps the app's data**, which is what you
+  want — it exercises the upgrade path. `adb install -r` does this. Only
+  uninstall first when you specifically want to test a *fresh* install.
+
 ## 2. Run the tests
 
 ```bash
