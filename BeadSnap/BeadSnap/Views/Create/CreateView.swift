@@ -13,6 +13,11 @@ struct CreateView: View {
     @State private var blankTitle = "My Design"
     @State private var blankGridSize: GridSize = .large
     @State private var showPhotoSettings = false
+    // The studio replaces the settings sheet: board size, colours and the
+    // background cut-out are all decisions best made with the beads visible,
+    // which is exactly what it shows. The old sheet asked for them blind.
+    @State private var studioImage: UIImage?
+    @State private var showStudio = false
     @State private var didStartConvert = false
     @State private var removeBackground = false
     @StateObject private var maskEditor = MaskEditor()
@@ -36,6 +41,35 @@ struct CreateView: View {
             .sheet(isPresented: $showBlankSheet) {
                 blankSheet
             }
+            .fullScreenCover(isPresented: $showStudio, onDismiss: {
+                studioImage = nil
+                capturedImage = nil
+                importVM.selectedItem = nil
+            }) {
+                if let image = studioImage {
+                    PhotoTuneView(
+                        source: image,
+                        onCancel: { showStudio = false },
+                        onDone: { pattern, _, _, cutout in
+                            // Keep the PHOTO, not just this one conversion of
+                            // it: trying a different board size later should not
+                            // mean hunting the picture down in the library again.
+                            let project = PhotoProjectStore.shared.createProject(
+                                title: "Photo \(PhotoProjectStore.shared.projects.count + 1)",
+                                source: image, cutout: cutout
+                            )
+                            var titled = pattern
+                            titled.title = "\(project.title) v1"
+                            PhotoProjectStore.shared.addVariant(
+                                project.id, patternId: titled.id,
+                                label: PhotoProjectStore.labelFor(titled, cutout: cutout != nil)
+                            )
+                            showStudio = false
+                            openInEditor(titled)
+                        }
+                    )
+                }
+            }
             .sheet(
                 isPresented: $showPhotoSettings,
                 onDismiss: {
@@ -57,8 +91,9 @@ struct CreateView: View {
                 onDismiss: {
                     // Fires only after the cover is fully off-screen, so the
                     // settings sheet can't race the dismissal animation
-                    if capturedImage != nil {
-                        showPhotoSettings = true
+                    if let captured = capturedImage {
+                        studioImage = captured
+                        showStudio = true
                     }
                 }
             ) {
@@ -148,9 +183,19 @@ struct CreateView: View {
                 )
             }
             .onChange(of: importVM.selectedItem) { _, item in
-                if item != nil {
-                    capturedImage = nil
-                    showPhotoSettings = true
+                guard let item else { return }
+                capturedImage = nil
+                Task {
+                    // The picker hands back an opaque item, so the bytes have to
+                    // be pulled before the studio has anything to show.
+                    guard let data = try? await item.loadTransferable(type: Data.self),
+                          let image = UIImage(data: data) else {
+                        importVM.errorMessage = "Could not read that photo. Try a different one."
+                        importVM.selectedItem = nil
+                        return
+                    }
+                    studioImage = image
+                    showStudio = true
                 }
             }
 

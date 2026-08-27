@@ -90,6 +90,36 @@ final class ImageConverter {
         }
     }
 
+    // MARK: - Crop
+
+    /// A rectangle of source pixels, in source coordinates.
+    struct CropRect {
+        var minX: Int, minY: Int, width: Int, height: Int
+    }
+
+    /// The largest centred rect of `width` x `height` whose aspect ratio matches
+    /// a cols x rows grid.
+    ///
+    /// Used as the default crop so photos keep their proportions instead of
+    /// being stretched onto a square board - a face converted without this comes
+    /// out squashed. Ported from the Android `ImageConverter.aspectCrop`.
+    static func aspectCrop(width srcW: Int, height srcH: Int, cols: Int, rows: Int) -> CropRect {
+        guard srcW > 0, srcH > 0, cols > 0, rows > 0 else {
+            return CropRect(minX: 0, minY: 0, width: max(1, srcW), height: max(1, srcH))
+        }
+        let target = Double(cols) / Double(rows)
+        let current = Double(srcW) / Double(srcH)
+        if current > target {
+            // Too wide: trim the sides.
+            let w = min(max(Int((Double(srcH) * target).rounded()), 1), srcW)
+            return CropRect(minX: (srcW - w) / 2, minY: 0, width: w, height: srcH)
+        } else {
+            // Too tall: trim top and bottom.
+            let h = min(max(Int((Double(srcW) / target).rounded()), 1), srcH)
+            return CropRect(minX: 0, minY: (srcH - h) / 2, width: srcW, height: h)
+        }
+    }
+
     // MARK: - Pixel Sampling
 
     /// The photo, upright and no larger than this on its long side.

@@ -108,6 +108,27 @@ final class MaskEditor: ObservableObject {
 
     // MARK: - Vision subject mask
 
+    /// A subject mask and the size it was computed at.
+    struct SubjectMask {
+        var values: [Bool]
+        var width: Int
+        var height: Int
+    }
+
+    /// Segment `image` at its OWN resolution.
+    ///
+    /// Deliberately not downscaled first. Vision wants a reasonably large image
+    /// to find a subject accurately, and the studio's working buffer is only
+    /// 384px on its long side - segmenting that would give a coarse mask with
+    /// thin features like an ear or a handle dropped, for no saving worth having.
+    /// The mask is resampled onto the working grid by `PhotoStudio.adoptMask`,
+    /// which exists for exactly this.
+    nonisolated static func subjectMask(_ image: UIImage) async -> SubjectMask? {
+        guard let cg = image.cgImage else { return nil }
+        guard let values = await subjectMask(cgImage: cg) else { return nil }
+        return SubjectMask(values: values, width: cg.width, height: cg.height)
+    }
+
     private nonisolated static func subjectMask(cgImage: CGImage) async -> [Bool]? {
         await Task.detached(priority: .userInitiated) { () -> [Bool]? in
             let request = VNGenerateForegroundInstanceMaskRequest()

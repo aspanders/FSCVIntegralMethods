@@ -80,6 +80,32 @@ AI_MUST_BE_GONE = [
 ]
 
 
+# Files that must exist on both platforms. iOS spent several releases without
+# these, so the same photo produced a visibly worse pattern there; a missing file
+# is the thing to catch, not a subtle difference inside one.
+PAIRED_FILES = [
+    ("services/ColorMath.kt", "Services/ColorMath.swift", "colour maths"),
+    ("services/PhotoStudio.kt", "Services/PhotoStudio.swift", "live photo studio"),
+    ("services/AIPatternService.kt", "Services/AIPatternService.swift", "AI patterns"),
+    ("services/ImageConverter.kt", "Services/ImageConverter.swift", "photo conversion"),
+    ("data/store/PhotoProjectStore.kt", "Services/PhotoProjectStore.swift", "photo projects"),
+]
+
+AND_ROOT = os.path.join(REPO, "BeadSnapAndroid", "app", "src", "main", "kotlin",
+                        "com", "beadsnap", "app")
+IOS_ROOT = os.path.join(REPO, "BeadSnap", "BeadSnap")
+
+
+def check_paired_files() -> list:
+    problems = []
+    for kt, sw, what in PAIRED_FILES:
+        if not os.path.exists(os.path.join(AND_ROOT, kt)):
+            problems.append(f"Android has no {kt} ({what})")
+        if not os.path.exists(os.path.join(IOS_ROOT, sw)):
+            problems.append(f"iOS has no {sw} ({what})")
+    return problems
+
+
 def check_ai() -> list:
     """Both AI services must ask for the same thing."""
     problems = []
@@ -133,12 +159,14 @@ def main() -> int:
         if f not in ALLOWED_FUNCS:
             problems.append(f"function {f}() exists on iOS but not on Android")
 
+    problems += check_paired_files()
     problems += check_ai()
 
     shared = sorted(set(kt_n) & set(sw_n))
     print(f"  {len(shared)} colour constants match across both platforms")
     print(f"  {len(kt_f & sw_f)} colour functions present on both")
     print(f"  {len(AI_MUST_MATCH)} AI request settings checked on both platforms")
+    print(f"  {len(PAIRED_FILES)} services present on both platforms")
 
     if problems:
         for p in problems:
