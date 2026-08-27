@@ -60,6 +60,19 @@ fi
 # Reverting either v8 migration - the no-argument enablePendingPurchases, or
 # treating the queryProductDetailsAsync callback's second argument as a list -
 # fails right here.
+# The AI pattern service had never been compiled off-device, let alone run, so
+# nothing could notice that its default request could not succeed: a 32x32 board
+# as per-cell JSON needs ~6,700 output tokens against a max_tokens of 4,096, and
+# every ordinary prompt came back truncated. This drives it end to end against
+# the okhttp / org.json stubs - what goes on the wire, and what it makes of a
+# reply - so the request shape and the validation are checked, not assumed.
+echo "==> ai pattern service"
+"$KOTLINC" -nowarn -cp "$COROUTINES" -include-runtime -d "$WORK/Ai.jar" \
+  "$HERE"/stubs/*.kt "$HERE/Ai.kt" \
+  "$SRC/data/model/BeadColor.kt" "$SRC/data/model/FusePattern.kt" \
+  "$SRC/services/AIPatternService.kt"
+java -cp "$WORK/Ai.jar:$COROUTINES" AiKt
+
 echo "==> play billing call sites (v9 signatures)"
 "$KOTLINC" -nowarn -cp "$COROUTINES" -d "$WORK/billing" \
   "$HERE"/stubs/*.kt "$SRC/services/TipJarManager.kt"
