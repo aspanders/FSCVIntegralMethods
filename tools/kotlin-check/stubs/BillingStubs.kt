@@ -1,8 +1,8 @@
-// Play Billing Library 9 stubs, written from the public API reference at
+// Play Billing Library 8 stubs, written from the public API reference at
 // developer.android.com/reference/com/android/billingclient/api/*.
 //
 // The point is NOT to emulate billing - nothing here does anything. It is to
-// let a plain kotlinc type-check TipJarManager against the v9 signatures
+// let a plain kotlinc type-check TipJarManager against the v8 signatures
 // without an Android SDK, so a migration mistake (calling the removed no-arg
 // enablePendingPurchases, or treating the queryProductDetailsAsync callback's
 // second argument as a List) fails here instead of in Play Console.

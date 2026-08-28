@@ -54,7 +54,7 @@ else
 fi
 
 # Play Billing has no emulator here and no Android SDK, so this is a
-# TYPE check, not a behaviour one: stubs/BillingStubs.kt encodes the v9
+# TYPE check, not a behaviour one: stubs/BillingStubs.kt encodes the v8
 # signatures from the public API reference, and compiling TipJarManager
 # against them proves the call sites match the library the app declares.
 # Reverting either v8 migration - the no-argument enablePendingPurchases, or
@@ -73,7 +73,7 @@ echo "==> ai pattern service"
   "$SRC/services/AIPatternService.kt"
 java -cp "$WORK/Ai.jar:$COROUTINES" AiKt
 
-echo "==> play billing call sites (v9 signatures)"
+echo "==> play billing call sites (v8 signatures)"
 "$KOTLINC" -nowarn -cp "$COROUTINES" -d "$WORK/billing" \
   "$HERE"/stubs/*.kt "$SRC/services/TipJarManager.kt"
 

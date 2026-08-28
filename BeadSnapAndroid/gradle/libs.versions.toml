@@ -27,7 +27,19 @@ coroutines = "1.8.1"
 #
 # If this is ever raised again, either keep it on `billing`, or upgrade the
 # Kotlin version below to match what the ktx module was built with.
-billing = "9.1.0"
+#
+# 8.0.0, not 9.1.0, and deliberately: 8.0.0 is exactly the floor Google set
+# for the 31 Aug 2026 cutoff, and the app advertises whatever it links as
+# com.google.android.play.billingclient.version in the merged manifest -
+# which is one of the things Play uses to decide which devices can run the
+# app. Going past the stated requirement bought nothing and put that number
+# ahead of the device catalogue. Take the floor, not the newest.
+#
+# Every v8 API this app uses arrived IN 8.0.0 - PendingPurchasesParams on
+# enablePendingPurchases, enableAutoServiceReconnection, and the
+# QueryProductDetailsResult form of the queryProductDetailsAsync callback -
+# so TipJarManager compiles against it unchanged.
+billing = "8.0.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
 exifinterface = "1.3.7"
 

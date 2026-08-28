@@ -2,7 +2,7 @@
 """Check the tip jar for the mistakes that cost real money, silently.
 
 There is no billing emulator here and the stubs do nothing, so compiling
-TipJarManager proves only that the call sites match the v9 signatures - not
+TipJarManager proves only that the call sites match the v8 signatures - not
 that the flow WORKS. Both faults found in review compiled perfectly:
 
   * launchBillingFlow reports failure by RETURN VALUE, and the return value was
