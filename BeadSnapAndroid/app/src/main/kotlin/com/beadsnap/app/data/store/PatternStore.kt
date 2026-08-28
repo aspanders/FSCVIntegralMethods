@@ -149,8 +149,39 @@ class PatternStore private constructor(context: Context) {
         _userPatterns.value = loaded
     }
 
+    /**
+     * Save on the CALLING thread.
+     *
+     * Kept synchronous because the editor calls it from onCleared(), where the
+     * write has to finish before the ViewModel and its scope go away. Anything
+     * on a hot path should use [saveOffThread] instead.
+     */
     fun save(pattern: FusePattern) {
         if (pattern.createdBy == CreatorType.system) return
+        if (writeToDisk(pattern)) index(pattern)
+    }
+
+    /**
+     * Save with the encode and the file write on the IO dispatcher.
+     *
+     * The editor autosaves every 500 ms while a stroke is in progress, and
+     * viewModelScope is Dispatchers.Main.immediate - so serialising a full
+     * board and writing it to disk was happening on the UI thread, in the
+     * middle of the drag it was saving. It is a few milliseconds on a fast
+     * device and a visible hitch on a slow one, and it is a StrictMode
+     * violation either way.
+     *
+     * The index update deliberately stays on the caller's dispatcher: it is a
+     * read-modify-write of _userPatterns, and every caller is on the main
+     * thread, which is what keeps two saves from losing each other.
+     */
+    suspend fun saveOffThread(pattern: FusePattern) {
+        if (pattern.createdBy == CreatorType.system) return
+        if (withContext(Dispatchers.IO) { writeToDisk(pattern) }) index(pattern)
+    }
+
+    /** Returns whether the pattern reached disk; reports why if it did not. */
+    private fun writeToDisk(pattern: FusePattern): Boolean {
         val file = File(userDir, "${pattern.id}.json")
         try {
             val tmp = File(userDir, "${pattern.id}.json.tmp")
@@ -159,13 +190,19 @@ class PatternStore private constructor(context: Context) {
             if (!tmp.renameTo(file)) {
                 tmp.delete()
                 _lastError.value = "Failed to save \"${pattern.title}\": could not commit file"
-                return
+                return false
             }
             _lastError.value = null
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             _lastError.value = "Failed to save \"${pattern.title}\": ${e.message}"
-            return
+            return false
         }
+        return true
+    }
+
+    private fun index(pattern: FusePattern) {
         val current = _userPatterns.value.toMutableList()
         val idx = current.indexOfFirst { it.id == pattern.id }
         if (idx >= 0) current[idx] = pattern else current.add(pattern)

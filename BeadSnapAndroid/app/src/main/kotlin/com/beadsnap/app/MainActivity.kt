@@ -31,14 +31,17 @@ class MainActivity : ComponentActivity() {
         val aiService  = AIPatternService.shared
         val tipJar     = TipJarManager.getInstance(this)
         val library    = RemoteLibraryService.getInstance(this)
-        if (savedInstanceState == null) tipJar.recordUse()
-
-        // Connect billing on every launch, not only when the tip sheet opens.
-        // A tip is a consumable: if the app was killed mid-checkout, or the
-        // consume call failed, Play keeps holding it and refunds it after three
-        // days. connect() reconciles those, so the launch call is what stops a
-        // real tip quietly turning back into a refund.
-        tipJar.connect()
+        if (savedInstanceState == null) {
+            tipJar.recordUse()
+            // Connect billing on launch, not only when the tip sheet opens. A
+            // tip is a consumable: if the app was killed mid-checkout, or the
+            // consume call failed, Play keeps holding it and refunds it after
+            // three days. connect() reconciles those, so the launch call is
+            // what stops a real tip quietly turning back into a refund. Under
+            // the same guard as recordUse - a rotation is not a launch, and
+            // rebinding the billing service on every one buys nothing.
+            tipJar.connect()
+        }
 
         // Auto-update the pattern library in the background on each launch.
         lifecycleScope.launch { library.syncIfNeeded() }

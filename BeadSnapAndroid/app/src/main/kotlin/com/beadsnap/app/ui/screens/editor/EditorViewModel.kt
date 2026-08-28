@@ -219,7 +219,8 @@ class EditorViewModel(
         autosaveJob = viewModelScope.launch {
             delay(500)
             if (store.userPatterns.value.none { it.id == p.id }) return@launch
-            store.save(_pattern.value)
+            // Off the main thread: this fires mid-stroke, every 500 ms.
+            store.saveOffThread(_pattern.value)
         }
     }
 

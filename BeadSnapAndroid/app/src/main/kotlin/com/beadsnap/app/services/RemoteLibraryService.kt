@@ -109,6 +109,20 @@ class RemoteLibraryService private constructor(context: Context) {
         get() = prefs.getInt("appliedVersion", 0)
         private set(v) { prefs.edit().putInt("appliedVersion", v).apply() }
 
+    /**
+     * When the cache write last failed, or 0.
+     *
+     * Not recording the version on a failed write is right - that is what stops
+     * the library silently freezing forever - but on its own it means a device
+     * whose disk is full re-downloads 4.9 MB on every single launch to fail at
+     * the same place, on whatever connection the user is paying for. The
+     * patterns are still applied in memory each time, so nothing is lost by
+     * waiting a day between attempts.
+     */
+    private var lastSaveFailure: Long
+        get() = prefs.getLong("lastSaveFailure", 0L)
+        set(v) { prefs.edit().putLong("lastSaveFailure", v).apply() }
+
     // Emits the new pattern count when an update is applied; UI shows a snackbar.
     private val _updateApplied = MutableStateFlow<Int?>(null)
     val updateApplied: StateFlow<Int?> = _updateApplied.asStateFlow()
@@ -144,6 +158,11 @@ class RemoteLibraryService private constructor(context: Context) {
             // date - stop, rather than asking the others the same question.
             if (manifest.version <= maxOf(appliedVersion, BUNDLED_LIBRARY_VERSION)) return null
 
+            // A negative interval means the clock moved backwards; treat that
+            // as "try now" rather than stranding the device until it catches up.
+            val sinceFailure = System.currentTimeMillis() - lastSaveFailure
+            if (sinceFailure in 0 until SAVE_RETRY_COOLDOWN_MS) return null
+
             val body = fetchPatterns(base, manifest) ?: continue
             val remote = try {
                 withContext(Dispatchers.Default) { json.decodeFromString<RemotePatterns>(body) }
@@ -155,7 +174,11 @@ class RemoteLibraryService private constructor(context: Context) {
             // Only record the version if the download reached DISK. Claiming a
             // version the cache does not hold makes the next launch short
             // circuit on it, so the update is lost and never retried.
-            if (!store.applyRemoteLibrary(remote.patterns, body)) return null
+            if (!store.applyRemoteLibrary(remote.patterns, body)) {
+                lastSaveFailure = System.currentTimeMillis()
+                return null
+            }
+            lastSaveFailure = 0L
             appliedVersion = manifest.version
             _updateApplied.value = remote.patterns.size
             return remote.patterns.size
@@ -216,6 +239,9 @@ class RemoteLibraryService private constructor(context: Context) {
         // Version of library.json shipped in the app's assets. Keep in sync with
         // the "version" field of the bundled asset when you refresh it.
         const val BUNDLED_LIBRARY_VERSION = 52
+
+        /** How long to wait before re-downloading after a failed cache write. */
+        private const val SAVE_RETRY_COOLDOWN_MS = 24L * 60 * 60 * 1000
 
         @Volatile private var instance: RemoteLibraryService? = null
         fun getInstance(context: Context): RemoteLibraryService =
