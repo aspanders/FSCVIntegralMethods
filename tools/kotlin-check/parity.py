@@ -73,6 +73,7 @@ AI_MUST_MATCH = [
     ("itemCounts", "the OpenAI schema must drop minItems/maxItems - strict mode 400s on them"),
     ("finish_reason", "a cut-off OpenAI reply has to say so, not 'no content'"),
     ("out of credit", "an HTTP failure has to repeat what the provider said"),
+    ("setApiKey", "storing a key has to report whether it worked"),
 ]
 
 # Things whose PRESENCE means the old broken design is still there.
@@ -121,12 +122,15 @@ def check_ai() -> list:
         # the check has to read the CODE. Otherwise a setting described in a
         # comment counts as present, and a message a comment says was removed
         # counts as still there.
-        src = strip_comments(open(path).read())
+        # Case-insensitive, because the two platforms spell the same thing
+        # differently by convention - setApiKey on Android, setAPIKey on iOS -
+        # and the point is whether the behaviour is there, not the casing.
+        src = strip_comments(open(path).read()).lower()
         for needle, why in AI_MUST_MATCH:
-            if needle not in src:
+            if needle.lower() not in src:
                 problems.append(f"{label} AI service is missing '{needle}' ({why})")
         for needle, why in AI_MUST_BE_GONE:
-            if needle in src:
+            if needle.lower() in src:
                 problems.append(f"{label} AI service still contains '{needle}' ({why})")
     return problems
 

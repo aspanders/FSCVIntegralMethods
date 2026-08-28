@@ -9,6 +9,7 @@ import com.beadsnap.app.data.model.PatternCategory
 import com.beadsnap.app.data.store.PatternStore
 import com.beadsnap.app.services.AIPatternService
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,7 +64,14 @@ class StudioViewModel(
         if (text.isBlank()) return
         _isGenerating.value = true
         _errorMessage.value = null
-        val job = viewModelScope.launch {
+        // LAZY, so generationJob is assigned before the body can run.
+        // viewModelScope is Dispatchers.Main.immediate: a default-started
+        // coroutine executes INLINE up to its first suspension, and
+        // generate() throws NoAPIKey with no suspension at all. The finally
+        // block then compared itself against the PREVIOUS job, decided it was
+        // stale, and left _isGenerating true - so tapping Generate with no API
+        // key set showed the error and then spun forever.
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val pattern = service.generate(text, _selectedCategory.value, _selectedGridSize.value)
                 if (isActive) _generatedPattern.value = pattern
@@ -77,6 +85,7 @@ class StudioViewModel(
             }
         }
         generationJob = job
+        job.start()
     }
 
     fun cancelGeneration() {
@@ -89,7 +98,7 @@ class StudioViewModel(
         val pattern = _generatedPattern.value ?: return
         _isGenerating.value = true
         _errorMessage.value = null
-        val job = viewModelScope.launch {
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {   // see generate()
             try {
                 val updated = service.iterate(pattern, instruction)
                 if (isActive) _generatedPattern.value = updated
@@ -102,10 +111,20 @@ class StudioViewModel(
             }
         }
         generationJob = job
+        job.start()
     }
 
     fun saveAPIKey(key: String, provider: com.beadsnap.app.services.AIProvider = service.provider) {
-        service.setApiKey(provider, key)
+        // Secure storage can be unavailable on a device with a damaged
+        // keystore. Without this the sheet closed, the key went nowhere, and
+        // the next tap said "No API key set" again - so the user retyped it,
+        // forever.
+        if (!service.setApiKey(provider, key)) {
+            _errorMessage.value =
+                "This device would not let us store the key securely. " +
+                "AI features need secure storage, and we will not keep a key without it."
+            return
+        }
         service.provider = provider
         _provider.value = provider
         _hasAPIKey.value = service.hasAPIKey

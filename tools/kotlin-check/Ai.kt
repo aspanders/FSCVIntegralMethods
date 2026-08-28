@@ -256,6 +256,19 @@ fun main() = runBlocking {
         oaProps?.optJSONObject("rows")?.optString("description")
             ?.contains("Exactly " + grid.height) == true)
 
+    // ── key storage ──────────────────────────────────────────────────────────
+    println("==> key storage")
+
+    // EncryptedSharedPreferences does not come up on every device - a damaged
+    // keystore, an OEM ROM with broken StrongBox. Swallowing that left the user
+    // pasting a key that went nowhere and being told again that no key was set.
+    KeystoreHelper.available = false
+    check("a key that could not be stored is reported, not swallowed",
+        !svc.setApiKey(AIProvider.CLAUDE, "sk-ant-would-not-store"))
+    KeystoreHelper.available = true
+    check("clearing a key still succeeds when storage works",
+        svc.setApiKey(AIProvider.CLAUDE, ""))
+
     println(if (failures == 0) "AI pattern service checks pass" else "$failures FAILED")
     if (failures > 0) kotlin.system.exitProcess(1)
 }

@@ -84,10 +84,15 @@ final class AIPatternService {
 
     // Per-provider keys (Keychain), so both can be stored and swapped freely.
     func apiKey(for p: AIProvider) -> String { Keychain.load(for: p.keyAccount) ?? "" }
-    func setAPIKey(_ value: String, for p: AIProvider) {
+    /// Returns whether the key was stored. See `Keychain.save`.
+    @discardableResult
+    func setAPIKey(_ value: String, for p: AIProvider) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { Keychain.delete(for: p.keyAccount) }
-        else { Keychain.save(trimmed, for: p.keyAccount) }
+        if trimmed.isEmpty {
+            Keychain.delete(for: p.keyAccount)
+            return true
+        }
+        return Keychain.save(trimmed, for: p.keyAccount)
     }
     func hasAPIKey(for p: AIProvider) -> Bool {
         !apiKey(for: p).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

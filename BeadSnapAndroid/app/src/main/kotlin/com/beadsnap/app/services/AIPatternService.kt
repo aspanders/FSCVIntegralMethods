@@ -120,9 +120,18 @@ class AIPatternService private constructor() {
 
     // Per-provider keys, so both can be stored and swapped freely.
     fun apiKey(p: AIProvider): String = KeystoreHelper.load(p.keyAccount) ?: ""
-    fun setApiKey(p: AIProvider, value: String) {
-        if (value.isBlank()) KeystoreHelper.delete(p.keyAccount)
-        else KeystoreHelper.save(p.keyAccount, value.trim())
+
+    /**
+     * Returns whether the key was stored. Secure storage can be unavailable on
+     * a device with a damaged keystore, and a key that silently went nowhere
+     * leaves the user pasting it again and again with nothing to explain why.
+     */
+    fun setApiKey(p: AIProvider, value: String): Boolean {
+        if (value.isBlank()) {
+            KeystoreHelper.delete(p.keyAccount)
+            return true
+        }
+        return KeystoreHelper.save(p.keyAccount, value.trim())
     }
     fun hasKey(p: AIProvider): Boolean = apiKey(p).isNotBlank()
 

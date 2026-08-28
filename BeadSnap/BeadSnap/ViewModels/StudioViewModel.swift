@@ -32,7 +32,14 @@ final class StudioViewModel: ObservableObject {
 
     /// Save the key for a provider and make it the active one.
     func saveAPIKey(_ key: String, for p: AIProvider) {
-        service.setAPIKey(key, for: p)
+        // The keychain write can fail - a locked device, a keychain the OS will
+        // not open. Without this the sheet closed, nothing was stored, and the
+        // next tap said "No API key set" again, so the user retyped it forever.
+        guard service.setAPIKey(key, for: p) else {
+            errorMessage = "This device would not let us store the key securely. "
+                + "AI features need the keychain, and we will not keep a key without it."
+            return
+        }
         service.provider = p
         refreshAPIKeyStatus()
     }
