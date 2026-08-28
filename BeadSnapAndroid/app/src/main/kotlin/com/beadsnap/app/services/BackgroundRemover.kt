@@ -34,25 +34,53 @@ object BackgroundRemover {
                         .enableForegroundConfidenceMask()
                         .build()
                 )
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 cont.resume(null); return@suspendCancellableCoroutine
             }
-            segmenter.process(InputImage.fromBitmap(bitmap, 0))
+            // Nothing else closes it if the caller walks away before either
+            // listener fires - navigating back out of the tune screen does
+            // exactly that - and a segmenter left open holds its model.
+            cont.invokeOnCancellation { runCatching { segmenter.close() } }
+
+            // Every path below has to resume EXACTLY once. A throw inside a
+            // Play Services listener does not reach the caller and does not
+            // trigger the other listener: it is handed to the executor and
+            // logged, and the continuation is simply never resumed - so
+            // background removal would sit there spinning for the life of the
+            // process. Both listeners therefore close and resume inside a
+            // guard, and reading the mask is wrapped rather than trusted.
+            fun finish(value: BooleanArray?) {
+                runCatching { segmenter.close() }
+                if (cont.isActive) cont.resume(value)
+            }
+
+            val task = try {
+                segmenter.process(InputImage.fromBitmap(bitmap, 0))
+            } catch (_: Throwable) {
+                // fromBitmap rejects a recycled bitmap by throwing.
+                finish(null); return@suspendCancellableCoroutine
+            }
+            task
                 .addOnSuccessListener { result ->
-                    val maskBuf = result.foregroundConfidenceMask
-                    if (maskBuf == null) {
-                        cont.resume(null)
-                    } else {
-                        val arr = BooleanArray(bitmap.width * bitmap.height)
-                        maskBuf.rewind()
-                        for (i in arr.indices) arr[i] = maskBuf.get() > 0.5f
-                        cont.resume(arr)
+                    val arr = try {
+                        val maskBuf = result.foregroundConfidenceMask
+                        val n = bitmap.width * bitmap.height
+                        maskBuf?.rewind()
+                        // A mask that is not the size of the image cannot be
+                        // read into it. Falling back to keep-everything costs
+                        // the user some brushwork; reading it anyway would
+                        // leave the tail false - "remove all of this" - and
+                        // blank most of their photo.
+                        if (maskBuf == null || maskBuf.remaining() < n) {
+                            null
+                        } else {
+                            BooleanArray(n) { maskBuf.get() > 0.5f }
+                        }
+                    } catch (_: Throwable) {
+                        null
                     }
-                    segmenter.close()
+                    finish(arr)
                 }
-                .addOnFailureListener {
-                    segmenter.close()
-                    cont.resume(null)
-                }
+                .addOnFailureListener { finish(null) }
         }
 }
