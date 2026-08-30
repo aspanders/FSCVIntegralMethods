@@ -1,0 +1,5 @@
+
+# Local record of which versionCodes have been uploaded to Play. Machine-
+# specific: Play burns a code on upload to ANY track, and only the person who
+# uploaded knows which.
+.uploaded-version-codes
