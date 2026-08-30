@@ -97,6 +97,48 @@ final class ImageConverter {
         var minX: Int, minY: Int, width: Int, height: Int
     }
 
+    /// The largest rect of the cols:rows ratio that fits inside `srcW` x `srcH`,
+    /// no larger than `wantW` x `wantH`, sitting as close to (`cx`, `cy`) as
+    /// staying inside the image allows.
+    ///
+    /// The sampler stretches whatever rect it is handed onto the grid, so a crop
+    /// of the wrong shape squashes the picture. This is the one place that shape
+    /// is enforced, and both the default crop and the crop the user drags come
+    /// through it, so they cannot drift apart.
+    ///
+    /// Growing a box to a ratio and then clamping its edges into bounds
+    /// separately undoes the ratio - that shipped on Android and squashed every
+    /// portrait photo. See tools/kotlin-check/Crop.kt, which pins the same
+    /// maths there.
+    static func fitAspect(cx: Int, cy: Int,
+                          wantW: Int, wantH: Int,
+                          srcW: Int, srcH: Int,
+                          cols: Int, rows: Int) -> CropRect {
+        guard srcW > 0, srcH > 0, cols > 0, rows > 0 else {
+            return CropRect(minX: 0, minY: 0, width: max(1, srcW), height: max(1, srcH))
+        }
+        let target = Double(cols) / Double(rows)
+        var bw = max(1, wantW)
+        var bh = max(1, wantH)
+        if Double(bw) / Double(bh) < target {
+            bw = Int((Double(bh) * target).rounded())
+        } else {
+            bh = Int((Double(bw) / target).rounded())
+        }
+        // Shrink to what the image can hold, keeping the ratio. Reaching the
+        // second branch means the first left the other side room to spare, so
+        // one pass in this order is enough.
+        if bw > srcW { bw = srcW; bh = Int((Double(bw) / target).rounded()) }
+        if bh > srcH { bh = srcH; bw = Int((Double(bh) * target).rounded()) }
+        bw = min(max(bw, 1), srcW)
+        bh = min(max(bh, 1), srcH)
+
+        // Slide it fully inside the image rather than cutting an edge off it.
+        let left = min(max(cx - bw / 2, 0), srcW - bw)
+        let top = min(max(cy - bh / 2, 0), srcH - bh)
+        return CropRect(minX: left, minY: top, width: bw, height: bh)
+    }
+
     /// The largest centred rect of `width` x `height` whose aspect ratio matches
     /// a cols x rows grid.
     ///

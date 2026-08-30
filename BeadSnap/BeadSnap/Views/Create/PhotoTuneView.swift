@@ -100,9 +100,21 @@ struct PhotoTuneView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        // The crop overlay sits on top and takes these touches,
+                        // but this guard is what actually guarantees the brush
+                        // stays out of it. On Android, covering the pane was NOT
+                        // enough - an unconsumed tap fell through to the brush
+                        // and silently edited the cut-out mask. Not relying on
+                        // hit-testing to be on my side twice.
+                        guard model.tab != .crop else { return }
                         paint(at: value.location, in: geo.size)
                     }
             )
+            .overlay {
+                if model.tab == .crop {
+                    CropOverlay(model: model, box: geo.size)
+                }
+            }
             .accessibilityLabel("Photo. Drag to include or exclude parts of it")
         }
     }
@@ -170,6 +182,7 @@ struct PhotoTuneView: View {
                 Group {
                     switch model.tab {
                     case .cutOut: cutOutControls
+                    case .crop:   cropControls
                     case .colour: colourControls
                     case .board:  boardControls
                     }
@@ -208,6 +221,29 @@ struct PhotoTuneView: View {
                 Text("Automatic selection didn't find a subject on this device.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var cropControls: some View {
+        VStack(spacing: 8) {
+            Text("Drag the box to choose what goes on the board, and pinch to "
+                 + "resize it. The box is locked to the board's shape, so the "
+                 + "picture cannot come out stretched.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 12) {
+                Button("Automatic") { model.resetCrop() }
+                    .disabled(model.userCrop == nil)
+                Button("As much as fits") { model.cropWholePhoto() }
+                Spacer()
+            }
+            Text(model.userCrop == nil
+                 ? "Automatic: the largest centred square of the photo."
+                 : "Using your crop. Automatic puts it back.")
+                .font(.caption2)
+                .foregroundStyle(model.userCrop == nil ? .secondary : .primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -272,11 +308,12 @@ struct PhotoTuneView: View {
 final class PhotoTuneModel: ObservableObject {
 
     enum Tab: String, CaseIterable, Identifiable {
-        case cutOut, colour, board
+        case cutOut, crop, colour, board
         var id: String { rawValue }
         var label: String {
             switch self {
             case .cutOut: return "Cut out"
+            case .crop:   return "Crop"
             case .colour: return "Colour"
             case .board:  return "Board"
             }
@@ -290,6 +327,61 @@ final class PhotoTuneModel: ObservableObject {
     @Published private(set) var maxColors = 12
     @Published private(set) var shape: PegboardShape = .square
     @Published private(set) var wbStrength: Double = 0
+
+    /// The crop the user dragged, in studio pixels, or nil for the automatic
+    /// centred one. Kept here rather than in the view because the portrait and
+    /// landscape arrangements are separate call sites - state held in a pane
+    /// would be lost on every rotation.
+    @Published private(set) var userCrop: ImageConverter.CropRect?
+
+    /// Size of the image the crop is expressed in, so a view can map between
+    /// studio pixels and screen points without reaching into the studio.
+    var sourceSize: CGSize {
+        guard let s = studio else { return .zero }
+        return CGSize(width: s.width, height: s.height)
+    }
+
+    /// The crop currently in force, automatic or chosen.
+    var effectiveCrop: ImageConverter.CropRect {
+        if let u = userCrop { return u }
+        guard let s = studio else {
+            return ImageConverter.CropRect(minX: 0, minY: 0, width: 1, height: 1)
+        }
+        return ImageConverter.aspectCrop(width: s.width, height: s.height,
+                                         cols: gridSize.width, rows: gridSize.height)
+    }
+
+    /// Move and resize the crop. Always routed through fitAspect, so no amount
+    /// of dragging can produce a rect of the wrong shape - which is the only
+    /// way a crop can squash the picture.
+    func moveCrop(dxPixels: Double, dyPixels: Double, scale: Double) {
+        guard let s = studio else { return }
+        let c = effectiveCrop
+        userCrop = ImageConverter.fitAspect(
+            cx: c.minX + c.width / 2 + Int(dxPixels.rounded()),
+            cy: c.minY + c.height / 2 + Int(dyPixels.rounded()),
+            wantW: Int((Double(c.width) * scale).rounded()),
+            wantH: Int((Double(c.height) * scale).rounded()),
+            srcW: s.width, srcH: s.height,
+            cols: gridSize.width, rows: gridSize.height)
+        scheduleRebuild()
+    }
+
+    func resetCrop() {
+        guard userCrop != nil else { return }
+        userCrop = nil
+        scheduleRebuild()
+    }
+
+    func cropWholePhoto() {
+        guard let s = studio else { return }
+        userCrop = ImageConverter.fitAspect(
+            cx: s.width / 2, cy: s.height / 2,
+            wantW: s.width, wantH: s.height,
+            srcW: s.width, srcH: s.height,
+            cols: gridSize.width, rows: gridSize.height)
+        scheduleRebuild()
+    }
 
     @Published private(set) var preview: UIImage?
     @Published private(set) var pattern: FusePattern?
@@ -402,12 +494,116 @@ final class PhotoTuneModel: ObservableObject {
         busy = true
         let cols = gridSize.width, rows = gridSize.height
         let colors = maxColors, shp = shape, g = gains
+        let uc = userCrop
         let built = await Task.detached {
             studio.buildPattern(title: "Imported Photo", cols: cols, rows: rows,
-                                maxColors: colors, shape: shp, gains: g)
+                                maxColors: colors, shape: shp, gains: g,
+                                userCrop: uc)
         }.value
         pattern = built
         preview = studio.photoPreview()
         busy = false
+    }
+}
+
+// MARK: - Crop overlay
+
+/// The whole photo with the crop box on it: drag to move it, pinch to resize.
+///
+/// Sits over the photo pane and exists only while the Crop tab is open. The
+/// pane underneath also guards on the tab, so the brush cannot paint here even
+/// if a touch were to reach it - on Android, relying on the overlay alone let
+/// an unconsumed tap fall through and edit the cut-out mask silently.
+///
+/// Every gesture result goes through `model.moveCrop`, which routes it through
+/// `ImageConverter.fitAspect`, so no amount of dragging can produce a box of
+/// the wrong shape. That is the whole reason the crop cannot squash a picture.
+private struct CropOverlay: View {
+    @ObservedObject var model: PhotoTuneModel
+    let box: CGSize
+
+    /// Both gestures report CUMULATIVE values, so the previous one is kept and
+    /// subtracted to get the increment. Reset on end, or the next gesture
+    /// starts with a jump.
+    @State private var lastTranslation: CGSize = .zero
+    @State private var lastMagnification: CGFloat = 1
+
+    private var imageSize: CGSize { model.sourceSize }
+
+    /// Points per studio pixel, through the same `.fit` letterbox the photo is
+    /// drawn into, so the box lands where the picture actually is.
+    private var scale: CGFloat {
+        guard imageSize.width > 0, imageSize.height > 0,
+              box.width > 0, box.height > 0 else { return 0 }
+        return min(box.width / imageSize.width, box.height / imageSize.height)
+    }
+
+    private var cropFrame: CGRect {
+        guard scale > 0 else { return .zero }
+        let drawW = imageSize.width * scale
+        let drawH = imageSize.height * scale
+        let left = (box.width - drawW) / 2
+        let top = (box.height - drawH) / 2
+        let c = model.effectiveCrop
+        return CGRect(x: left + CGFloat(c.minX) * scale,
+                      y: top + CGFloat(c.minY) * scale,
+                      width: CGFloat(c.width) * scale,
+                      height: CGFloat(c.height) * scale)
+    }
+
+    var body: some View {
+        let r = cropFrame
+        Canvas { ctx, size in
+            guard r.width > 0, r.height > 0 else { return }
+            // Dim what will be thrown away, in four bands around the box.
+            let scrim = GraphicsContext.Shading.color(.black.opacity(0.55))
+            ctx.fill(Path(CGRect(x: 0, y: 0, width: size.width, height: max(0, r.minY))), with: scrim)
+            ctx.fill(Path(CGRect(x: 0, y: r.maxY,
+                                 width: size.width,
+                                 height: max(0, size.height - r.maxY))), with: scrim)
+            ctx.fill(Path(CGRect(x: 0, y: r.minY, width: max(0, r.minX), height: r.height)), with: scrim)
+            ctx.fill(Path(CGRect(x: r.maxX, y: r.minY,
+                                 width: max(0, size.width - r.maxX),
+                                 height: r.height)), with: scrim)
+
+            ctx.stroke(Path(r), with: .color(.accentColor), lineWidth: 3)
+            // Thirds, so it reads as a camera crop frame rather than a selection.
+            for i in 1...2 {
+                let gx = r.minX + r.width * CGFloat(i) / 3
+                let gy = r.minY + r.height * CGFloat(i) / 3
+                var v = Path(); v.move(to: CGPoint(x: gx, y: r.minY)); v.addLine(to: CGPoint(x: gx, y: r.maxY))
+                var h = Path(); h.move(to: CGPoint(x: r.minX, y: gy)); h.addLine(to: CGPoint(x: r.maxX, y: gy))
+                ctx.stroke(v, with: .color(.accentColor.opacity(0.35)), lineWidth: 1)
+                ctx.stroke(h, with: .color(.accentColor.opacity(0.35)), lineWidth: 1)
+            }
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            SimultaneousGesture(
+                DragGesture()
+                    .onChanged { value in
+                        guard scale > 0 else { return }
+                        let dx = value.translation.width - lastTranslation.width
+                        let dy = value.translation.height - lastTranslation.height
+                        lastTranslation = value.translation
+                        // The box follows the finger.
+                        model.moveCrop(dxPixels: Double(dx / scale),
+                                       dyPixels: Double(dy / scale),
+                                       scale: 1)
+                    }
+                    .onEnded { _ in lastTranslation = .zero },
+                MagnifyGesture()
+                    .onChanged { value in
+                        guard lastMagnification > 0 else { return }
+                        let step = value.magnification / lastMagnification
+                        lastMagnification = value.magnification
+                        guard step.isFinite, step > 0 else { return }
+                        // Pinching apart makes the box itself bigger.
+                        model.moveCrop(dxPixels: 0, dyPixels: 0, scale: Double(step))
+                    }
+                    .onEnded { _ in lastMagnification = 1 }
+            )
+        )
+        .accessibilityLabel("Crop area. Drag to move it, pinch to resize it")
     }
 }

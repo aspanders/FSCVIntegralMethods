@@ -228,10 +228,25 @@ final class PhotoStudio: @unchecked Sendable {
     /// debounced live preview absorbs; the cache exists on Android to hold 60fps
     /// while a finger is moving. The OUTPUT is identical either way - the
     /// caching is about when the work happens, not what it produces.
+    /// `userCrop` is the rect the user chose in the Crop tab, in this studio's
+    /// own pixels. Nil keeps the previous behaviour exactly: the largest centred
+    /// rect of the board's shape.
     func buildPattern(title: String, cols: Int, rows: Int,
                       maxColors: Int, shape: PegboardShape,
-                      gains: (Double, Double, Double)) -> FusePattern {
-        let crop = ImageConverter.aspectCrop(width: width, height: height, cols: cols, rows: rows)
+                      gains: (Double, Double, Double),
+                      userCrop: ImageConverter.CropRect? = nil) -> FusePattern {
+        // Even a user-chosen crop goes back through fitAspect, so changing the
+        // board size afterwards reshapes it rather than leaving a rect of the
+        // old proportions to be stretched onto the new grid.
+        let crop: ImageConverter.CropRect
+        if let u = userCrop {
+            crop = ImageConverter.fitAspect(
+                cx: u.minX + u.width / 2, cy: u.minY + u.height / 2,
+                wantW: u.width, wantH: u.height,
+                srcW: width, srcH: height, cols: cols, rows: rows)
+        } else {
+            crop = ImageConverter.aspectCrop(width: width, height: height, cols: cols, rows: rows)
+        }
         let full = PaletteColor.full
         let fullLAB: [(Double, Double, Double)] = full.map { c in
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
