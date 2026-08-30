@@ -438,16 +438,15 @@ fun PhotoTuneScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 260.dp)
-                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                // Scrollable: this went from three chips to four, and four
-                // ("Cut out", "Crop", "Colour", "Board") plus their gaps do not
-                // fit across a narrow phone inside this column's own padding.
-                // Without this the last chip is clipped off the edge and the
-                // Board tab - shape and size - becomes unreachable.
+                // PINNED, outside the scrolling area below.
+                //
+                // The tab strip used to sit inside the scroll, so scrolling
+                // through a tall tab carried the tabs off the top of the panel
+                // with it. Still horizontally scrollable as a safety net for
+                // very narrow screens; on an ordinary phone all four fit.
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -462,229 +461,261 @@ fun PhotoTuneScreen(
                 }
                 Spacer(Modifier.height(2.dp))
 
-                when (tab) {
-                    ControlTab.CutOut -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = brushRestores,
-                                onClick = { brushRestores = true },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Healing, null, Modifier.size(16.dp))
-                                },
-                                label = { Text("Add back") }
-                            )
-                            FilterChip(
-                                selected = !brushRestores,
-                                onClick = { brushRestores = false },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Brush, null, Modifier.size(16.dp))
-                                },
-                                label = { Text("Remove") }
-                            )
-                        }
-                        Text(
-                            "Drag on the photo. Faded areas are left out of the pattern, " +
-                            "and the beads update as you go.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        LabelledSlider("Brush size", pct(brushSize / 0.2f), brushSize, 0.01f..0.2f) {
-                            brushSize = it
-                        }
-                        Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            TextButton(onClick = {
-                                val s = studio ?: return@TextButton
-                                scope.launch {
-                                    autoRunning = true
-                                    autoUnavailable = false
-                                    try {
-                                        // Full resolution, for the reason given
-                                        // at the first call site above.
-                                        val mask = BackgroundRemover.subjectMask(source)
-                                        val kept = mask?.count { it } ?: 0
-                                        if (mask == null || kept == 0 || kept == mask.size) {
-                                            autoUnavailable = true
-                                        } else {
-                                            post { st ->
-                                                st.adoptMask(mask, source.width, source.height)
-                                            }
-                                        }
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (_: Exception) {
-                                        autoUnavailable = true
-                                    } finally {
-                                        autoRunning = false
-                                    }
-                                }
-                            }) {
-                                Icon(Icons.Default.AutoFixHigh, null, Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Auto")
-                            }
-                            TextButton(onClick = { post { it.keepAll() } }) { Text("Keep all") }
-                            TextButton(onClick = { post { it.clearAll() } }) { Text("Clear all") }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Asking for automatic framing drops the manual
-                            // crop - otherwise the checkbox would appear to do
-                            // nothing at all while one was set.
-                            Checkbox(
-                                checked = fitToSubject,
-                                onCheckedChange = { fitToSubject = it; userCrop = null }
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text("Fit board to subject", style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    "Spend the whole board on what you kept, instead of a " +
-                                    "centred square that clips it",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        if (autoUnavailable) {
-                            Text(
-                                "Automatic selection didn't find a subject on this device. " +
-                                "Nothing has been removed - switch the brush to Remove and " +
-                                "paint over the background, or use Clear all and paint the " +
-                                "subject back in.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
+                // Every tab opens at its OWN top.
+                //
+                // One scroll state was shared by all four tabs, and it is not
+                // reset when the tab changes. Scroll down in a tall tab -
+                // Colour, which grew when the colour count moved into it -
+                // then switch to a short one, and that tab is rendered already
+                // scrolled past its first control. On Board that first control
+                // is the board size, so the size row simply was not there when
+                // you arrived: it read as the feature having been removed.
+                val tabScroll = rememberScrollState()
+                LaunchedEffect(tab) { tabScroll.scrollTo(0) }
 
-                    ControlTab.Crop -> {
-                        Text(
-                            "Drag the box to choose what goes on the board, and pinch " +
-                            "to resize it. The box is locked to the board's shape, so " +
-                            "the picture cannot come out stretched.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(
-                                onClick = { userCrop = null },
-                                enabled = userCrop != null
-                            ) { Text("Automatic") }
-                            TextButton(onClick = {
-                                val img = photo ?: return@TextButton
-                                userCrop = ImageConverter.fitAspect(
-                                    cx = img.width / 2, cy = img.height / 2,
-                                    wantW = img.width, wantH = img.height,
-                                    srcW = img.width, srcH = img.height,
-                                    cols = gridSize.width, rows = gridSize.height
-                                )
-                            }) { Text("As much as fits") }
-                        }
-                        Text(
-                            when {
-                                userCrop != null ->
-                                    "Using your crop. Automatic puts it back."
-                                fitToSubject ->
-                                    "Automatic: fitted to whatever you kept in Cut out."
-                                else ->
-                                    "Automatic: the largest centred square of the photo."
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (userCrop != null) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    ControlTab.Colour -> {
-                        // How many different beads the pattern may use. This is
-                        // the first thing somebody with one starter tub needs,
-                        // so it leads the Colour tab rather than sitting at the
-                        // bottom of Board where it was.
-                        LabelledSlider(
-                            "Colours", "$maxColors", maxColors.toFloat(), 2f..24f, 21
-                        ) { maxColors = it.roundToInt() }
-                        Text(
-                            "Set this to what your kit actually has. A pattern that " +
-                            "needs twenty colours is no use with eight in the drawer, " +
-                            "and fewer colours reads better on a small board anyway.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    val s = studio ?: return@Button
-                                    scope.launch {
-                                        val g = withContext(Dispatchers.Default) { s.measureGreyWorld() }
-                                        wbRaw = g
-                                        // 0.5 measured best on the test photo:
-                                        // enough to bring Light Blue and Light
-                                        // Green back, before the highlights
-                                        // start bleaching out.
-                                        wbStrength = 0.5f
-                                    }
-                                },
-                                enabled = studio != null
-                            ) { Text("Auto white balance") }
-                            if (wbRaw !== ConvertOptions.NEUTRAL_GAINS) {
-                                TextButton(onClick = {
-                                    wbRaw = ConvertOptions.NEUTRAL_GAINS
-                                    wbStrength = 0f
-                                }) { Text("Reset") }
-                            }
-                        }
-                        LabelledSlider(
-                            "White balance", pct(wbStrength), wbStrength, 0f..1f
-                        ) { wbStrength = it }
-                        Text(
-                            "Measured from the part of the photo you kept, so the background " +
-                            "cannot drag the correction the wrong way. This is the only " +
-                            "control that can undo a colour cast rather than a loss of " +
-                            "saturation.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        LabelledSlider("Colour rescue", num(chromaLift), chromaLift, 0f..2f) {
-                            chromaLift = it
-                        }
-                        LabelledSlider("Brightness", num(brightness), brightness, -1f..1f) {
-                            brightness = it
-                        }
-                        LabelledSlider("Contrast", num(contrast), contrast, -1f..1f) { contrast = it }
-                        LabelledSlider("Saturation", num(saturation), saturation, -1f..1f) {
-                            saturation = it
-                        }
-                    }
-
-                    ControlTab.Board -> {
-                        Text("Pegboard", style = MaterialTheme.typography.labelLarge)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PegboardShape.entries.forEach { s ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 215.dp)
+                        .verticalScroll(tabScroll),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    when (tab) {
+                        ControlTab.CutOut -> {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(
-                                    selected = shape == s,
-                                    onClick = { shape = s },
-                                    label = { Text(s.displayName) }
+                                    selected = brushRestores,
+                                    onClick = { brushRestores = true },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Healing, null, Modifier.size(16.dp))
+                                    },
+                                    label = { Text("Add back") }
+                                )
+                                FilterChip(
+                                    selected = !brushRestores,
+                                    onClick = { brushRestores = false },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Brush, null, Modifier.size(16.dp))
+                                    },
+                                    label = { Text("Remove") }
                                 )
                             }
-                        }
-                        Text("Size", style = MaterialTheme.typography.labelLarge)
-                        Row(
-                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
-                                .forEach { gs ->
-                                    FilterChip(
-                                        selected = gridSize == gs,
-                                        onClick = { gridSize = gs },
-                                        label = { Text(gs.displayName) }
+                            Text(
+                                "Drag on the photo. Faded areas are left out of the pattern, " +
+                                "and the beads update as you go.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            LabelledSlider("Brush size", pct(brushSize / 0.2f), brushSize, 0.01f..0.2f) {
+                                brushSize = it
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                TextButton(onClick = {
+                                    val s = studio ?: return@TextButton
+                                    scope.launch {
+                                        autoRunning = true
+                                        autoUnavailable = false
+                                        try {
+                                            // Full resolution, for the reason given
+                                            // at the first call site above.
+                                            val mask = BackgroundRemover.subjectMask(source)
+                                            val kept = mask?.count { it } ?: 0
+                                            if (mask == null || kept == 0 || kept == mask.size) {
+                                                autoUnavailable = true
+                                            } else {
+                                                post { st ->
+                                                    st.adoptMask(mask, source.width, source.height)
+                                                }
+                                            }
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (_: Exception) {
+                                            autoUnavailable = true
+                                        } finally {
+                                            autoRunning = false
+                                        }
+                                    }
+                                }) {
+                                    Icon(Icons.Default.AutoFixHigh, null, Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Auto")
+                                }
+                                TextButton(onClick = { post { it.keepAll() } }) { Text("Keep all") }
+                                TextButton(onClick = { post { it.clearAll() } }) { Text("Clear all") }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Asking for automatic framing drops the manual
+                                // crop - otherwise the checkbox would appear to do
+                                // nothing at all while one was set.
+                                Checkbox(
+                                    checked = fitToSubject,
+                                    onCheckedChange = { fitToSubject = it; userCrop = null }
+                                )
+                                Column(Modifier.weight(1f)) {
+                                    Text("Fit board to subject", style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        "Spend the whole board on what you kept, instead of a " +
+                                        "centred square that clips it",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
+                            }
+                            if (autoUnavailable) {
+                                Text(
+                                    "Automatic selection didn't find a subject on this device. " +
+                                    "Nothing has been removed - switch the brush to Remove and " +
+                                    "paint over the background, or use Clear all and paint the " +
+                                    "subject back in.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                        ControlTab.Crop -> {
+                            Text(
+                                "Drag the box to choose what goes on the board, and pinch " +
+                                "to resize it. The box is locked to the board's shape, so " +
+                                "the picture cannot come out stretched.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = { userCrop = null },
+                                    enabled = userCrop != null
+                                ) { Text("Automatic") }
+                                TextButton(onClick = {
+                                    val img = photo ?: return@TextButton
+                                    userCrop = ImageConverter.fitAspect(
+                                        cx = img.width / 2, cy = img.height / 2,
+                                        wantW = img.width, wantH = img.height,
+                                        srcW = img.width, srcH = img.height,
+                                        cols = gridSize.width, rows = gridSize.height
+                                    )
+                                }) { Text("As much as fits") }
+                            }
+                            Text(
+                                when {
+                                    userCrop != null ->
+                                        "Using your crop. Automatic puts it back."
+                                    fitToSubject ->
+                                        "Automatic: fitted to whatever you kept in Cut out."
+                                    else ->
+                                        "Automatic: the largest centred square of the photo."
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (userCrop != null) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        ControlTab.Colour -> {
+                            // How many different beads the pattern may use. This is
+                            // the first thing somebody with one starter tub needs,
+                            // so it leads the Colour tab rather than sitting at the
+                            // bottom of Board where it was.
+                            LabelledSlider(
+                                "Colours", "$maxColors", maxColors.toFloat(), 2f..24f, 21
+                            ) { maxColors = it.roundToInt() }
+                            Text(
+                                "Set this to what your kit actually has. A pattern that " +
+                                "needs twenty colours is no use with eight in the drawer, " +
+                                "and fewer colours reads better on a small board anyway.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val s = studio ?: return@Button
+                                        scope.launch {
+                                            val g = withContext(Dispatchers.Default) { s.measureGreyWorld() }
+                                            wbRaw = g
+                                            // 0.5 measured best on the test photo:
+                                            // enough to bring Light Blue and Light
+                                            // Green back, before the highlights
+                                            // start bleaching out.
+                                            wbStrength = 0.5f
+                                        }
+                                    },
+                                    enabled = studio != null
+                                ) { Text("Auto white balance") }
+                                if (wbRaw !== ConvertOptions.NEUTRAL_GAINS) {
+                                    TextButton(onClick = {
+                                        wbRaw = ConvertOptions.NEUTRAL_GAINS
+                                        wbStrength = 0f
+                                    }) { Text("Reset") }
+                                }
+                            }
+                            LabelledSlider(
+                                "White balance", pct(wbStrength), wbStrength, 0f..1f
+                            ) { wbStrength = it }
+                            Text(
+                                "Measured from the part of the photo you kept, so the background " +
+                                "cannot drag the correction the wrong way. This is the only " +
+                                "control that can undo a colour cast rather than a loss of " +
+                                "saturation.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            LabelledSlider("Colour rescue", num(chromaLift), chromaLift, 0f..2f) {
+                                chromaLift = it
+                            }
+                            LabelledSlider("Brightness", num(brightness), brightness, -1f..1f) {
+                                brightness = it
+                            }
+                            LabelledSlider("Contrast", num(contrast), contrast, -1f..1f) { contrast = it }
+                            LabelledSlider("Saturation", num(saturation), saturation, -1f..1f) {
+                                saturation = it
+                            }
+                        }
+
+                        ControlTab.Board -> {
+                            // Size FIRST. It is the control this tab exists for and
+                            // the one people come back to; having the pegboard
+                            // shape above it pushed the size row under the fold of
+                            // a short panel, where it was easy to conclude it had
+                            // gone.
+                            Text("Size", style = MaterialTheme.typography.labelLarge)
+                            Row(
+                                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(GridSize.small, GridSize.medium, GridSize.large, GridSize.xlarge)
+                                    .forEach { gs ->
+                                        FilterChip(
+                                            selected = gridSize == gs,
+                                            onClick = { gridSize = gs },
+                                            label = { Text(gs.displayName) }
+                                        )
+                                    }
+                            }
+                            Text(
+                                "Beads across and down. A bigger board holds more detail " +
+                                "and costs more beads.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                            Text("Pegboard", style = MaterialTheme.typography.labelLarge)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PegboardShape.entries.forEach { s ->
+                                    FilterChip(
+                                        selected = shape == s,
+                                        onClick = { shape = s },
+                                        label = { Text(s.displayName) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
