@@ -350,20 +350,37 @@ class PhotoStudio private constructor(
         val pad = (max(maxX - minX, maxY - minY) * padFrac).roundToInt()
         var x0 = minX - pad; var y0 = minY - pad
         var x1 = maxX + 1 + pad; var y1 = maxY + 1 + pad
+        // Grow the subject box to the board's aspect ratio, then FIT that box
+        // inside the photo without changing its shape.
+        //
+        // The previous version grew the box to the ratio and then clamped each
+        // edge into bounds on its own, which silently threw the ratio away
+        // again. A subject near an edge - or any subject whose grown box was
+        // wider than the photo, which is every tall portrait shot on a square
+        // board - came back as a rect of some other shape, and sampling that
+        // onto a square board stretches one axis. That is the squashed pattern:
+        // it happened by default, because fitting to the subject is on by
+        // default and every board this app offers is square.
         val target = cols.toDouble() / rows
-        var bw = x1 - x0; var bh = y1 - y0
-        if (bw.toDouble() / bh < target) {
-            val need = (bh * target).roundToInt()
-            val cx = (x0 + x1) / 2
-            x0 = cx - need / 2; x1 = x0 + need
-        } else {
-            val need = (bw / target).roundToInt()
-            val cy = (y0 + y1) / 2
-            y0 = cy - need / 2; y1 = y0 + need
-        }
-        x0 = x0.coerceIn(0, width - 1); y0 = y0.coerceIn(0, height - 1)
-        x1 = x1.coerceIn(x0 + 1, width); y1 = y1.coerceIn(y0 + 1, height)
-        return Rect(x0, y0, x1, y1)
+        val cx = (x0 + x1) / 2
+        val cy = (y0 + y1) / 2
+        var bw = x1 - x0
+        var bh = y1 - y0
+        if (bw.toDouble() / bh < target) bw = (bh * target).roundToInt()
+        else bh = (bw / target).roundToInt()
+
+        // Shrink to what the photo can hold, keeping the ratio. Order matters
+        // and is safe either way round: reaching the second branch means the
+        // first left the other side with room to spare.
+        if (bw > width) { bw = width; bh = (bw / target).roundToInt() }
+        if (bh > height) { bh = height; bw = (bh * target).roundToInt() }
+        bw = bw.coerceIn(1, width)
+        bh = bh.coerceIn(1, height)
+
+        // Slide it fully inside the photo rather than cutting an edge off it.
+        val left = (cx - bw / 2).coerceIn(0, width - bw)
+        val top = (cy - bh / 2).coerceIn(0, height - bh)
+        return Rect(left, top, left + bw, top + bh)
     }
 
     /** Scale a working-buffer rect up to a full-resolution photo's pixels. */
