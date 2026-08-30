@@ -155,14 +155,33 @@ struct PhotoTuneView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
 
-            Group {
-                switch model.tab {
-                case .cutOut: cutOutControls
-                case .colour: colourControls
-                case .board:  boardControls
+            // The tab's own controls scroll; the tab picker above does not.
+            //
+            // The picker is deliberately OUTSIDE this scroll view. On Android
+            // the equivalent tab strip lived inside the scrolling area, so
+            // scrolling a tall tab carried the tabs themselves off the top and
+            // the board size looked as though it had been removed. Keeping the
+            // picker pinned is what stops that happening here.
+            //
+            // maxHeight bounds the panel so the photo and bead panes above keep
+            // their space; anything taller than that scrolls rather than being
+            // clipped, which matters at large Dynamic Type sizes.
+            ScrollView {
+                Group {
+                    switch model.tab {
+                    case .cutOut: cutOutControls
+                    case .colour: colourControls
+                    case .board:  boardControls
+                    }
                 }
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
+            .frame(maxHeight: 215)
+            // A fresh scroll view per tab, so every tab opens at its own top.
+            // One shared scroll view keeps its offset across a tab change, and
+            // arriving at a short tab already scrolled past its first control
+            // is precisely how board size came to look missing on Android.
+            .id(model.tab)
         }
         .padding(.vertical, 10)
     }

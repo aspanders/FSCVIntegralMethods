@@ -2,6 +2,8 @@ package com.beadsnap.app.ui.screens.onboarding
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -64,14 +66,21 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 modifier = Modifier.weight(1f)
             ) { index ->
                 val page = pages[index]
+                // Scrolls, for the same reason CreateScreen does: a page of
+                // a 96dp badge, a headline and a paragraph does not fit a small
+                // screen at a large font scale, and without a scroll the text
+                // is simply cut off. Weighted spacers cannot survive here -
+                // weight() needs a bounded parent and a scrolling column is
+                // unbounded - so Arrangement.Center does the centring instead,
+                // which looks identical whenever the page does fit.
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 40.dp),
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 40.dp, vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Spacer(Modifier.weight(1f))
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = CircleShape,
@@ -99,7 +108,6 @@ fun OnboardingScreen(onDone: () -> Unit) {
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(Modifier.weight(1f))
                 }
             }
 

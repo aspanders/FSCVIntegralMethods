@@ -24,15 +24,31 @@ struct CreateView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Spacer()
-                header
-                    .padding(.bottom, 40)
-                options
-                    .padding(.horizontal, 28)
-                    .frame(maxWidth: 520)   // keep option cards scannable on iPad
-                Spacer()
-                Spacer()
+            // Scrolls, and centres itself while it fits.
+            //
+            // This was a plain VStack pinned between Spacers, which is exactly
+            // the height of the screen and never any taller: four option cards
+            // and a header do not fit that on a small phone, or on any phone at
+            // a large Dynamic Type setting, and the last options were cut off
+            // the bottom with no way to reach them. Same fault, same fix as
+            // CreateScreen on Android.
+            //
+            // minHeight on the inner frame is what keeps the centred look: the
+            // stack still fills the viewport when the content is short, and
+            // grows past it - scrolling - when it is not.
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 24)
+                        header
+                            .padding(.bottom, 40)
+                        options
+                            .padding(.horizontal, 28)
+                            .frame(maxWidth: 520)   // keep option cards scannable on iPad
+                        Spacer(minLength: 24)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                }
             }
             .navigationTitle("Create")
             .navigationDestination(item: $editorPattern) { p in

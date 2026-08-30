@@ -101,6 +101,35 @@ AND_ROOT = os.path.join(REPO, "BeadSnapAndroid", "app", "src", "main", "kotlin",
 IOS_ROOT = os.path.join(REPO, "BeadSnap", "BeadSnap")
 
 
+# Screens that must SCROLL on both platforms, and the token that proves it.
+#
+# A screen that fills the viewport with no scroll looks fine on the developer's
+# phone and clips its last controls on a smaller one, or at a large font scale -
+# and there is nothing to tap to reveal them. It happened on Create on both
+# platforms at once, and on the photo studio's control panel, so it is pinned
+# here rather than left to be found on a device again.
+PAIRED_SCROLL = [
+    ("ui/screens/create/CreateScreen.kt", "verticalScroll",
+     "Views/Create/CreateView.swift", "ScrollView",
+     "the Create screen's option list"),
+    ("ui/screens/create/PhotoTuneScreen.kt", "verticalScroll",
+     "Views/Create/PhotoTuneView.swift", "ScrollView",
+     "the photo studio's control panel"),
+]
+
+
+def check_paired_scroll() -> list:
+    problems = []
+    for kt, kt_needle, sw, sw_needle, what in PAIRED_SCROLL:
+        kt_path = os.path.join(AND_ROOT, kt)
+        sw_path = os.path.join(IOS_ROOT, sw)
+        if os.path.exists(kt_path) and kt_needle not in open(kt_path).read():
+            problems.append(f"Android {kt} cannot scroll ({what})")
+        if os.path.exists(sw_path) and sw_needle not in open(sw_path).read():
+            problems.append(f"iOS {sw} cannot scroll ({what})")
+    return problems
+
+
 def check_paired_files() -> list:
     problems = []
     for kt, sw, what in PAIRED_FILES:
@@ -172,6 +201,7 @@ def main() -> int:
             problems.append(f"function {f}() exists on iOS but not on Android")
 
     problems += check_paired_files()
+    problems += check_paired_scroll()
     problems += check_ai()
 
     shared = sorted(set(kt_n) & set(sw_n))
@@ -179,6 +209,7 @@ def main() -> int:
     print(f"  {len(kt_f & sw_f)} colour functions present on both")
     print(f"  {len(AI_MUST_MATCH)} AI request settings checked on both platforms")
     print(f"  {len(PAIRED_FILES)} services present on both platforms")
+    print(f"  {len(PAIRED_SCROLL)} screens scroll on both platforms")
 
     if problems:
         for p in problems:

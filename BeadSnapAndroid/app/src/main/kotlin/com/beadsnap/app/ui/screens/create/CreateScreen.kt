@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -136,16 +138,29 @@ fun CreateScreen(
                 .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
+        // SCROLLS.
+        //
+        // This column used to be fillMaxHeight with a weighted spacer at each
+        // end and no scroll at all, which means it is exactly the height of the
+        // screen and never any taller. Four option rows, a 64dp icon and two
+        // headings do not fit that on a small phone, or on any phone at a large
+        // font scale - the weighted spacers collapse to nothing and the last
+        // options are simply cut off the bottom with no way to reach them.
+        //
+        // With verticalScroll the column can grow past the viewport, and
+        // fillMaxHeight + Arrangement.Center keeps it centred exactly as before
+        // whenever it does fit. The weighted spacers had to go: weight() needs
+        // a bounded parent, and a scrolling column is unbounded, so leaving
+        // them would crash instead of scrolling.
         Column(
             modifier = Modifier
                 .fillMaxHeight()
                 .widthIn(max = 520.dp)    // keep option cards scannable on tablets
-                .padding(horizontal = 28.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Spacer(Modifier.weight(1f))
-
             Icon(
                 Icons.Default.AutoAwesome, contentDescription = null,
                 modifier = Modifier.size(64.dp),
@@ -211,8 +226,6 @@ fun CreateScreen(
                 subtitle = "Generate a pattern with Claude AI",
                 onClick = onOpenAIStudio
             )
-
-            Spacer(Modifier.weight(2f))
         }
 
         if (isConverting) {
