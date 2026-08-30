@@ -368,12 +368,19 @@ fun PhotoTuneScreen(
                                 photo = photo,
                                 crop = cropRect,
                                 onPaint = { nx, ny -> paint(nx, ny) },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                brushEnabled = !cropping
                             )
                             if (cropping && shownPhoto != null) {
                                 CropOverlay(
+                                    // userCrop, not cropRect: cropRect is a
+                                    // read-back of what the studio has finished
+                                    // rebuilding, which lags a drag by a frame
+                                    // or more. Basing the next drag step on it
+                                    // makes the box stall and jump behind the
+                                    // finger. userCrop is set synchronously.
+                                    crop = userCrop ?: cropRect,
                                     photo = shownPhoto,
-                                    crop = cropRect,
                                     cols = gridSize.width,
                                     rows = gridSize.height,
                                     onCrop = { userCrop = it },
@@ -391,12 +398,13 @@ fun PhotoTuneScreen(
                                 photo = photo,
                                 crop = cropRect,
                                 onPaint = { nx, ny -> paint(nx, ny) },
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                brushEnabled = !cropping
                             )
                             if (cropping && shownPhoto != null) {
                                 CropOverlay(
+                                    crop = userCrop ?: cropRect,   // see above
                                     photo = shownPhoto,
-                                    crop = cropRect,
                                     cols = gridSize.width,
                                     rows = gridSize.height,
                                     onCrop = { userCrop = it },
@@ -435,7 +443,15 @@ fun PhotoTuneScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Scrollable: this went from three chips to four, and four
+                // ("Cut out", "Crop", "Colour", "Board") plus their gaps do not
+                // fit across a narrow phone inside this column's own padding.
+                // Without this the last chip is clipped off the edge and the
+                // Board tab - shape and size - becomes unreachable.
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     ControlTab.entries.forEach { t ->
                         FilterChip(
                             selected = tab == t,
@@ -700,7 +716,18 @@ private fun PhotoPane(
     photo: ImageBitmap?,
     crop: android.graphics.Rect?,
     onPaint: (Float, Float) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * false while the crop overlay is up.
+     *
+     * Covering this pane with another one is NOT enough to stop it painting.
+     * Compose hit-tests every pointer node under the finger, front to back, and
+     * a touch the overlay does not consume still arrives here - a tap below the
+     * pan/zoom slop is exactly that, so tapping while cropping would have put a
+     * silent brush dab in the cut-out mask. With no handler registered at all
+     * there is nothing to reach.
+     */
+    brushEnabled: Boolean = true
 ) {
     var box by remember { mutableStateOf(IntSize.Zero) }
     Box(
@@ -738,7 +765,11 @@ private fun PhotoPane(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { box = it }
-                .pointerInput(Unit) {
+                // Keyed on brushEnabled, which only changes when a tab chip is
+                // tapped - never with a finger on the pane - so this cannot
+                // restart mid-stroke. See the note above about why that matters.
+                .pointerInput(brushEnabled) {
+                    if (!brushEnabled) return@pointerInput
                     awaitEachGesture {
                         fun emit(pos: Offset) {
                             if (box.width == 0 || box.height == 0) return
