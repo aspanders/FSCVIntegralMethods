@@ -270,7 +270,7 @@ private fun CategoryChipsRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PatternCard(
+internal fun PatternCard(
     pattern: FusePattern,
     onClick: () -> Unit,
     onDuplicate: (() -> Unit)? = null,

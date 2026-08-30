@@ -318,6 +318,48 @@ object ImageConverter {
      * cols x rows grid. Used as the default crop so photos keep their
      * proportions instead of being stretched onto a square board.
      */
+    /**
+     * The largest rect of the cols:rows ratio that fits inside [srcW] x [srcH],
+     * no larger than [wantW] x [wantH], sitting as close to ([cx], [cy]) as
+     * staying inside the image allows.
+     *
+     * The sampler stretches whatever rect it is handed onto the grid, and every
+     * board this app offers is square, so a crop of the wrong shape squashes
+     * the picture. This is the ONE place that shape is enforced - the automatic
+     * subject crop and the crop the user drags both come through here, so they
+     * cannot drift apart. Growing a box to a ratio and then clamping its edges
+     * into bounds separately is what shipped, and it undoes the ratio: see
+     * tools/kotlin-check/Crop.kt.
+     */
+    fun fitAspect(
+        cx: Int, cy: Int,
+        wantW: Int, wantH: Int,
+        srcW: Int, srcH: Int,
+        cols: Int, rows: Int
+    ): android.graphics.Rect {
+        if (srcW <= 0 || srcH <= 0 || cols <= 0 || rows <= 0) {
+            return android.graphics.Rect(0, 0, srcW.coerceAtLeast(1), srcH.coerceAtLeast(1))
+        }
+        val target = cols.toDouble() / rows
+        var bw = wantW.coerceAtLeast(1)
+        var bh = wantH.coerceAtLeast(1)
+        if (bw.toDouble() / bh < target) bw = (bh * target).roundToInt()
+        else bh = (bw / target).roundToInt()
+
+        // Shrink to what the image can hold, keeping the ratio. Reaching the
+        // second branch means the first left the other side room to spare, so
+        // one pass in this order is enough.
+        if (bw > srcW) { bw = srcW; bh = (bw / target).roundToInt() }
+        if (bh > srcH) { bh = srcH; bw = (bh * target).roundToInt() }
+        bw = bw.coerceIn(1, srcW)
+        bh = bh.coerceIn(1, srcH)
+
+        // Slide it fully inside the image rather than cutting an edge off it.
+        val left = (cx - bw / 2).coerceIn(0, srcW - bw)
+        val top = (cy - bh / 2).coerceIn(0, srcH - bh)
+        return android.graphics.Rect(left, top, left + bw, top + bh)
+    }
+
     fun aspectCrop(srcW: Int, srcH: Int, cols: Int, rows: Int): android.graphics.Rect {
         if (srcW <= 0 || srcH <= 0 || cols <= 0 || rows <= 0) {
             return android.graphics.Rect(0, 0, srcW.coerceAtLeast(1), srcH.coerceAtLeast(1))

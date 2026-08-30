@@ -102,6 +102,35 @@ fun main() {
         }
     }
 
+    // fitAspect is now the single implementation behind both the automatic
+    // subject crop and the crop the user drags, so it is checked directly:
+    // a box far bigger than the photo, one far smaller, and one pinned to a
+    // corner all have to come back the board's shape and inside the frame.
+    println("==> fitAspect, the one place the shape is enforced")
+    for ((w, h) in sources) {
+        val cases = listOf(
+            "huge box" to listOf(w / 2, h / 2, w * 4, h * 4),
+            "tiny box" to listOf(w / 2, h / 2, 3, 3),
+            "off the top-left" to listOf(-50, -50, w, h),
+            "off the bottom-right" to listOf(w + 50, h + 50, w, h),
+            "tall and thin" to listOf(w / 2, h / 2, 5, h),
+            "short and wide" to listOf(w / 2, h / 2, w, 5)
+        )
+        for ((name, v) in cases) {
+            for ((cols, rows) in listOf(16 to 16, 32 to 32)) {
+                val r = ImageConverter.fitAspect(v[0], v[1], v[2], v[3], w, h, cols, rows)
+                val want = cols.toDouble() / rows
+                check(
+                    "fitAspect $name on ${w}x$h",
+                    abs(aspect(r) - want) / want <= 0.02 &&
+                        r.left >= 0 && r.top >= 0 && r.right <= w && r.bottom <= h &&
+                        r.width() > 0 && r.height() > 0,
+                    "got ${r.left},${r.top} ${r.width()}x${r.height()}"
+                )
+            }
+        }
+    }
+
     println(if (failures == 0) "crop checks pass" else "$failures FAILED")
     if (failures > 0) kotlin.system.exitProcess(1)
 }

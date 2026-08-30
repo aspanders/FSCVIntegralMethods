@@ -35,7 +35,16 @@ import androidx.compose.ui.semantics.semantics
 @Composable
 fun AIStudioScreen(
     viewModel: StudioViewModel,
-    onEditPattern: (FusePattern) -> Unit
+    onEditPattern: (FusePattern) -> Unit,
+    /**
+     * Back out of the studio.
+     *
+     * Required, not optional. This screen used to be a bottom-bar destination,
+     * so the bar itself was the way out and it needed no button of its own.
+     * It is reached from Create now, and without this there is no way off it
+     * but the system back gesture.
+     */
+    onBack: () -> Unit
 ) {
     val prompt           by viewModel.prompt.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
@@ -51,7 +60,14 @@ fun AIStudioScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("AI Studio", style = MaterialTheme.typography.titleLarge) })
+            TopAppBar(
+                title = { Text("AI Studio", style = MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
         }
     ) { padding ->
         Column(

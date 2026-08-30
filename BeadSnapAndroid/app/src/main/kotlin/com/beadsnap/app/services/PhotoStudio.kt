@@ -350,37 +350,21 @@ class PhotoStudio private constructor(
         val pad = (max(maxX - minX, maxY - minY) * padFrac).roundToInt()
         var x0 = minX - pad; var y0 = minY - pad
         var x1 = maxX + 1 + pad; var y1 = maxY + 1 + pad
-        // Grow the subject box to the board's aspect ratio, then FIT that box
-        // inside the photo without changing its shape.
-        //
-        // The previous version grew the box to the ratio and then clamped each
-        // edge into bounds on its own, which silently threw the ratio away
-        // again. A subject near an edge - or any subject whose grown box was
-        // wider than the photo, which is every tall portrait shot on a square
-        // board - came back as a rect of some other shape, and sampling that
-        // onto a square board stretches one axis. That is the squashed pattern:
-        // it happened by default, because fitting to the subject is on by
-        // default and every board this app offers is square.
-        val target = cols.toDouble() / rows
-        val cx = (x0 + x1) / 2
-        val cy = (y0 + y1) / 2
-        var bw = x1 - x0
-        var bh = y1 - y0
-        if (bw.toDouble() / bh < target) bw = (bh * target).roundToInt()
-        else bh = (bw / target).roundToInt()
-
-        // Shrink to what the photo can hold, keeping the ratio. Order matters
-        // and is safe either way round: reaching the second branch means the
-        // first left the other side with room to spare.
-        if (bw > width) { bw = width; bh = (bw / target).roundToInt() }
-        if (bh > height) { bh = height; bw = (bh * target).roundToInt() }
-        bw = bw.coerceIn(1, width)
-        bh = bh.coerceIn(1, height)
-
-        // Slide it fully inside the photo rather than cutting an edge off it.
-        val left = (cx - bw / 2).coerceIn(0, width - bw)
-        val top = (cy - bh / 2).coerceIn(0, height - bh)
-        return Rect(left, top, left + bw, top + bh)
+        // Grow the subject box to the board's aspect ratio and fit it inside
+        // the photo, in the one place that maths lives. Doing it inline here
+        // is how it went wrong: the box was grown to the ratio and then had
+        // each edge clamped into bounds separately, which threw the ratio away
+        // again for any subject near an edge and for every tall portrait shot.
+        return ImageConverter.fitAspect(
+            cx = (x0 + x1) / 2,
+            cy = (y0 + y1) / 2,
+            wantW = x1 - x0,
+            wantH = y1 - y0,
+            srcW = width,
+            srcH = height,
+            cols = cols,
+            rows = rows
+        )
     }
 
     /** Scale a working-buffer rect up to a full-resolution photo's pixels. */

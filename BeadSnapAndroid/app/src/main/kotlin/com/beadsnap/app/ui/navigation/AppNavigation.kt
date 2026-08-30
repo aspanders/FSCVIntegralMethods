@@ -36,6 +36,7 @@ import com.beadsnap.app.ui.tipjar.TipPromptBanner
 import com.beadsnap.app.ui.screens.create.CreateScreen
 import com.beadsnap.app.ui.screens.editor.EditorScreen
 import com.beadsnap.app.ui.screens.editor.EditorViewModel
+import com.beadsnap.app.ui.screens.creations.MyCreationsScreen
 import com.beadsnap.app.ui.screens.library.LibraryScreen
 import com.beadsnap.app.ui.screens.library.LibraryViewModel
 import com.beadsnap.app.ui.screens.projects.ProjectsScreen
@@ -50,6 +51,15 @@ private sealed class Destination(
     data object Library : Destination("library", "Library", Icons.Default.GridView)
     data object Create  : Destination("create",  "Create",  Icons.Default.Add)
     data object Photos  : Destination("photos",  "Photos",  Icons.Default.PhotoLibrary)
+    data object Mine    : Destination("mine",    "Mine",    Icons.Default.Brush)
+
+    /**
+     * The AI studio. NOT in the bottom bar: it is reached from Create, which
+     * is where somebody looking to make something goes, and the bar slot it
+     * used to hold now belongs to the user's own work - far more useful to
+     * reach in one tap than a second door to a screen Create already opens.
+     * The route stays registered and the screen is unchanged.
+     */
     data object Studio  : Destination("studio",  "Studio",  Icons.Default.AutoFixHigh)
 }
 
@@ -57,7 +67,7 @@ private val topLevelDestinations = listOf(
     Destination.Library,
     Destination.Create,
     Destination.Photos,
-    Destination.Studio
+    Destination.Mine
 )
 
 @Composable
@@ -236,10 +246,12 @@ private fun BeadSnapNavHost(
                     navController.navigate("editor")
                 },
                 onOpenAIStudio = {
+                    // An ordinary push, not the tab-switch navigate this used
+                    // to be. The studio is no longer a tab, so clearing the
+                    // stack back to Library would have left Back going to the
+                    // Library from a screen you opened from Create.
                     navController.navigate(Destination.Studio.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
-                        restoreState    = true
                     }
                 }
             )
@@ -255,13 +267,26 @@ private fun BeadSnapNavHost(
             )
         }
 
+        composable(Destination.Mine.route) {
+            MyCreationsScreen(
+                store         = store,
+                onOpenPattern = { pattern ->
+                    navState.editorPattern = pattern
+                    navController.navigate("editor")
+                }
+            )
+        }
+
         composable(Destination.Studio.route) {
             AIStudioScreen(
                 viewModel      = studioViewModel,
                 onEditPattern  = { pattern ->
                     navState.editorPattern = pattern
                     navController.navigate("editor")
-                }
+                },
+                // No bottom bar here any more, so the screen carries its own
+                // way out.
+                onBack = { navController.popBackStack() }
             )
         }
 

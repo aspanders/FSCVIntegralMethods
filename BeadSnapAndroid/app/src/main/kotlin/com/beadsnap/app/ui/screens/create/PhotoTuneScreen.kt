@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
@@ -50,7 +52,7 @@ import kotlin.math.roundToInt
 
 /** Which group of controls the bottom strip is showing. */
 private enum class ControlTab(val label: String) {
-    CutOut("Cut out"), Colour("Colour"), Board("Board")
+    CutOut("Cut out"), Crop("Crop"), Colour("Colour"), Board("Board")
 }
 
 /**
@@ -118,6 +120,11 @@ fun PhotoTuneScreen(
     var pattern by remember { mutableStateOf<FusePattern?>(null) }
     var photo by remember { mutableStateOf<ImageBitmap?>(null) }
     var cropRect by remember { mutableStateOf<android.graphics.Rect?>(null) }
+
+    // The crop the USER dragged, or null for the automatic one. Kept separate
+    // from cropRect, which is only ever a read-back of what the studio settled
+    // on, so the two never fight over who decides.
+    var userCrop by remember { mutableStateOf<android.graphics.Rect?>(null) }
     var busy by remember { mutableStateOf(true) }
     var committing by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -225,12 +232,28 @@ fun PhotoTuneScreen(
     // what that actually invalidates.
     LaunchedEffect(
         studio, gridSize, maxColors, shape, brightness, contrast, saturation,
-        chromaLift, wbStrength, wbRaw, fitToSubject
+        chromaLift, wbStrength, wbRaw, fitToSubject, userCrop
     ) {
         if (studio == null) return@LaunchedEffect
         val gains = blend(wbRaw, wbStrength)
         post { s ->
-            val crop = if (fitToSubject) s.subjectCrop(gridSize.width, gridSize.height) else null
+            // A crop the user placed wins over both automatic modes. It
+            // still goes through fitAspect, so changing the board size later
+            // reshapes it rather than leaving a rect of the old proportions
+            // to be stretched onto the new grid.
+            val manual = userCrop
+            val crop = when {
+                manual != null -> ImageConverter.fitAspect(
+                    cx = (manual.left + manual.right) / 2,
+                    cy = (manual.top + manual.bottom) / 2,
+                    wantW = manual.width(),
+                    wantH = manual.height(),
+                    srcW = s.width, srcH = s.height,
+                    cols = gridSize.width, rows = gridSize.height
+                )
+                fitToSubject -> s.subjectCrop(gridSize.width, gridSize.height)
+                else -> null
+            }
             s.configure(
                 cols = gridSize.width,
                 rows = gridSize.height,
@@ -334,25 +357,53 @@ fun PhotoTuneScreen(
                 // inside one would lose it on every rotation, because the two
                 // branches are different call sites.
                 val landscape = maxWidth > maxHeight
+                // Captured once so the null check below smart-casts; `photo`
+                // is a delegated var and would not.
+                val shownPhoto = photo
+                val cropping = tab == ControlTab.Crop
                 if (landscape) {
                     Row(Modifier.fillMaxSize()) {
-                        PhotoPane(
-                            photo = photo,
-                            crop = cropRect,
-                            onPaint = { nx, ny -> paint(nx, ny) },
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            PhotoPane(
+                                photo = photo,
+                                crop = cropRect,
+                                onPaint = { nx, ny -> paint(nx, ny) },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            if (cropping && shownPhoto != null) {
+                                CropOverlay(
+                                    photo = shownPhoto,
+                                    crop = cropRect,
+                                    cols = gridSize.width,
+                                    rows = gridSize.height,
+                                    onCrop = { userCrop = it },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                         VerticalDivider()
                         BeadPane(pattern, Modifier.weight(1f).fillMaxHeight())
                     }
                 } else {
                     Column(Modifier.fillMaxSize()) {
-                        PhotoPane(
-                            photo = photo,
-                            crop = cropRect,
-                            onPaint = { nx, ny -> paint(nx, ny) },
-                            modifier = Modifier.weight(1f).fillMaxWidth()
-                        )
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            PhotoPane(
+                                photo = photo,
+                                crop = cropRect,
+                                onPaint = { nx, ny -> paint(nx, ny) },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            if (cropping && shownPhoto != null) {
+                                CropOverlay(
+                                    photo = shownPhoto,
+                                    crop = cropRect,
+                                    cols = gridSize.width,
+                                    rows = gridSize.height,
+                                    onCrop = { userCrop = it },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                         HorizontalDivider()
                         BeadPane(pattern, Modifier.weight(1f).fillMaxWidth())
                     }
@@ -462,7 +513,13 @@ fun PhotoTuneScreen(
                             TextButton(onClick = { post { it.clearAll() } }) { Text("Clear all") }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(checked = fitToSubject, onCheckedChange = { fitToSubject = it })
+                            // Asking for automatic framing drops the manual
+                            // crop - otherwise the checkbox would appear to do
+                            // nothing at all while one was set.
+                            Checkbox(
+                                checked = fitToSubject,
+                                onCheckedChange = { fitToSubject = it; userCrop = null }
+                            )
                             Column(Modifier.weight(1f)) {
                                 Text("Fit board to subject", style = MaterialTheme.typography.bodyMedium)
                                 Text(
@@ -485,7 +542,60 @@ fun PhotoTuneScreen(
                         }
                     }
 
+                    ControlTab.Crop -> {
+                        Text(
+                            "Drag the box to choose what goes on the board, and pinch " +
+                            "to resize it. The box is locked to the board's shape, so " +
+                            "the picture cannot come out stretched.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = { userCrop = null },
+                                enabled = userCrop != null
+                            ) { Text("Automatic") }
+                            TextButton(onClick = {
+                                val img = photo ?: return@TextButton
+                                userCrop = ImageConverter.fitAspect(
+                                    cx = img.width / 2, cy = img.height / 2,
+                                    wantW = img.width, wantH = img.height,
+                                    srcW = img.width, srcH = img.height,
+                                    cols = gridSize.width, rows = gridSize.height
+                                )
+                            }) { Text("As much as fits") }
+                        }
+                        Text(
+                            when {
+                                userCrop != null ->
+                                    "Using your crop. Automatic puts it back."
+                                fitToSubject ->
+                                    "Automatic: fitted to whatever you kept in Cut out."
+                                else ->
+                                    "Automatic: the largest centred square of the photo."
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (userCrop != null) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
                     ControlTab.Colour -> {
+                        // How many different beads the pattern may use. This is
+                        // the first thing somebody with one starter tub needs,
+                        // so it leads the Colour tab rather than sitting at the
+                        // bottom of Board where it was.
+                        LabelledSlider(
+                            "Colours", "$maxColors", maxColors.toFloat(), 2f..24f, 21
+                        ) { maxColors = it.roundToInt() }
+                        Text(
+                            "Set this to what your kit actually has. A pattern that " +
+                            "needs twenty colours is no use with eight in the drawer, " +
+                            "and fewer colours reads better on a small board anyway.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -559,9 +669,6 @@ fun PhotoTuneScreen(
                                         label = { Text(gs.displayName) }
                                     )
                                 }
-                        }
-                        LabelledSlider("Colours", "$maxColors", maxColors.toFloat(), 4f..24f, 19) {
-                            maxColors = it.roundToInt()
                         }
                     }
                 }
@@ -687,6 +794,121 @@ private fun PhotoPane(
                 ),
                 dstSize = IntSize(drawW.roundToInt(), drawH.roundToInt())
             )
+        }
+    }
+}
+
+/**
+ * The whole photo with the crop box on it: drag to move it, pinch to resize it.
+ *
+ * Drawn OVER PhotoPane, and only while the Crop tab is open, so it takes every
+ * touch before the brush underneath can see one. PhotoPane is not modified, not
+ * re-keyed and not re-entered - its gesture handler is the most delicate code
+ * on this screen, and the safest way to add a second gesture was to not go near
+ * the first one.
+ *
+ * It deliberately shows the FULL photo, unlike PhotoPane which shows only the
+ * crop: choosing a new crop means seeing what is currently outside it.
+ */
+@Composable
+private fun CropOverlay(
+    photo: ImageBitmap,
+    crop: android.graphics.Rect?,
+    cols: Int,
+    rows: Int,
+    onCrop: (android.graphics.Rect) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var box by remember { mutableStateOf(IntSize.Zero) }
+    val liveImage by rememberUpdatedState(photo)
+    val liveCrop by rememberUpdatedState(crop)
+    val liveCols by rememberUpdatedState(cols)
+    val liveRows by rememberUpdatedState(rows)
+    val liveOnCrop by rememberUpdatedState(onCrop)
+
+    val scrim = Color.Black.copy(alpha = 0.55f)
+    val edge = MaterialTheme.colorScheme.primary
+
+    Canvas(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .onSizeChanged { box = it }
+            .semantics {
+                contentDescription = "Crop area. Drag to move it, pinch to resize it"
+            }
+            .pointerInput(Unit) {
+                // detectTransformGestures rather than a hand-rolled
+                // awaitFirstDown loop: it already copes with a second finger
+                // arriving and leaving part-way through, which is exactly where
+                // hand-written pinch handling goes wrong. Keyed on Unit, and
+                // everything it reads goes through rememberUpdatedState, for
+                // the reason spelled out in PhotoPane.
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val img = liveImage
+                    val b = box
+                    if (b.width == 0 || b.height == 0) return@detectTransformGestures
+                    val scale = min(
+                        b.width.toFloat() / img.width,
+                        b.height.toFloat() / img.height
+                    )
+                    if (scale <= 0f) return@detectTransformGestures
+                    val c = liveCrop
+                        ?: android.graphics.Rect(0, 0, img.width, img.height)
+                    // The box is the thing under the finger, so it follows the
+                    // drag, and pinching apart makes it bigger. fitAspect then
+                    // keeps it the board's shape and inside the photo, which is
+                    // why no amount of dragging can produce a stretched result.
+                    liveOnCrop(
+                        ImageConverter.fitAspect(
+                            cx = (c.left + c.right) / 2 + (pan.x / scale).roundToInt(),
+                            cy = (c.top + c.bottom) / 2 + (pan.y / scale).roundToInt(),
+                            wantW = (c.width() * zoom).roundToInt(),
+                            wantH = (c.height() * zoom).roundToInt(),
+                            srcW = img.width, srcH = img.height,
+                            cols = liveCols, rows = liveRows
+                        )
+                    )
+                }
+            }
+    ) {
+        val scale = min(size.width / photo.width, size.height / photo.height)
+        val drawW = photo.width * scale
+        val drawH = photo.height * scale
+        val left = (size.width - drawW) / 2f
+        val top = (size.height - drawH) / 2f
+        drawImage(
+            image = photo,
+            srcOffset = IntOffset(0, 0),
+            srcSize = IntSize(photo.width, photo.height),
+            dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
+            dstSize = IntSize(drawW.roundToInt(), drawH.roundToInt())
+        )
+
+        val c = crop ?: android.graphics.Rect(0, 0, photo.width, photo.height)
+        val rx = left + c.left * scale
+        val ry = top + c.top * scale
+        val rw = c.width() * scale
+        val rh = c.height() * scale
+
+        // Dim what will be thrown away, in four bands around the box.
+        drawRect(scrim, Offset(0f, 0f), Size(size.width, ry.coerceAtLeast(0f)))
+        drawRect(
+            scrim, Offset(0f, ry + rh),
+            Size(size.width, (size.height - ry - rh).coerceAtLeast(0f))
+        )
+        drawRect(scrim, Offset(0f, ry), Size(rx.coerceAtLeast(0f), rh))
+        drawRect(
+            scrim, Offset(rx + rw, ry),
+            Size((size.width - rx - rw).coerceAtLeast(0f), rh)
+        )
+
+        drawRect(edge, Offset(rx, ry), Size(rw, rh), style = Stroke(width = 3f))
+        // Thirds, so it reads as a camera crop frame rather than a selection.
+        for (i in 1..2) {
+            val gx = rx + rw * i / 3f
+            val gy = ry + rh * i / 3f
+            drawLine(edge.copy(alpha = 0.35f), Offset(gx, ry), Offset(gx, ry + rh), 1f)
+            drawLine(edge.copy(alpha = 0.35f), Offset(rx, gy), Offset(rx + rw, gy), 1f)
         }
     }
 }
