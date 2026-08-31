@@ -132,35 +132,46 @@ fun CreateScreen(
             TopAppBar(title = { Text("Create", style = MaterialTheme.typography.titleLarge) })
         }
     ) { padding ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-        // SCROLLS.
+        // Scrolls when it must, and stays centred when it fits.
         //
         // This column used to be fillMaxHeight with a weighted spacer at each
         // end and no scroll at all, which means it is exactly the height of the
         // screen and never any taller. Four option rows, a 64dp icon and two
         // headings do not fit that on a small phone, or on any phone at a large
         // font scale - the weighted spacers collapse to nothing and the last
-        // options are simply cut off the bottom with no way to reach them.
+        // options are cut off the bottom with nothing to swipe to reach them.
         //
-        // With verticalScroll the column can grow past the viewport, and
-        // fillMaxHeight + Arrangement.Center keeps it centred exactly as before
-        // whenever it does fit. The weighted spacers had to go: weight() needs
-        // a bounded parent, and a scrolling column is unbounded, so leaving
-        // them would crash instead of scrolling.
+        // ORDER MATTERS, and getting it wrong is silent. A size modifier BEFORE
+        // verticalScroll sizes the scroll VIEWPORT; one after it sizes the
+        // scrolling CONTENT. Inside a scroll the content is measured with
+        // minHeight 0, so Arrangement.Center has no spare space to distribute
+        // and everything piles up at the top. heightIn(min = viewport) placed
+        // AFTER the scroll makes the content at least a screenful tall, so
+        // Center behaves exactly as it did before, and taller content still
+        // grows past the viewport and scrolls. Same trick as minHeight against
+        // the geometry on the iOS side.
+        //
+        // The weighted spacers had to go regardless: weight() needs a bounded
+        // parent and a scrolling column is unbounded, so leaving them in would
+        // crash rather than scroll. Fixed spacers replace them.
+        val viewport = maxHeight
         Column(
             modifier = Modifier
-                .fillMaxHeight()
                 .widthIn(max = 520.dp)    // keep option cards scannable on tablets
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp, vertical = 24.dp),
+                .heightIn(min = viewport)
+                .padding(horizontal = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            Spacer(Modifier.height(24.dp))
+
             Icon(
                 Icons.Default.AutoAwesome, contentDescription = null,
                 modifier = Modifier.size(64.dp),
@@ -226,6 +237,8 @@ fun CreateScreen(
                 subtitle = "Generate a pattern with Claude AI",
                 onClick = onOpenAIStudio
             )
+
+            Spacer(Modifier.height(24.dp))
         }
 
         if (isConverting) {

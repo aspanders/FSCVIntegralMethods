@@ -66,21 +66,26 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 modifier = Modifier.weight(1f)
             ) { index ->
                 val page = pages[index]
-                // Scrolls, for the same reason CreateScreen does: a page of
-                // a 96dp badge, a headline and a paragraph does not fit a small
-                // screen at a large font scale, and without a scroll the text
-                // is simply cut off. Weighted spacers cannot survive here -
-                // weight() needs a bounded parent and a scrolling column is
-                // unbounded - so Arrangement.Center does the centring instead,
-                // which looks identical whenever the page does fit.
+                // Scrolls for the same reason CreateScreen does - a 96dp badge,
+                // a headline and a paragraph do not fit a small screen at a
+                // large font scale - and stays centred the same way, with
+                // heightIn(min = viewport) placed AFTER the scroll so the
+                // content is at least a screenful tall. See the note in
+                // CreateScreen: a size modifier before the scroll sizes the
+                // viewport, after it sizes the content, and only the second one
+                // leaves Arrangement.Center any room to work with.
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                val viewport = maxHeight
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 40.dp, vertical = 24.dp),
+                        .heightIn(min = viewport)
+                        .padding(horizontal = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
+                    Spacer(Modifier.height(24.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = CircleShape,
@@ -108,6 +113,8 @@ fun OnboardingScreen(onDone: () -> Unit) {
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(24.dp))
+                }
                 }
             }
 
