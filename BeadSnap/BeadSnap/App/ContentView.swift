@@ -1,7 +1,11 @@
 import SwiftUI
 
 enum AppTab: Hashable {
-    case library, create, studio
+    // The AI studio is deliberately NOT a tab. It is reached from Create,
+    // which is where somebody looking to make something goes, and the slot it
+    // held now belongs to the user's own work - far more useful in one tap
+    // than a second door to a screen Create already opens. Matches Android.
+    case library, create, mine
 }
 
 struct ContentView: View {
@@ -10,6 +14,7 @@ struct ContentView: View {
     @ObservedObject private var library = RemoteLibraryService.shared
     @State private var selectedTab: AppTab = .library
     @State private var showTipJar = false
+    @State private var showStudio = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -19,19 +24,26 @@ struct ContentView: View {
                 }
                 .tag(AppTab.library)
 
-            CreateView(onOpenAIStudio: { selectedTab = .studio })
+            CreateView(onOpenAIStudio: { showStudio = true })
                 .tabItem {
                     Label("Create", systemImage: "plus.circle.fill")
                 }
                 .tag(AppTab.create)
 
-            AIStudioView()
+            MyCreationsView()
                 .tabItem {
-                    Label("Studio", systemImage: "wand.and.stars")
+                    Label("Mine", systemImage: "paintbrush.pointed.fill")
                 }
-                .tag(AppTab.studio)
+                .tag(AppTab.mine)
         }
         .tint(.purple)
+        // A sheet rather than a tab. Presented this way it is dismissible by
+        // swipe as well as by its own Close button, so there is no way to end
+        // up stranded on it - which is exactly what removing it from the tab
+        // bar risked, and what caught out the Android side.
+        .sheet(isPresented: $showStudio) {
+            AIStudioView(onClose: { showStudio = false })
+        }
         .onAppear { tipJar.recordUse() }
         .task { await library.syncIfNeeded() }
         .overlay(alignment: .bottom) {

@@ -104,6 +104,61 @@ def near_duplicates(patterns, threshold=NEAR_DUP):
     return out
 
 
+# Categories where two subjects sharing one silhouette is a DEFECT.
+#
+# Deliberately not every category. In hearts, stars and the knockout icons the
+# shared outline IS the design - a heart full of stripes and a heart full of
+# waves are both meant to be heart-shaped, and the variation lives inside it.
+# Balls are circles; gem cuts are faceted polygons. Flagging those would bury
+# the real finding in thousands of expected matches, which is exactly what the
+# first version of this check did.
+#
+# In these categories the outline is the whole picture: an oak and a cherry
+# tree that occupy identical cells are two names for one design, and colour is
+# the only thing telling them apart on the board.
+REPRESENTATIONAL = {
+    "animals", "birds", "bugs", "fish", "flowers", "trees", "vehicles",
+    "food", "space", "holidays", "threeD",
+}
+
+SILHOUETTE_FILL = 0.70   # board fuller than this is a fill design, not a subject
+SHAPE_DUP = 0.95         # cells agreeing, colour ignored
+
+
+def occupancy(p):
+    """The board as bare filled/empty, plus its size and how full it is."""
+    g, w, h = grid_of(p)
+    filled = sum(1 for row in g for c in row if c)
+    return tuple(tuple(bool(c) for c in row) for row in g), w, h, filled / (w * h)
+
+
+def shape_collisions(lst):
+    """Different subjects in one category drawn as the same silhouette.
+
+    The near_duplicates check above compares COLOURED cells, so two identical
+    outlines in different palettes sail past it - which is how Bluebell and
+    Foxglove came to be 96% the same shape, and Oak, Cherry Young and Apple
+    Tree Young came to be exactly the same shape, without anything complaining.
+    """
+    sil = [(p, *occupancy(p)) for p in lst]
+    sil = [d for d in sil if d[4] < SILHOUETTE_FILL]
+    out = []
+    for i in range(len(sil)):
+        pi, gi, wi, hi, _ = sil[i]
+        for j in range(i + 1, len(sil)):
+            pj, gj, wj, hj, _ = sil[j]
+            if (wi, hi) != (wj, hj):
+                continue
+            if family_of(pi["title"]) == family_of(pj["title"]):
+                continue
+            same = sum(1 for y in range(hi) for x in range(wi) if gi[y][x] == gj[y][x])
+            f = same / (wi * hi)
+            if f >= SHAPE_DUP:
+                out.append((f, pi["title"], pj["title"]))
+    out.sort(reverse=True)
+    return out
+
+
 def exact_key(p):
     cells = p.get("cells") or from_rows(p.get("rows", []), p["palette"])
     return (p["grid"]["width"], p["grid"]["height"],
@@ -131,6 +186,9 @@ def audit(patterns):
             if m["speckle"] > MAX_SPECKLE:
                 failures["speckled"].append((cat, p["title"], round(100 * m["speckle"])))
         near = near_duplicates(lst)
+        shapes = shape_collisions(lst) if cat in REPRESENTATIONAL else []
+        for f, a, b in shapes:
+            failures["same-silhouette"].append((cat, f"{a} == {b}", round(100 * f)))
         same_fam = [x for x in near if x[3]]
         cross_fam = [x for x in near if not x[3]]
         rows.append(dict(

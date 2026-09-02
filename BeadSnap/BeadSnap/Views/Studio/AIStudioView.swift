@@ -1,6 +1,16 @@
 import SwiftUI
 
 struct AIStudioView: View {
+    /// Dismiss the studio.
+    ///
+    /// Required, not optional. This used to be a tab, so the tab bar itself
+    /// was the way out and it needed no button. It is presented from Create
+    /// now, and without this the only exit is the sheet's swipe-down - which
+    /// is easy to miss and impossible on a keyboard. The Android side lost its
+    /// way out entirely when the same change was made there; this is that
+    /// lesson applied before shipping rather than after.
+    var onClose: () -> Void = {}
+
     @StateObject private var viewModel = StudioViewModel()
     @State private var showAPIKeySheet = false
     @State private var apiKeyInput = ""
@@ -41,6 +51,11 @@ struct AIStudioView: View {
             }
             .navigationTitle("AI Studio")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", action: onClose)
+                }
+            }
             .navigationDestination(item: $editingPattern) { p in
                 PatternEditorView(pattern: p)
             }
