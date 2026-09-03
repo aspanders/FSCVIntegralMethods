@@ -240,3 +240,66 @@ sweets, threeD, videogame.
 
 The metrics cover all 24 categories; the eyes do not. Anything above is a
 finding, not a clean bill of health for the rest.
+
+
+---
+
+# Visual pass over the remaining categories — 2026-09-03
+
+Fourteen categories now reviewed by eye against the rendered contact sheets,
+not just by metric. New defects, each confirmed by dumping the cells rather
+than by squinting at a thumbnail.
+
+## Broken patterns
+
+    fish / Angelfish     palette is [cream, black] and the board is a solid
+                         black silhouette with EXACTLY ONE cream bead - the
+                         eye. No fins, no detail. A black blob.
+    bugs / Snail         a chaotic three-colour scatter in an oval; reads as
+                         a pizza (recorded earlier)
+
+## space: 7 patterns are a background with a few dots on it
+
+    Comet 1, Comet 2                      93% of the board is one colour
+    Constellation 1, 2, 4, 5, 6           90-93%
+
+676 to 841 beads to produce a blue square with five dots. They pass the
+connectivity and distinctness checks; they are simply not worth building.
+The category also has no background discipline at all - navy, cyan, pink,
+yellow, cream, lavender and grey all appear, so the category does not read as
+a set.
+
+## threeD is the weakest category in the library
+
+Eight patterns. Four are flagged "tiny" (28-39 beads). Two of the remaining
+four - Gift Box and Creeper Head - are the same cross-shaped net. Three large
+fold-out nets sit beside five small objects with no visual coherence.
+
+## vehicles: one template, repeated
+
+Rows of car, bus, taxi, van, truck, ambulance and tractor are the same box on
+the same wheels, which is what the earlier collision numbers were pointing at
+(Taxi == Car Big Wheels 95.5%). The bicycles read as spectacles - two rings
+joined by a blob - and three or four vehicles are not identifiable at all.
+
+## Smaller findings
+
+    geometric   the dither finding confirmed by eye; also a "pattern" that is
+                four solid colour quadrants and nothing else
+    emoji       a few faces are pale-on-pale (cream outline on cream fill) so
+                the features barely read
+    holidays    turkey and one bowl-like subject do not read; several outline
+                variants are very sparse
+    food        grapes and bread are weak; the outline variants are thin
+    videogame   good throughout, including the Steamboat Willie set
+
+## Coverage, stated honestly
+
+Reviewed by eye (14): flowers, birds, animals, trees, bugs, geometric, emoji,
+space, threeD, holidays, vehicles, fish, food, videogame.
+
+NOT reviewed by eye (10): circles, gems, hearts, icons, mandalas, rainbows,
+snowflakes, sports, stars, sweets. Most are abstract fill families where the
+metrics carry more signal than a thumbnail does, and icons was checked by
+dumping cells instead - but none of them has had a human-equivalent look, and
+this list should not be read as a pass.
