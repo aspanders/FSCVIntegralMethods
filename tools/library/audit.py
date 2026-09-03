@@ -35,6 +35,14 @@ PATTERNS = os.path.join(REPO, "library", "patterns.json")
 MIN_BEADS = 40          # below this there is barely a pattern to make
 MAX_DOMINANT = 0.90     # one colour over this share of the BOARD is near-blank
 MAX_SPECKLE = 0.15      # isolated beads as a fraction of all beads
+# A second, much harder line. Above MAX_SPECKLE a pattern is worth LOOKING at;
+# above this it is not a pattern at all, it is dither. At 100% every single
+# bead differs from all four of its neighbours - 784 of them on a full board -
+# which is exhausting to place and reads as noise rather than as a design. The
+# fine chevrons and the width-1 diagonal stripes land here, and they pass every
+# other check in this file: they are distinct, connected, well formed and
+# perfectly buildable on paper.
+MAX_DITHER = 0.35
 MIN_UNIQUE_FRAC = 0.80  # a category below this is mostly recolours
 NEAR_DUP = 0.95         # two boards sharing more than this are indistinguishable
 
@@ -183,7 +191,9 @@ def audit(patterns):
                 failures["tiny"].append((cat, p["title"], m["beads"]))
             if m["dom"] > MAX_DOMINANT:
                 failures["near-blank"].append((cat, p["title"], round(100 * m["dom"])))
-            if m["speckle"] > MAX_SPECKLE:
+            if m["speckle"] > MAX_DITHER:
+                failures["dither"].append((cat, p["title"], round(100 * m["speckle"])))
+            elif m["speckle"] > MAX_SPECKLE:
                 failures["speckled"].append((cat, p["title"], round(100 * m["speckle"])))
         near = near_duplicates(lst)
         shapes = shape_collisions(lst) if cat in REPRESENTATIONAL else []

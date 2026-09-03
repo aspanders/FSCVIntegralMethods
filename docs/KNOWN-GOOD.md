@@ -180,3 +180,63 @@ file EXISTS, and existence is not membership. Verified by removing ColorMath
 from the Sources phase and watching the check fail.
 
 Nothing on the Android side is affected - versionCode 19 stands as recorded.
+
+
+---
+
+# Adversarial QC, continued — 2026-09-03
+
+## Dither: 17 patterns that are noise, not designs
+
+New `MAX_DITHER` check in audit.py, at 35% isolated beads. Above the existing
+15% "speckled" line a pattern is worth looking at; above 35% it is not a
+pattern at all.
+
+    Diag Stripes w1     100%   784 beads, EVERY one differing from all four neighbours
+    Diag Heart w1       100%   359 beads, the same
+    Wide Chevron p10     93%
+    Chevron p7           89%
+    Tennis Racket        51%   the strings are a one-bead crosshatch
+
+The library mean is 4.1%, so these are extreme outliers. 13 patterns sit above
+50% and 37 above 25%, together 15,368 beads of near-pure noise. Every one of
+them passes every other check in the file: distinct, connected, well formed,
+correct at all three sizes. They are simply miserable to build and read as dirt
+on the board.
+
+Mostly geometric (14 of the worst 37), and all of them are the finest
+variant of a family that is fine at coarser settings - Chevron p5 upward is a
+proper chevron, p2 is dither. The fix is to stop generating the finest
+variants, which is a change to the generators and a library republish rather
+than an app change.
+
+## Snail is broken
+
+`bugs / Snail` is a horizontal oval filled with a chaotic three-colour scatter.
+No spiral, no body, no eyestalks - it reads as a pizza. Confirmed by dumping
+the cells, not by squinting at a thumbnail.
+
+Slug, next to it, is fine: eyestalks and an elongated body. It looked like a
+bowl in the contact sheet purely because the tile was small - a reminder that
+the thumbnail is for finding candidates, not for judging them.
+
+## Trees: the "Young" variants are one traced outline
+
+Oak, Apple Tree Young and Cherry Young share a byte-identical canopy and trunk
+silhouette. Apple Tree Young is that oak with red beads scattered in; Cherry
+Young is the same oak in blush and pink. Defensible for cherry blossom,
+thinner for apple. It is the clearest instance of the 254 silhouette
+collisions already recorded above.
+
+Also in trees: `Mushroom` is not a tree, and `Cactus` is a stretch. Both are
+fine patterns in the wrong category.
+
+## What the pass has NOT covered
+
+Reviewed by eye: flowers, birds, animals, trees, bugs. Rendered but not yet
+read: vehicles, fish, food. Never rendered: circles, emoji, gems, geometric,
+hearts, holidays, icons, mandalas, rainbows, snowflakes, space, sports, stars,
+sweets, threeD, videogame.
+
+The metrics cover all 24 categories; the eyes do not. Anything above is a
+finding, not a clean bill of health for the rest.
