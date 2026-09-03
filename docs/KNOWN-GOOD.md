@@ -611,3 +611,78 @@ compact row encoding uses `.` for an empty peg and `0` for the FIRST PALETTE
 COLOUR; the script treated `0` as empty. Every board whose first palette entry
 was its outline therefore measured as edge-to-edge ink. The letters were fine
 all along — it was only the hearts, and the reducer.
+
+---
+
+# Borders that had closed over what they outlined — 2026-09-03
+
+*"The pretzels look like a slug or some animal. For all categories and all
+images, ensure that the borders on both sides of a volume don't touch each
+other. If there is a border, black or otherwise, it should contain color
+between at all points."*
+
+## What was actually wrong
+
+`_outline` draws a one-bead dark edge round a subject. It already refused to
+outline a strand that erodes to nothing, which handles a limb thin in *two*
+dimensions. The failure is one-dimensional and it slipped straight through: a
+limb three beads **across** but only three beads **long** has a solid centre,
+so all eight beads round that centre qualify as edge and the whole limb goes
+dark bar one. Repeat that over a pretzel drawn from three overlapping rings and
+you get a black amoeba.
+
+Compounding it, the outline colour was allowed to be a colour the subject was
+already using. In the species tables the *accent* draws the legs, fins, stripes
+and head — and for most bugs and fish the accent is `black`, the same colour
+the outline is drawn in. Legs, markings and edge became one mass.
+
+Measured across the library, on backgroundless subjects that carry both an ink
+colour and a fill:
+
+| | before | after |
+|---|---|---|
+| the ink is half the subject or more | 116 | 33 |
+| two borders meeting with no colour between | 127 | 43 |
+| worst case | `fish/Angelfish` at **99.2% black**, one cream bead | none above 70% |
+
+## Four changes
+
+* **`_outline` second pass.** The rule, stated plainly and enforced along both
+  axes: if outlining would leave a whole row or column run of the subject with
+  nothing but border in it, the middle bead of that run keeps its colour. Two
+  borders can then never meet with nothing between them.
+* **`_ink_for`.** The outline is drawn in the first dark tone the subject is not
+  already using. A bee whose stripes are black, outlined in black, is one black
+  shape.
+* **`MAX_OUTLINE_SHARE = 0.45`.** Some subjects are simply too small to carry an
+  outline. Past this the border has stopped describing the shape and started
+  replacing it, so it is dropped entirely — a plain coloured silhouette reads
+  better than a black one. This is what fixed the pretzel.
+* **Fins take the body colour.** An Angelfish is a 5-bead body between a dorsal
+  and a ventral fin nearly twice its height. Painting the fins in the marking
+  colour made the fish 74% black before the outline was even drawn. A real
+  fish's fins are the colour of the fish; the accent is for bands, spots and
+  the eye. `Angelfish` and `Barb` also had silver bodies, which is invisible on
+  a pale board, and now have colour.
+
+## What still reads dark, and why that is right
+
+Ten subjects in the outlined categories are more than half ink: a bat, a bomb,
+Steamboat Willie, `Sword Outline` and `Flag Outline` (line art by design), and
+the "Long" bug variants, whose extra legs are drawn in the species accent —
+a cricket's legs really are black. All were rendered and checked by eye. The 43
+still matching the "two borders touching" scan are the hollow `* Outline` style
+variants, where the two sides of a thin shape come close with background
+between them rather than nothing; they were rendered too and they are fine.
+
+## The checks
+
+Check 22 drives `_outline` directly on blocks chosen to hit each case, rather
+than scanning the shipped library — the shipped answer depends on every species
+colour and every framing decision as well, and a test that depends on all of
+those tells you nothing about which one broke. 22b holds the share bound, 22c
+holds the colour-collision rule, and 23 scans the library for a subject that is
+mostly its own outline, with the bar set where a genuinely black bat passes and
+a swallowed fish cannot.
+
+Library v55, 2379 patterns, 100% distinct, 31 regression checks passing.

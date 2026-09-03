@@ -14,7 +14,7 @@ import math
 
 from beadlib import make_pattern, stable_id
 from canvas import Grid
-from gen_creatures import S, _emit, _frame, _outline, _pick_bg
+from gen_creatures import S, _emit, _frame, _ink_for, _outline, _pick_bg
 
 PALE = ["cream", "ivory", "light_gray", "sky_blue", "toothpaste",
         "light_lavender", "banana", "peach", "light_pink", "silver"]
@@ -271,7 +271,7 @@ def _draw_vehicle(g, spec, cx, cy, scale):
             g.limb(cx + ln * 0.2, cy + hg * 0.36, cx + ln * 0.2, cy + hg * 0.62, trim)
             g.rect(cx - ln * 0.26, cy + hg * 0.62, cx + ln * 0.26, cy + hg * 0.95, trim)
 
-    _outline(g, "black" if body != "black" else "dark_gray", None)
+    _outline(g, _ink_for(g, None, "black"), None)
 
 
 def vehicles():
@@ -617,7 +617,7 @@ def _recipe_category(cat, items, variants, target=100):
     def build(sp):
         def draw(g, spec, cx, cy, k):
             _run_ops(g, spec["ops"], cx, cy, k, spec["cols"])
-            _outline(g, "black" if spec["cols"][0] != "black" else "dark_gray", None)
+            _outline(g, _ink_for(g, None, "black"), None)
         out = _frame(draw, sp, sp["bg"], fill=sp["fill"])
         if sp.get("line") and _hollow(out, sp["bg"]) is None:
             return out

@@ -409,6 +409,117 @@ def test_subjects_clear_the_board_edge():
           not named, f"{len(named)} touching: {named[:3]}")
 
 
+def test_a_border_always_has_colour_inside_it():
+    """Two borders may never meet with nothing between them.
+
+    Symptom: "the pretzels look like a slug"; "if there is a border, black or
+    otherwise, it should contain color between at all points".
+
+    _outline skips a strand that erodes to nothing, which handles a limb that
+    is thin in two dimensions. The failure is one-dimensional. A limb three
+    beads ACROSS but only three beads LONG has a solid centre, so all eight
+    beads around that centre qualify as edge and the whole limb goes dark bar
+    one. Repeat that over a pretzel drawn from three overlapping rings and the
+    result is a black amoeba.
+
+    This drives _outline directly on shapes chosen to hit each case, rather
+    than scanning the shipped library, because the shipped answer depends on
+    every species colour and every framing decision as well - and a test that
+    depends on all of those tells you nothing about which one broke.
+    """
+    from canvas import Grid
+    from gen_creatures import _outline, _ink_for, MAX_OUTLINE_SHARE
+
+    def runs_keep_colour(g, ink):
+        """Every row and column run of the subject holds a non-ink bead."""
+        lines = [[(x, y) for x in range(g.w)] for y in range(g.h)]
+        lines += [[(x, y) for y in range(g.h)] for x in range(g.w)]
+        for line in lines:
+            i = 0
+            while i < len(line):
+                x, y = line[i]
+                if g.g[y][x] is None:
+                    i += 1
+                    continue
+                j = i
+                while j < len(line) and g.g[line[j][1]][line[j][0]] is not None:
+                    j += 1
+                run = line[i:j]
+                if len(run) >= 2 and all(g.g[b][a] == ink for a, b in run):
+                    return False
+                i = j
+        return True
+
+    def blob(w, h):
+        g = Grid(12, 12)
+        for y in range(2, 2 + h):
+            for x in range(2, 2 + w):
+                g.set(x, y, "red")
+        return g
+
+    bad = []
+    for w, h in ((3, 3), (3, 5), (4, 4), (5, 5), (3, 9), (9, 3), (6, 7), (8, 8)):
+        g = blob(w, h)
+        _outline(g, "black", None)
+        if not runs_keep_colour(g, "black"):
+            bad.append(f"{w}x{h} block")
+    check("22. an outline never closes over the shape it outlines",
+          not bad, f"pinched: {bad}")
+
+    # However small the subject, the outline never becomes the pattern.
+    over = []
+    for w, h in ((3, 3), (3, 4), (4, 4), (3, 5), (5, 5), (3, 9), (7, 7)):
+        g = blob(w, h)
+        _outline(g, "black", None)
+        ink = sum(1 for r in g.g for c in r if c == "black")
+        if ink > MAX_OUTLINE_SHARE * (w * h):
+            over.append(f"{w}x{h}: {ink}/{w*h}")
+    check("22b. an outline never grows past its share of the subject",
+          not over, f"over {MAX_OUTLINE_SHARE:.0%}: {over}")
+
+    # And it is never drawn in a colour the subject already uses.
+    g = blob(6, 6)
+    g.set(3, 3, "black")
+    check("22c. the outline colour never collides with the drawing",
+          _ink_for(g, None, "black") != "black",
+          f"picked {_ink_for(g, None, 'black')!r} when the drawing already uses it")
+
+
+def test_no_subject_is_mostly_its_own_outline():
+    """A border that outweighs what it borders has replaced it.
+
+    Angelfish shipped at 99.2% black with one cream bead for an eye, and it
+    passed every check in this file, because none of them measured how much of
+    a subject its dark had eaten. Twenty-two other fish and thirty-four bugs
+    were in the same state: the outline colour was also the species' marking
+    colour, so fins, legs and edge were one mass.
+
+    The bar is set where genuinely dark subjects still pass - a bat, a bomb,
+    Steamboat Willie, an ant whose legs really are black - and the failure this
+    is guarding against, an outline eating four fifths of a fish, cannot.
+    """
+    from collections import Counter
+    from connectivity import has_background
+    INK = ("black", "dark_gray")
+    OUTLINED = {"animals", "birds", "bugs", "fish", "food", "sweets", "holidays",
+                "sports", "trees", "vehicles", "videogame", "emoji", "flowers",
+                "space", "threeD"}
+    worst = []
+    for p in SHIPPED:
+        if p["category"] not in OUTLINED or has_background(p):
+            continue
+        cells = p.get("cells") or from_rows(p["rows"], p["palette"])
+        counts = Counter(c["colorId"] for c in cells)
+        if len(counts) < 2:
+            continue
+        ink = next((c for c in INK if c in counts), None)
+        if ink and counts[ink] / sum(counts.values()) > 0.70:
+            worst.append(f"{p['category']}/{p['title']} "
+                         f"{100*counts[ink]/sum(counts.values()):.0f}% {ink}")
+    check("23. no outlined subject is mostly its own outline",
+          not worst, f"{len(worst)} swallowed: {worst[:3]}")
+
+
 
 def main():
     print(f"regressions against {len(SHIPPED)} shipped patterns\n")
@@ -420,7 +531,9 @@ def main():
                test_patterns_are_buildable, test_size_variants,
                test_symmetric_subjects_are_symmetric,
                test_no_franchise_references,
-               test_subjects_clear_the_board_edge):
+               test_subjects_clear_the_board_edge,
+               test_a_border_always_has_colour_inside_it,
+               test_no_subject_is_mostly_its_own_outline):
         fn()
     print()
     if FAILURES:

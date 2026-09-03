@@ -136,7 +136,7 @@ FISH_PALETTE = {
     "Goldfish":  ("orange", "dark_red", "banana"),
     "Koi":       ("orange", "dark_red", "white"),
     "Clownfish": ("orange", "black", "white"),
-    "Angelfish": ("silver", "black", "banana"),
+    "Angelfish": ("banana", "dark_brown", "cream"),
     "Betta":     ("magenta", "dark_purple", "light_pink"),
     "Puffer":    ("banana", "dark_brown", "cream"),
     "Shark":     ("silver", "dark_gray", "cream"),
@@ -149,7 +149,7 @@ FISH_PALETTE = {
     "Flounder":  ("tan", "dark_brown", "cream"),
     "Piranha":   ("silver", "dark_gray", "red"),
     "Sunfish":   ("banana", "olive", "orange"),
-    "Barb":      ("silver", "black", "orange"),
+    "Barb":      ("cheddar", "dark_red", "cream"),
     "Tetra":     ("aqua", "navy", "red"),
     "Marlin":    ("navy", "black", "aqua"),
     "Grouper":   ("brown", "dark_brown", "cream"),
@@ -305,8 +305,29 @@ def _pick_bg(main, options, nth=0):
     return ranked[nth % max(1, min(len(ranked), 4))]
 
 
+# Dark tones an outline may be drawn in, best first. The outline has to be a
+# colour the subject is NOT already using: a bee whose stripes are black,
+# outlined in black, is one black shape.
+INKS = ("black", "dark_gray", "dark_purple", "dark_blue", "dark_brown",
+        "dark_red", "forest")
+
+# How much of a subject an outline is allowed to be. Past this it is not an
+# outline any more - it is the pattern, and whatever it was drawn round has
+# been replaced by it.
+MAX_OUTLINE_SHARE = 0.45
+
+
+def _ink_for(g, bg, prefer="black"):
+    """A dark outline colour that does not collide with the drawing."""
+    used = {g.g[y][x] for y in range(g.h) for x in range(g.w)} - {None, bg}
+    for cid in (prefer,) + INKS:
+        if cid and cid not in used:
+            return cid
+    return None
+
+
 def _outline(g, cid, bg):
-    """One-bead dark edge around SOLID masses only.
+    """One-bead dark edge around SOLID masses, never around a thin one.
 
     Outlining every edge bead worked when appendages were one bead wide and
     got skipped as hopeless. Now that legs, antennae and stems are two beads
@@ -317,7 +338,20 @@ def _outline(g, cid, bg):
     A bead is outlined only if it neighbours a bead that survives one erosion,
     i.e. one that has all four neighbours filled. A two-wide strand erodes to
     nothing and keeps its own colour; a body has an interior and gets its edge.
+
+    That still was not enough. Erosion is a two-dimensional test and the thing
+    that goes wrong is one-dimensional: a limb three beads across but only
+    three beads long has a solid centre, so all eight beads round that centre
+    qualify and the limb goes dark bar one bead. The second pass below is the
+    rule stated plainly - a border has to have colour inside it - enforced
+    along both axes: if outlining would leave a whole row or column run of the
+    subject with nothing but border in it, the middle bead of that run keeps
+    its colour instead. Two borders can then never meet with nothing between
+    them, which is the failure that made the pretzel read as a slug and turned
+    half the bugs into black scribbles.
     """
+    if cid is None:
+        return
     solid = [[False] * g.w for _ in range(g.h)]
     for y in range(g.h):
         for x in range(g.w):
@@ -326,7 +360,7 @@ def _outline(g, cid, bg):
             if all(g.inb(x + dx, y + dy) and g.g[y + dy][x + dx] not in (None, bg)
                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
                 solid[y][x] = True
-    edge = []
+    edge = set()
     for y in range(g.h):
         for x in range(g.w):
             if g.g[y][x] in (None, bg):
@@ -340,7 +374,50 @@ def _outline(g, cid, bg):
                 g.inb(x + dx, y + dy) and solid[y + dy][x + dx]
                 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
             if near_solid:
-                edge.append((x, y))
+                edge.add((x, y))
+
+    def is_ink(pt):
+        x, y = pt
+        return pt in edge or g.g[y][x] == cid
+
+    lines = [[(x, y) for x in range(g.w)] for y in range(g.h)]
+    lines += [[(x, y) for y in range(g.h)] for x in range(g.w)]
+
+    for _ in range(8):                      # converges in one or two passes
+        freed = False
+        for line in lines:
+            i = 0
+            while i < len(line):
+                x, y = line[i]
+                if g.g[y][x] in (None, bg):
+                    i += 1
+                    continue
+                j = i
+                while j < len(line) and g.g[line[j][1]][line[j][0]] not in (None, bg):
+                    j += 1
+                run = line[i:j]
+                if len(run) >= 2 and all(is_ink(pt) for pt in run):
+                    # Give one bead back, from the middle, where the fill shows.
+                    spare = [pt for pt in run if pt in edge]
+                    if spare:
+                        edge.discard(spare[len(spare) // 2])
+                        freed = True
+                i = j
+        if not freed:
+            break
+
+    # Last resort: a subject can simply be too small to carry an outline. An
+    # Angelfish is a 5-bead body between two thin fins - outline it and 74% of
+    # the fish is border. Past this share the outline has stopped describing
+    # the shape and started replacing it, so it is dropped entirely; a plain
+    # coloured silhouette reads better than a black one.
+    body = sum(1 for y in range(g.h) for x in range(g.w)
+               if g.g[y][x] not in (None, bg))
+    already = sum(1 for y in range(g.h) for x in range(g.w)
+                  if g.g[y][x] == cid)
+    if body and (len(edge) + already) > MAX_OUTLINE_SHARE * body:
+        return
+
     for x, y in edge:
         g.set(x, y, cid)
 
@@ -486,7 +563,7 @@ def _draw_bird(g, spec, cx, cy, scale):
                 (hx - head * 0.75, hy - head * 0.15)], main)
 
     dark = "black" if main not in ("black", "dark_blue", "navy") else "dark_gray"
-    _outline(g, dark, None)
+    _outline(g, _ink_for(g, None, dark), None)
     g.set(hx + head * 0.35, hy - head * 0.25, "white")
     g.set(hx + head * 0.35 + 1, hy - head * 0.25, dark)
 
@@ -556,12 +633,17 @@ FISH_SPECIES = [
     ("Discus",    (5.2, 6.0), "point",  1.5, 1.4, "blunt",  "bands"),
 ]
 
+# Same rule as the bugs: the accent draws the fins, and an Angelfish is nearly
+# all fin. With "black" in the accent slot it came out 99% black with a single
+# cream bead for an eye - the worst pattern in the library, and it passed every
+# check because none of them measured how much of a subject its outline had
+# eaten.
 FISH_COLOURS = [
-    ("orange", "dark_red", "banana"), ("red", "dark_red", "blush"),
-    ("yellow", "orange", "cream"), ("blue", "navy", "aqua"),
-    ("teal", "dark_green", "toothpaste"), ("purple", "dark_purple", "lavender"),
-    ("navy", "black", "silver"), ("green", "forest", "light_green"),
-    ("magenta", "purple", "light_pink"), ("dark_brown", "black", "tan"),
+    ("orange", "cheddar", "banana"), ("red", "blush", "cream"),
+    ("yellow", "orange", "cream"), ("blue", "sky_blue", "aqua"),
+    ("teal", "toothpaste", "aqua"), ("purple", "lavender", "light_pink"),
+    ("navy", "periwinkle", "silver"), ("green", "light_green", "banana"),
+    ("magenta", "light_pink", "blush"), ("caramel", "tan", "cream"),
 ]
 WATER = ["toothpaste", "aqua", "light_gray", "ivory", "sky_blue",
          "cream", "light_lavender", "silver"]
@@ -573,12 +655,19 @@ def _draw_fish(g, spec, cx, cy, scale):
     rx *= scale * 1.3; ry *= scale * 1.3
     ts = max(0.55, min(1.15, ry / 5.0))   # tail scales with the body, not the board
 
+    # Fins take the BODY colour, not the marking colour. An Angelfish is a
+    # 5-bead body between a dorsal and a ventral fin nearly twice its height,
+    # and with the fins painted in its marking colour - black - the fish came
+    # out 74% black with a single cream bead for an eye. It was the worst
+    # pattern in the library and it passed every check, because none of them
+    # measured how much of a subject its dark had eaten. A real fish's fins are
+    # the colour of the fish; the accent is for bands, spots and the eye.
     if dorsal > 0.3:
         g.poly([(cx - rx * 0.4, cy - ry * 0.8), (cx + rx * 0.1, cy - ry - 4.4 * dorsal * scale),
-                (cx + rx * 0.6, cy - ry * 0.7)], accent)
+                (cx + rx * 0.6, cy - ry * 0.7)], main)
     if ventral > 0.3:
         g.poly([(cx - rx * 0.3, cy + ry * 0.8), (cx, cy + ry + 4.0 * ventral * scale),
-                (cx + rx * 0.5, cy + ry * 0.7)], accent)
+                (cx + rx * 0.5, cy + ry * 0.7)], main)
 
     g.ellipse(cx, cy, rx, ry, main)
     g.ellipse(cx + rx * 0.15, cy + ry * 0.55, rx * 0.55, ry * 0.30, belly)
@@ -593,22 +682,22 @@ def _draw_fish(g, spec, cx, cy, scale):
     bx = cx - rx
     if tail == "fan":
         g.poly([(bx + 1, cy), (bx - 4.6 * scale * ts, cy - 4.4 * scale * ts),
-                (bx - 4.6 * scale * ts, cy + 4.4 * scale * ts)], accent)
+                (bx - 4.6 * scale * ts, cy + 4.4 * scale * ts)], main)
     elif tail == "fork":
         g.poly([(bx + 1, cy), (bx - 5.2 * scale * ts, cy - 5 * scale * ts), (bx - 3.0 * scale * ts, cy),
-                (bx - 5.2 * scale * ts, cy + 5 * scale * ts)], accent)
+                (bx - 5.2 * scale * ts, cy + 5 * scale * ts)], main)
     elif tail == "lunate":
         g.poly([(bx + 1, cy), (bx - 5.8 * scale * ts, cy - 6 * scale * ts), (bx - 3.8 * scale * ts, cy),
-                (bx - 5.8 * scale * ts, cy + 6 * scale * ts)], accent)
+                (bx - 5.8 * scale * ts, cy + 6 * scale * ts)], main)
         g.poly([(bx - 3.8 * scale * ts, cy), (bx - 5.8 * scale * ts, cy - 6 * scale * ts),
                 (bx - 5.2 * scale * ts, cy - 6 * scale * ts)], None)
     elif tail == "veil":
         g.poly([(bx + 1, cy - 1), (bx - 6.4 * scale * ts, cy - 6 * scale * ts),
-                (bx - 5.2 * scale * ts, cy), (bx - 6.4 * scale * ts, cy + 6 * scale * ts), (bx + 1, cy + 1)], accent)
+                (bx - 5.2 * scale * ts, cy), (bx - 6.4 * scale * ts, cy + 6 * scale * ts), (bx + 1, cy + 1)], main)
     elif tail == "round":
         g.ellipse(bx - 2.2 * scale * ts, cy, 3.4 * scale, 3.6 * scale, accent)
     elif tail == "point":
-        g.poly([(bx + 1, cy - 1.6), (bx - 5.2 * scale * ts, cy), (bx + 1, cy + 1.6)], accent)
+        g.poly([(bx + 1, cy - 1.6), (bx - 5.2 * scale * ts, cy), (bx + 1, cy + 1.6)], main)
 
     if stripe == "bands":
         for k in (-0.35, 0.1, 0.55):
@@ -627,7 +716,7 @@ def _draw_fish(g, spec, cx, cy, scale):
     # black blobs with a little colour trapped inside. The species' dark tone
     # separates it from the background just as well and reads as its own
     # shadow.
-    _outline(g, accent if accent != main else "black", None)
+    _outline(g, _ink_for(g, None, accent), None)
     ex, ey = cx + rx * 0.62, cy - ry * 0.28
     g.disc(ex, ey, 1.3 * scale, "white")
     g.disc(ex + 0.4, ey, 0.8 * scale, "black")
@@ -695,10 +784,14 @@ BUG_SPECIES = [
     ("Slug",        "snail",    0,   0,  1,  2, "none",     (0, 0)),
 ]
 
+# No ink colours here. The accent draws the legs, the head and the markings,
+# and the outline is drawn in ink: a species whose accent was "black" got black
+# legs inside a black outline, and half the category came out as a scribble
+# with a coloured belly. Reserve the dark end of the palette for the outline.
 BUG_COLOURS = [
-    ("red", "black", "white"), ("dark_green", "light_green", "yellow"),
+    ("red", "dark_red", "white"), ("dark_green", "light_green", "yellow"),
     ("navy", "sky_blue", "white"), ("purple", "lavender", "banana"),
-    ("orange", "dark_brown", "cream"), ("black", "yellow", "white"),
+    ("orange", "caramel", "cream"), ("banana", "orange", "white"),
     ("teal", "aqua", "cream"), ("magenta", "light_pink", "white"),
     ("brown", "tan", "cream"), ("olive", "army_green", "banana"),
 ]
@@ -812,7 +905,7 @@ def _draw_bug(g, spec, cx, cy, scale):
     # black blobs with a little colour trapped inside. The species' dark tone
     # separates it from the background just as well and reads as its own
     # shadow.
-    _outline(g, accent if accent != main else "black", None)
+    _outline(g, _ink_for(g, None, accent), None)
     for sgn in (-1, 1):
         g.set(cx + sgn * 1.1 * u, hy - 0.4 * u, hi)
 
@@ -977,7 +1070,7 @@ def _draw_tree(g, spec, cx, cy, scale):
     elif extra == "blossom":
         for ux, uy in ((-0.55, -0.1), (0.4, -0.5), (0.05, 0.3), (-0.15, -0.65), (0.6, 0.1)):
             g.disc(cx + 8 * u * ux, top - 5 * u + 8 * u * uy, 1.3 * u, "light_pink")
-    _outline(g, "dark_brown" if leaf != "dark_brown" else "black", None)
+    _outline(g, _ink_for(g, None, "dark_brown"), None)
 
 
 def trees():
@@ -1201,7 +1294,7 @@ def _draw_animal(g, spec, cx, cy, scale):
     # black blobs with a little colour trapped inside. The species' dark tone
     # separates it from the background just as well and reads as its own
     # shadow.
-    _outline(g, dark if dark != main else "black", None)
+    _outline(g, _ink_for(g, None, dark), None)
     g.set(hx + head * 0.25, hy - head * 0.3, "white")
     g.set(hx + head * 0.25 + 1, hy - head * 0.3, "black")
 

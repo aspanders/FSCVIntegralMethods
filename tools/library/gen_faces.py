@@ -13,7 +13,7 @@ import math
 
 from beadlib import make_pattern, stable_id
 from canvas import Grid
-from gen_creatures import _emit, _frame, _outline, _pick_bg
+from gen_creatures import _emit, _frame, _ink_for, _outline, _pick_bg
 
 PALE = ["cream", "ivory", "light_gray", "sky_blue", "toothpaste",
         "light_lavender", "banana", "peach", "light_pink", "silver"]
@@ -291,7 +291,7 @@ def _draw_face(g, spec, cx, cy, scale):
             g.line(sx - 2.2 * u, sy, sx + 2.2 * u, sy, "banana", t=0.6 * u)
             g.line(sx, sy - 2.2 * u, sx, sy + 2.2 * u, "banana", t=0.6 * u)
 
-    _outline(g, dark, None)
+    _outline(g, _ink_for(g, None, dark), None)
 
 
 def emoji():
