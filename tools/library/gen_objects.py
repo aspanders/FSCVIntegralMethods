@@ -25,7 +25,9 @@ PALE = ["cream", "ivory", "light_gray", "sky_blue", "toothpaste",
 VEHICLES = [
     # name          plan     len  hgt  cab   wheels wsize extra
     ("Car",         "road",  9.0, 3.4, "mid",   2,  0.95, "none"),
-    ("Sports Car",  "road", 10.5, 2.6, "low",   2,  0.85, "none"),
+    # Was 10.5 x 2.6: a long flat slab with a token window on top, which is
+    # the "bizarre long car" of the review. Shorter and taller reads as a car.
+    ("Sports Car",  "road",  9.4, 3.2, "low",   2,  0.90, "none"),
     ("Taxi",        "road",  9.0, 3.6, "mid",   2,  0.95, "sign"),
     ("Police Car",  "road",  9.5, 3.4, "mid",   2,  0.95, "siren"),
     ("Van",         "road",  9.0, 5.0, "front", 2,  0.70, "none"),
@@ -43,7 +45,10 @@ VEHICLES = [
     ("Train",       "rail", 11.0, 5.6, "front", 4,  0.55, "funnel"),
     ("Tram",        "rail", 11.0, 6.0, "none",  4,  0.50, "pole"),
     ("Motorbike",   "two",   7.0, 2.0, "low",   2,  1.00, "none"),
-    ("Bicycle",     "two",   7.5, 1.4, "none",  2,  1.55, "none"),
+    # Wheel size was 1.55, so two big thin rings dominated a hairline frame
+    # and the whole thing read as a pair of spectacles. Smaller wheels and a
+    # taller frame box; the stroke width is raised in _draw_vehicle too.
+    ("Bicycle",     "two",   7.5, 1.6, "none",  2,  1.00, "none"),
     ("Scooter",     "two",   6.0, 1.8, "low",   2,  0.90, "none"),
     ("Boat",        "water", 10.0, 3.0, "mid",  0,  0.0, "none"),
     ("Sailboat",    "water",  9.0, 2.6, "none", 0,  0.0, "sail"),
@@ -124,8 +129,11 @@ def _draw_vehicle(g, spec, cx, cy, scale):
             g.rect(cx + ln * 0.12, top - hg * 0.7, cx + ln * 0.48, top, body)
             g.rect(cx + ln * 0.18, top - hg * 0.55, cx + ln * 0.42, top - 1, glass)
         elif cab == "low":
-            g.poly([(cx - ln * 0.15, top), (cx, top - hg * 0.55),
-                    (cx + ln * 0.22, top)], glass)
+            # A wider, squarer greenhouse. The old triangle spanned 0.37 of the
+            # body and peaked at 0.55 of its height, which on a long body is a
+            # token bump - the "tiny window" of the review.
+            g.poly([(cx - ln * 0.26, top), (cx - ln * 0.12, top - hg * 0.72),
+                    (cx + ln * 0.16, top - hg * 0.72), (cx + ln * 0.30, top)], glass)
         for k in range(nw):
             wx = cx - ln / 2 + ln * (k + 0.5) / max(1, nw)
             g.disc(wx, bot + wr * 0.35, wr, "dark_gray")
@@ -172,7 +180,11 @@ def _draw_vehicle(g, spec, cx, cy, scale):
             g.ring(cx + sgn * ln * 0.36, bot, wr, "dark_gray", t=1.2 * u)
         # Frame strokes have to be thick enough to survive at bead scale, or a
         # bike is two wheels with a smudge between them.
-        tk = max(1, 1.1 * u)
+        # HAIRLINE. tk was 1.1*u, about two beads, inside a frame only six
+        # beads tall - so the tubes merged and the whole triangle filled solid.
+        # That is the blob between two rings that read as spectacles. A bicycle
+        # frame is one bead wide at this scale, and has to be.
+        tk = 0
         top = bot - wr * 1.5
         g.line(cx - ln * 0.36, bot, cx - ln * 0.06, top, body, t=tk)
         g.line(cx - ln * 0.06, top, cx + ln * 0.36, bot, body, t=tk)
@@ -245,7 +257,14 @@ def _draw_vehicle(g, spec, cx, cy, scale):
             g.poly([(cx - ln * 0.7, cy + hg * 0.36), (cx, cy + hg * 0.62),
                     (cx + ln * 0.7, cy + hg * 0.36)], trim)
         elif extra == "basket":
-            g.ellipse(cx, cy - hg * 0.15, ln / 2, hg / 2, body)
+            # A hot air balloon is a teardrop: round and wide at the crown,
+            # pinched to a neck above the basket. Drawn as a plain ellipse it
+            # is a ball on strings, which is what "deflated" was describing.
+            crown = ln * 0.66
+            g.disc(cx, cy - hg * 0.62, crown, body)
+            g.poly([(cx - crown, cy - hg * 0.62), (cx + crown, cy - hg * 0.62),
+                    (cx + ln * 0.24, cy + hg * 0.30),
+                    (cx - ln * 0.24, cy + hg * 0.30)], body)
             for k in (-0.5, 0.0, 0.5):
                 g.limb(cx + ln * k * 0.9, cy - hg * 0.6, cx + ln * k * 0.35, cy + hg * 0.36, glass)
             g.limb(cx - ln * 0.2, cy + hg * 0.36, cx - ln * 0.2, cy + hg * 0.62, trim)
@@ -689,8 +708,12 @@ FOOD_ITEMS = [
         ("r", -0.6, -9, 0.6, -6, 2), ("e", 2.6, -7.5, 2.8, 1.4, 1),
         ("e", -2.2, 3, 1.4, 2.0, 3)]),
     ("Banana", ("yellow", "dark_brown", "cheddar", "cream"), [
-        ("p", [(-8, -2), (-5, 5), (2, 8), (8, 3), (7, 0.5), (2, 5), (-4, 3), (-6, -2)], 0),
-        ("r", -8.6, -3.4, -6.6, -1.4, 1), ("l", 7.6, 3, 8.6, 1.6, 0.9, 1)]),
+        # Fatter. The old crescent was about two beads thick at its widest, so
+        # it read as a thin sad line rather than as fruit - the outer and inner
+        # arcs were nearly on top of each other.
+        ("p", [(-8.4, -3.0), (-5.4, 5.2), (2.0, 8.8), (9.0, 3.4), (7.2, 0.2),
+               (2.0, 4.6), (-3.0, 2.0), (-5.4, -3.4)], 0),
+        ("r", -9.0, -4.6, -6.6, -2.2, 1), ("l", 8.2, 3.2, 9.4, 1.4, 1.0, 1)]),
     ("Orange", ("orange", "cheddar", "dark_green", "cream"), [
         ("d", 0, 1, 7.6, 0), ("rad", 8, 1.2, 7.0, 0.6, 3),
         ("d", 0, 1, 1.4, 1), ("e", 2.4, -7, 3.0, 1.4, 2)]),
@@ -1072,7 +1095,13 @@ HOLIDAY_ITEMS = [
         ("r", -1.2, -8.4, 1.2, -4.4, 1),
         ("p", [(-5.4, -1), (-1.6, -1), (-3.4, 2.4)], 2),
         ("p", [(5.4, -1), (1.6, -1), (3.4, 2.4)], 2),
-        ("p", [(-5, 5), (5, 5), (3, 8), (-3, 8)], 2)]),
+        # A grin with teeth. This was one filled trapezoid, which reads as a
+        # dark slab stuck on the pumpkin rather than as a mouth - the carved
+        # look comes entirely from the gaps between the teeth.
+        ("p", [(-6.0, 4.4), (6.0, 4.4), (4.6, 8.2), (-4.6, 8.2)], 2),
+        ("p", [(-3.4, 4.4), (-1.8, 4.4), (-2.4, 6.6)], 0),
+        ("p", [(1.8, 4.4), (3.4, 4.4), (2.4, 6.6)], 0),
+        ("p", [(-1.0, 8.2), (1.0, 8.2), (0, 6.2)], 0)]),
     ("Ghost", ("white", "black", "silver", "light_gray"), [
         ("d", 0, -2, 7.4, 0), ("r", -7.4, -2, 7.4, 6, 0),
         ("p", [(-7.4, 6), (-4.4, 9.4), (-1.4, 6), (1.4, 9.4), (4.4, 6), (7.4, 9.4), (7.4, 6)], 0),
@@ -1165,9 +1194,36 @@ VG_ITEMS = [
         ("d", 0, -2, 8.6, 0), ("r", -8.6, -2, 8.6, 0, 0),
         ("d", -4, -4.4, 2.4, 1), ("d", 4, -4.4, 2.4, 1), ("d", 0, -7, 2.0, 1),
         ("r", -4.4, 0, 4.4, 7.4, 1), ("d", -2.2, 3, 1.0, 3), ("d", 2.2, 3, 1.0, 3)]),
+    # The blade used to be a rectangle with a FLAT top and a point at y=5 -
+    # which is inside the crossguard. So it was blunt at the tip and pointed
+    # into its own handle: that is the "sad and limp" sword. Point at the top
+    # now, with a fuller down the middle, a chunky guard and a square pommel,
+    # which is the blocky look the rest of these items are going for.
     ("Sword", ("silver", "banana", "dark_gray", "caramel"), [
-        ("p", [(-1.8, -10.4), (1.8, -10.4), (1.8, 3), (0, 5), (-1.8, 3)], 0),
-        ("r", -5.4, 3, 5.4, 5, 1), ("r", -1.2, 5, 1.2, 10, 3), ("d", 0, 10.4, 1.6, 1)]),
+        ("p", [(0, -11.4), (2.8, -7.6), (2.8, 3), (-2.8, 3), (-2.8, -7.6)], 0),
+        ("r", -1.0, -7.0, 1.0, 2.4, 2),
+        ("r", -7.0, 3, 7.0, 5.6, 1),
+        ("r", -1.8, 5.6, 1.8, 9.8, 3),
+        ("r", -3.2, 9.8, 3.2, 11.6, 1)]),
+    ("Pickaxe", ("dark_gray", "caramel", "silver", "black"), [
+        ("p", [(-11.6, -2.6), (-7.0, -8.2), (0, -9.4), (7.0, -8.2), (11.6, -2.6),
+               (8.0, -4.0), (0, -5.2), (-8.0, -4.0)], 0),
+        ("p", [(-8.0, -6.0), (0, -7.8), (8.0, -6.0), (0, -5.8)], 2),
+        ("r", -1.8, -5.0, 1.8, 11.4, 1)]),
+    ("Axe", ("silver", "caramel", "dark_gray", "black"), [
+        ("r", -1.8, -8.0, 1.8, 11.4, 1),
+        ("p", [(1.8, -9.4), (9.6, -7.0), (10.6, 0.6), (1.8, 2.6)], 0),
+        ("p", [(1.8, -7.4), (7.4, -5.6), (8.0, -0.4), (1.8, 1.0)], 2)]),
+    ("Torch", ("caramel", "orange", "banana", "dark_brown"), [
+        ("r", -1.8, -2.0, 1.8, 11.4, 0),
+        ("r", -1.8, 2.0, 1.8, 4.0, 3),
+        ("r", -3.0, -7.0, 3.0, -2.0, 1),
+        ("r", -1.8, -9.4, 1.8, -7.0, 2)]),
+    ("Ore Block", ("dark_gray", "silver", "aqua", "black"), [
+        ("r", -10, -10, 10, 10, 0),
+        ("r", -10, -10, 10, -7.6, 1),
+        ("d", -4.6, -3.4, 2.4, 2), ("d", 4.2, -1.0, 2.0, 2),
+        ("d", -2.2, 4.6, 2.2, 2), ("d", 5.4, 6.0, 1.8, 2)]),
     ("Shield", ("blue", "banana", "silver", "white"), [
         ("p", [(-7.4, -8), (7.4, -8), (7.4, 2), (0, 10), (-7.4, 2)], 0),
         ("p", [(-5.4, -6), (5.4, -6), (5.4, 1.4), (0, 7.4), (-5.4, 1.4)], 2),

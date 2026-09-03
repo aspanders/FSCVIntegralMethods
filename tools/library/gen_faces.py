@@ -170,7 +170,17 @@ def _draw_face(g, spec, cx, cy, scale):
     for sgn in (-1, 1):
         px = cx + sgn * ex
         if eyes == "dot":
-            g.disc(px, ey, 1.5 * u, dark)
+            # A SQUARE pupil, not a disc.
+            #
+            # disc(r=1.5u) is exactly the radius where rasterisation turns
+            # lumpy: it lands on a different set of cells depending on where
+            # the centre falls between pegs, so the two eyes of one face came
+            # out different shapes and the whole face read as wonky. A rect
+            # snapped to whole beads is identical on both sides every time, and
+            # a square pupil is what pixel art uses at this scale anyway.
+            r = max(1.0, round(1.4 * u))
+            g.rect(round(px) - r + 1, round(ey) - r + 1,
+                   round(px) + r - 1, round(ey) + r - 1, dark)
         elif eyes == "arc":
             g.line(px - 2.0 * u, ey + 0.6 * u, px, ey - 1.4 * u, dark, t=0.7 * u)
             g.line(px, ey - 1.4 * u, px + 2.0 * u, ey + 0.6 * u, dark, t=0.7 * u)
@@ -187,8 +197,20 @@ def _draw_face(g, spec, cx, cy, scale):
             g.poly([(px - 2.1 * u, ey - 0.2 * u), (px + 2.1 * u, ey - 0.2 * u),
                     (px, ey + 2.2 * u)], "red")
         elif eyes == "shades":
-            g.rect(cx - R * 0.85, ey - 1.6 * u, cx + R * 0.85, ey + 1.4 * u, dark)
-            break
+            # A lens over each eye, joined by a thin bridge - not one bar.
+            #
+            # First attempt spanned 0.88R either side of centre with a 1-bead
+            # nose gap, and at this scale the two lenses simply merged back
+            # into the blindfold they were meant to replace. Sized off the eye
+            # SPACING instead, so the gap is always visibly a gap.
+            lw = max(2, round(2.4 * u))
+            lh = max(1, round(1.4 * u))
+            g.rect(round(px) - lw, round(ey) - lh,
+                   round(px) + lw, round(ey) + lh, dark)
+            if sgn > 0:
+                # Drawn once, on the second eye: the bridge across the nose.
+                g.rect(round(cx - ex) + lw, round(ey),
+                       round(cx + ex) - lw, round(ey), dark)
         elif eyes == "wide":
             g.disc(px, ey, 2.4 * u, "white")
             g.disc(px, ey, 1.3 * u, dark)
@@ -201,10 +223,18 @@ def _draw_face(g, spec, cx, cy, scale):
                 a = k * 0.7
                 g.set(px + math.cos(a) * k * 0.28 * u, ey + math.sin(a) * k * 0.28 * u, dark)
         elif eyes == "star":
-            for k in range(4):
-                a = k * math.pi / 4
-                g.line(px - math.cos(a) * 2.2 * u, ey - math.sin(a) * 2.2 * u,
-                       px + math.cos(a) * 2.2 * u, ey + math.sin(a) * 2.2 * u, dark)
+            # A four-point sparkle drawn on the grid, not eight diagonal rays.
+            #
+            # The old version swept four lines through the centre at 45 degree
+            # steps; the diagonals rasterise unevenly against the axis-aligned
+            # ones, so each eye came out a different lopsided scribble. Two
+            # bars and a solid centre are symmetric by construction, and thick
+            # enough to read as eyes rather than as specks.
+            a = max(2, round(2.2 * u))
+            t = max(1, round(0.8 * u))
+            cxp, cyp = round(px), round(ey)
+            g.rect(cxp - a, cyp - t + 1, cxp + a, cyp + t - 1, dark)
+            g.rect(cxp - t + 1, cyp - a, cxp + t - 1, cyp + a, dark)
 
     # ── mouth ───────────────────────────────────────────────────────────────
     my = cy + R * 0.45

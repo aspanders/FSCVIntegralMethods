@@ -1,6 +1,6 @@
 {
-  "version": 52,
-  "count": 2342,
+  "version": 53,
+  "count": 2362,
   "perCategory": {
     "geometric": 199,
     "mandalas": 181,
@@ -9,7 +9,7 @@
     "flowers": 63,
     "rainbows": 100,
     "space": 84,
-    "emoji": 139,
+    "emoji": 148,
     "gems": 118,
     "icons": 139,
     "animals": 77,
@@ -19,10 +19,10 @@
     "food": 77,
     "sweets": 59,
     "trees": 100,
-    "vehicles": 94,
+    "vehicles": 95,
     "snowflakes": 197,
     "holidays": 63,
-    "videogame": 70,
+    "videogame": 80,
     "sports": 62,
     "circles": 91,
     "threeD": 8
