@@ -852,7 +852,15 @@ SWEET_ITEMS = [
         ("l", -2.8, -6, -2.8, 6, 0.5, 1), ("l", 2.8, -6, 2.8, 6, 0.5, 1),
         ("r", -8.4, -8.4, 8.4, -6, 2)]),
     ("Truffle", ("dark_brown", "caramel", "cream", "brown"), [
-        ("d", 0, 1, 7.4, 0), ("e", 0, -5.4, 8.0, 2.4, 1), ("d", -2.6, -1.4, 1.6, 2)]),
+        # The old one was a disc with a wide ellipse laid across its top, which
+        # is the silhouette of a cooking pot. A truffle is a ball sitting IN a
+        # fluted paper cup, and the cup is what names it.
+        ("d", 0, -2.4, 7.2, 0),
+        ("e", 0, -7.0, 4.6, 1.8, 1), ("e", -2.4, -5.2, 1.6, 1.1, 2),
+        ("p", [(-8.4, 3.4), (8.4, 3.4), (6.2, 10.0), (-6.2, 10.0)], 3),
+        ("l", -4.6, 3.4, -3.4, 10.0, 0.6, 0),
+        ("l", 0, 3.4, 0, 10.0, 0.6, 0),
+        ("l", 4.6, 3.4, 3.4, 10.0, 0.6, 0)]),
     ("Donut", ("light_pink", "banana", "hot_pink", "caramel"), [
         ("d", 0, 0, 9.0, 3), ("d", 0, 0, 7.6, 0), ("d", 0, 0, 2.6, None),
         ("d", -3.6, -3.6, 1.0, 1), ("d", 3.4, -2.6, 1.0, 2),
@@ -884,9 +892,14 @@ SWEET_ITEMS = [
     ("Popsicle", ("aqua", "white", "toothpaste", "caramel"), [
         ("p", [(-5, -8), (5, -8), (5, 5), (0, 8), (-5, 5)], 0),
         ("r", -5, -4, 5, -2, 1), ("r", -1.4, 8, 1.4, 11, 3)]),
-    ("Marshmallow", ("white", "light_pink", "cream", "silver"), [
-        ("e", 0, -5, 6.4, 2.6, 0), ("r", -6.4, -5, 6.4, 5, 0),
-        ("e", 0, 5, 6.4, 2.6, 1)]),
+    ("Marshmallow", ("light_pink", "white", "caramel", "silver"), [
+        # Tall, white and untoasted, this read as a drinking glass. A
+        # marshmallow is SQUAT, and the toasted top is what says "marshmallow"
+        # rather than "cylinder".
+        ("r", -7.0, -3.0, 7.0, 4.0, 0),
+        ("e", 0, 4.0, 7.0, 2.6, 0),
+        ("e", 0, -3.0, 7.0, 2.6, 2),
+        ("e", 0, -3.4, 4.0, 1.4, 1)]),
     ("Candy Cane", ("white", "red", "cream", "light_pink"), [
         ("l", 3, -4, 3, 10, 2.4, 0), ("l", -3, -4, 3, -4, 2.4, 0),
         ("d", -3, -1.4, 2.4, 0),
@@ -911,9 +924,16 @@ SWEET_ITEMS = [
         ("l", 0, -8, 0, 8, 0.6, 1), ("l", 4, -8, 4, 8, 0.6, 1),
         ("d", 0, -1, 2.2, 2)]),
     ("Pretzel", ("caramel", "cream", "dark_brown", "tan"), [
-        ("o", -4, 1, 4.4, 1.6, 0), ("o", 4, 1, 4.4, 1.6, 0), ("o", 0, -4.4, 4.0, 1.6, 0),
-        ("d", -6, 6, 1.6, 0), ("d", 6, 6, 1.6, 0),
-        ("d", -3, -5, 0.8, 1), ("d", 3, -5, 0.8, 1)]),
+        # Three rings that never met made a wire sculpture. A pretzel is one
+        # unbroken rope: two loops at the top, the ends crossed in the middle,
+        # and a fat bar closing the bottom.
+        # Two loops with legs under them read as a frog. A pretzel is three
+        # holes in a triangle - two up, one down - made by three rings that
+        # OVERLAP, so the rope is continuous and the holes are what you see.
+        ("o", -4.6, -2.2, 5.2, 2.3, 0), ("o", 4.6, -2.2, 5.2, 2.3, 0),
+        ("o", 0, 4.8, 5.2, 2.3, 0),
+        ("d", -5.0, -6.8, 0.9, 2), ("d", 5.0, -6.8, 0.9, 2),
+        ("d", 0, 9.0, 0.9, 2)]),
     ("Gummy Bear", ("orange", "cheddar", "dark_brown", "banana"), [
         ("d", 0, -5, 3.8, 0), ("d", -3.4, -8, 2.0, 0), ("d", 3.4, -8, 2.0, 0),
         ("e", 0, 3, 5.0, 5.4, 0),
@@ -988,15 +1008,30 @@ SPORT_ITEMS = [
         ("l", -6, -9, 4, 4, 1.4, 0), ("p", [(4, 3), (9, 7), (9, 9), (2.4, 5.4)], 0),
         ("e", -6, 8, 4.4, 2.0, 1)]),
     ("Ice Skate", ("white", "silver", "sky_blue", "light_gray"), [
-        ("p", [(-6, -6), (2, -6), (4, 0), (6, 4), (-6, 4)], 0),
-        ("r", -7.4, 4, 7.4, 6, 1), ("l", -6, 8.4, 6, 8.4, 0.9, 1),
-        ("l", -6, 6, -6, 8.4, 0.7, 1), ("l", 6, 6, 6, 8.4, 0.7, 1),
-        ("l", -4, -4.4, 1, -4.4, 0.5, 2), ("l", -4, -1.4, 1.6, -1.4, 0.5, 2)]),
+        # A rounded slab over a bar is a clipboard. A skate needs an ANKLE -
+        # a tall cuff that steps in to a foot pointing forward - and a blade
+        # carried on two posts with the toe turned up.
+        ("p", [(-5, -9.5), (1.6, -9.5), (1.6, -1), (7.6, 2), (7.6, 5.4),
+               (-5, 5.4)], 0),
+        ("r", -5, -9.5, 1.6, -7.4, 2),
+        ("l", -3.6, -6.0, 0.4, -6.0, 0.5, 2),
+        ("l", -3.6, -4.4, 0.4, -4.4, 0.5, 2),
+        ("l", -3.6, -2.8, 0.4, -2.8, 0.5, 2),
+        ("r", -3.4, 5.4, -2.0, 7.6, 1), ("r", 4.4, 5.4, 5.8, 7.6, 1),
+        ("r", -6.6, 7.6, 8.4, 9.0, 1),
+        ("p", [(8.4, 9.0), (10.6, 9.0), (10.6, 6.2), (8.4, 7.6)], 1)]),
     ("Ski", ("red", "dark_gray", "banana", "silver"), [
-        ("p", [(-3.4, -10), (0.6, -10), (2.6, 8), (-1.4, 8)], 0),
-        ("p", [(-1.4, 8), (2.6, 8), (4.6, 10), (0.6, 10.4)], 0),
-        ("r", -4.4, -1, 3.4, 1, 1),
-        ("l", 6, -8, 6, 8, 0.7, 1), ("d", 6, 8, 2.0, 1), ("l", 4, -8.4, 8, -8.4, 0.7, 1)]),
+        # A ski is LONG, NARROW and STRAIGHT with the tip curled up at one end.
+        # The old one leaned, widened as it went and had its tip on the bottom,
+        # so the eye had nothing to lock on to.
+        # One upright ski is a bar, and a bar beside a pole is a thermometer
+        # next to a golf club. CROSSED skis is the shape everyone reads as
+        # skiing, and the tip kicking outward at the top is the upturned nose.
+        ("l", -6.0, 10.0, 4.6, -8.0, 2.6, 0),
+        ("l", 4.6, -8.0, 7.0, -10.2, 2.6, 0),
+        ("l", 6.0, 10.0, -4.6, -8.0, 2.6, 1),
+        ("l", -4.6, -8.0, -7.0, -10.2, 2.6, 1),
+        ("r", -3.4, -2.6, 3.4, -0.6, 2)]),
     ("Skateboard", ("caramel", "black", "red", "silver"), [
         ("p", [(-9.4, -2), (9.4, -2), (7.4, 2), (-7.4, 2)], 0),
         ("e", -9.6, -0.4, 2.0, 2.4, 0), ("e", 9.6, -0.4, 2.0, 2.4, 0),

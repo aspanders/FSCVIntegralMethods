@@ -504,3 +504,49 @@ All 24 categories have now been looked at pattern by pattern. What is still
 open is carried in the earlier sections of this file: flowers (task 17), the
 17 dither patterns, `fish/Angelfish`, `bugs/Snail`, the 7 near-blank space
 boards, threeD, and the same-silhouette count.
+
+## Second round: the failures named above, fixed
+
+Everything in "Failed, and still failing" was rendered full size rather than as
+a thumbnail, which changed two of the calls: `Starburst 8` and `Tennis Racket`
+are fine and were wrongly listed, and `5/2`, `6/2`, `7/3` and `8/3 Star
+Polygon` are good — only the shallow ones fail. The rest were real.
+
+**stars**
+
+* `{7/2}` and `{9/2} Star Polygon` read as cogs. k/n sets the point angle and
+  below ~0.3 the chords barely skip a vertex, so the family is now chosen by
+  that ratio; `{13/5}` and `{14/5}` take their place.
+* `5pt V Star w2` and the whole internal-pattern family were striped with
+  `white`, which the background remover then took away, so the star fell apart
+  into loose bars. Both halves are ink now, and the minimum stripe is 3 beads.
+* `Star Wreath` satellites were 2-bead blobs. They are big enough to have
+  points of their own now.
+* `Star Grid` had two problems at once: tile stars too small to have points,
+  and — once they were big enough — the one-connected-piece rule welding their
+  points into a scaffold. They sit on a night-sky board now and stay separate.
+
+**sports**
+
+* `Ice Skate` was a rounded slab over a bar: a clipboard. It has an ankle now —
+  a tall cuff stepping in to a foot — with the blade on two posts and the toe
+  turned up.
+* `Ski` was a bar beside a pole, which reads as a thermometer next to a golf
+  club. Crossed skis with the tips kicking outward is the shape people read as
+  skiing.
+
+**sweets**
+
+* `Truffle` was a disc with an ellipse across its top: a cooking pot. It sits
+  in a fluted paper cup now, which is what names it.
+* `Marshmallow` was a tall white cylinder — a drinking glass. Squat, pink, with
+  a toasted top.
+* `Pretzel` was three rings that never met. Three overlapping rings in a
+  triangle gives the three holes that make a pretzel a pretzel.
+
+The recurring lesson in both rounds: **a design made of separate pieces cannot
+be backgroundless.** Three Hearts, Heart Trio Row, Star Grid and the striped
+stars all failed the same way, and all four are fixed by giving them a board
+rather than by redrawing them.
+
+Library v55, 2351 patterns, 100% distinct, 25 regression checks passing.

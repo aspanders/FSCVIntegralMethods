@@ -906,7 +906,11 @@ def stars():
             g.poly_outline(star_points(c, c, S * rr, S * rr * 0.45, n), hue(), t=0)
         add(f"Ring Star {n}pt", g, ["rings"])
     # star polygons / n-grams (connect every k-th vertex)
-    for n, k in [(5, 2), (6, 2), (7, 2), (7, 3), (8, 3), (9, 2), (9, 4), (10, 3), (12, 5), (8, 2), (10, 4), (11, 3), (11, 4)]:
+    # k/n is what sets the point angle. Below about 0.3 the chords barely skip
+    # a vertex, the points come out shallow, and {7/2} and {9/2} render as a
+    # cog or a ring rather than a star.
+    for n, k in [(5, 2), (6, 2), (7, 3), (8, 3), (9, 4), (10, 3), (12, 5),
+                 (10, 4), (11, 4), (13, 5), (14, 5), (12, 4)]:
         g = Grid(S, S)
         verts = reg_polygon(c, c, S * 0.46, n, rot=-math.pi / 2)
         col = hue()
@@ -940,18 +944,26 @@ def stars():
     for m in (5, 6, 7, 8, 10, 12):
         g = Grid(S, S)
         rc, cc2 = hue(), hue()
+        # A 0.09*27 satellite is a 2-bead blob: the wreath read as scattered
+        # specks round a small star. The satellites have to be big enough to
+        # have points of their own.
         for kk in range(m):
             a = 2 * math.pi * kk / m - math.pi / 2
-            g.poly(star_points(c + S * 0.34 * math.cos(a), c + S * 0.34 * math.sin(a), S * 0.09, S * 0.04, 5), rc)
-        g.poly(star_points(c, c, S * 0.18, S * 0.08, 5), cc2)
+            g.poly(star_points(c + S * 0.34 * math.cos(a), c + S * 0.34 * math.sin(a), S * 0.14, S * 0.06, 5), rc)
+        g.poly(star_points(c, c, S * 0.20, S * 0.09, 5), cc2)
         add(f"Star Wreath {m}", g, ["wreath"])
-    # star grids / tessellation
-    for sp in (5, 6, 7, 8):
+    # star grids / tessellation. Two things had to change. A tile star needs
+    # about seven beads to have points at all, so the spacing has to leave room
+    # for one - at sp=5 the board was a barcode. And a field of separate stars
+    # cannot be backgroundless: the one-connected-piece rule welded the points
+    # together into a scaffold. On a night-sky board they stay separate.
+    for sp, bg in ((9, "navy"), (11, "dark_purple"), (13, "dark_blue")):
         g = Grid(S, S)
+        g.fill(bg)
         col = hue()
         for cy in range(sp // 2, S, sp):
             for cx in range(sp // 2, S, sp):
-                g.poly(star_points(cx, cy, sp * 0.42, sp * 0.42 * 0.45, 5), col)
+                g.poly(star_points(cx, cy, sp * 0.46, sp * 0.46 * 0.42, 5), col)
         add(f"Star Grid s{sp}", g, ["grid"])
     # internal-pattern stars: fill a big 5/6-point star mask with a pattern
     for n in (5, 6):
@@ -963,7 +975,10 @@ def stars():
         smask = {(x, y) for x, y, _ in mg.cells()}
         xs = [x for x, _ in smask]; ys = [y for _, y in smask]
         mx0, my0 = min(xs), min(ys)
-        A, Bc = hue(), "white"
+        # Both halves have to be ink. With white as the second colour the
+        # background remover took it away and the star fell apart into loose
+        # stripes - "5pt V Star" shipped as three bars with two small arms.
+        A, Bc = hue(), hue()
         fills = [("H", lambda x, y, w: (A, Bc)[(y // w) % 2]),
                  ("V", lambda x, y, w: (A, Bc)[(x // w) % 2]),
                  ("Diag", lambda x, y, w: (A, Bc)[((x + y) // w) % 2]),
@@ -971,7 +986,9 @@ def stars():
                  ("Ring", lambda x, y, w: (A, Bc)[int(math.hypot(x - (c - mx0), y - (c - my0)) // w) % 2]),
                  ("Dot", lambda x, y, w: Bc if (x % w == w // 2 and y % w == w // 2) else A)]
         for fname, ffn in fills:
-            for w in (2, 3):
+            # w=2 inside a 27-bead star is a two-bead stripe: "5pt V Star w2"
+            # shipped as a barcode with a vaguely pointed edge.
+            for w in (3, 4):
                 g = Grid(S, S)
                 for (x, y) in smask:
                     g.set(x, y, ffn(x - mx0, y - my0, w))
