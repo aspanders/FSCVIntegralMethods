@@ -1,6 +1,6 @@
 {
-  "version": 53,
-  "count": 2362,
+  "version": 54,
+  "count": 2354,
   "perCategory": {
     "geometric": 199,
     "mandalas": 181,
@@ -22,7 +22,7 @@
     "vehicles": 95,
     "snowflakes": 197,
     "holidays": 63,
-    "videogame": 80,
+    "videogame": 72,
     "sports": 62,
     "circles": 91,
     "threeD": 8

@@ -148,18 +148,23 @@ def generate():
         ),
     ))
 
-    # 3) Creeper head (Minecraft-style cube)
+    # 3) Monster cube.
+    #
+    # This was a creeper head - green, with the Minecraft mob's square eyes and
+    # its distinctive frown, and tagged "minecraft" besides. The cube NET is a
+    # genuinely good pattern type and worth keeping; the face on it belonged to
+    # Mojang. Redrawn as a plain friendly monster in purple, which no game owns.
     out.append(net_pattern(
-        "creeper", "Creeper Head", ["creeper", "cube", "game", "minecraft"],
+        "monstercube", "Monster Cube", ["monster", "cube", "face", "toy"],
         size=6,
-        faces={"front": ["‧‧‧‧‧‧", "‧KK‧KK", "‧KK‧KK", "‧‧KK‧‧", "‧KKKK‧", "‧K‧‧K‧"],
+        faces={"front": ["‧‧‧‧‧‧", "‧K‧‧K‧", "‧K‧‧K‧", "‧‧‧‧‧‧", "K‧‧‧‧K", "‧KKKK‧"],
                "back": None, "left": None, "right": None, "top": None, "bottom": None},
-        fill="G", cmap={"G": "green", "K": "black", "E": "dark_green"}, edge="E",
+        fill="G", cmap={"G": "purple", "K": "black", "E": "dark_purple"}, edge="E",
         build=(
-            "Make six 6x6 panels in green.\n"
-            "On ONE panel (the front) add the black face: two square eyes and the\n"
-            "classic frown, as shown in the net. The other five faces stay plain\n"
-            "green. Mix two greens if you have them for the blocky look."
+            "Make six 6x6 panels in purple.\n"
+            "On ONE panel (the front) add the black face: two round eyes and a\n"
+            "wide grin, as shown in the net. The other five faces stay plain\n"
+            "purple. Mix two purples if you have them for the blocky look."
         ),
         assembly=(
             "1. Iron every panel.\n"

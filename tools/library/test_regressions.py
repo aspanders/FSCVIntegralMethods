@@ -329,6 +329,39 @@ def test_symmetric_subjects_are_symmetric():
           len(band) <= 20, f"{len(band)} nearly-symmetric: {band[:4]}")
 
 
+def test_no_franchise_references():
+    """Nothing in the library may name or depict someone else's character.
+
+    A "video game" category is an open invitation to draw other people's
+    sprites, and it had four: a creeper head, a mushroom with eyes, a magenta
+    ghost with a wavy skirt and a green invader. Each belonged to a rights
+    holder that enforces - Mojang, Nintendo, Bandai Namco, Taito - and each
+    passed every quality check in the suite, because none of them measures
+    whose character it is.
+
+    The Steamboat Willie set is deliberately NOT caught here: the 1928 short is
+    in the United States public domain, the art is held to that depiction, and
+    the patterns are titled after the short rather than after the trademarked
+    character. See tools/library/gen_willie.py.
+    """
+    banned = [
+        "creeper", "minecraft", "mario", "luigi", "yoshi", "bowser", "nintendo",
+        "pikachu", "pokemon", "sonic", "sega", "zelda", "kirby",
+        "tetris", "tetromino", "pac-man", "pacman", "space invader", "invader",
+        "hello kitty", "batman", "superman", "spider-man", "marvel", "star wars",
+        "lego", "among us", "fortnite", "roblox", "disney", "mickey mouse",
+    ]
+    bad = []
+    for p in SHIPPED:
+        hay = (p["title"] + " " + " ".join(p.get("tags", []))).lower()
+        for term in banned:
+            if term in hay:
+                bad.append(f"{p['category']}/{p['title']} matches {term!r}")
+    check("20. no pattern names or tags someone else's character", not bad,
+          "; ".join(sorted(set(bad))[:5]))
+
+
+
 def main():
     print(f"regressions against {len(SHIPPED)} shipped patterns\n")
     for fn in (test_fill_changes_the_board, test_small_variants_do_not_converge,
@@ -337,7 +370,8 @@ def main():
                test_near_blank_measures_the_board, test_no_blank_boards_ship,
                test_shipped_library_has_no_lookalikes,
                test_patterns_are_buildable, test_size_variants,
-               test_symmetric_subjects_are_symmetric):
+               test_symmetric_subjects_are_symmetric,
+               test_no_franchise_references):
         fn()
     print()
     if FAILURES:

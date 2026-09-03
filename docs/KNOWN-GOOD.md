@@ -303,3 +303,58 @@ snowflakes, sports, stars, sweets. Most are abstract fill families where the
 metrics carry more signal than a thumbnail does, and icons was checked by
 dumping cells instead - but none of them has had a human-equivalent look, and
 this list should not be read as a pass.
+
+---
+
+# Copyright audit — 2026-09-03
+
+Not legal advice; I am not a lawyer. This is an engineering review of what the
+library depicts, and what it would be prudent to change.
+
+## Removed: four recognisable characters
+
+Each was checked by rendering it, not by reading its name, and each is
+unmistakable once drawn:
+
+    threeD/Creeper Head    the Minecraft creeper's square eyes and frown, on a
+                           cube net, tagged "minecraft", with build notes
+                           calling for "the classic frown"   (Mojang/Microsoft)
+    videogame/Power Mushroom  red cap, cream spots, EYES on the stem - the
+                           Super Mario super mushroom              (Nintendo)
+    videogame/Ghost Sprite magenta, wavy skirt, blue-pupil eyes - a Pac-Man
+                           ghost                              (Bandai Namco)
+    videogame/Alien Sprite the Space Invaders invader                 (Taito)
+
+All four rights holders are known to enforce. The three sprites are gone
+outright; nothing is lost, because holidays already ships a proper Ghost and
+space already ships an Alien. The creeper's cube NET was worth keeping, so it
+survives as Monster Cube - purple, with a plain grin.
+
+## Changed: the tetrominoes
+
+Polyominoes are mathematics and belong to nobody. What starts to look like
+trade dress is the named set in its familiar colour-to-shape mapping, which is
+what shipped: T purple, L orange, S green, O yellow. Renamed to Block Tee, Ell,
+Zigzag and Square, and recoloured to teal, plum, sky blue and rust.
+
+## Kept, deliberately: Steamboat Willie
+
+The 1928 short entered the United States public domain on 1 January 2024. The
+art is held to that depiction - black and white, pie-cut eyes, no gloves - and
+the patterns are titled after the SHORT, never after the character, because the
+name remains a live trademark. gen_willie.py carries that reasoning at the top
+of the file. This is the one place in the library where a famous figure is
+drawn on purpose, and the basis is written down.
+
+## The check that keeps it out
+
+Regression 20 scans every shipped title and tag against a list of franchise
+terms. Verified by adding a "minecraft" tag to a pattern and watching it fail.
+
+It is a name check, not an image check - it would not have caught a creeper
+drawn under a different title, and nothing automatic can. The rule for the
+videogame category is written at the top of VG_ITEMS: draw the generic object a
+game might contain - a sword, a key, a potion, a chest - never a specific
+character. If a player could name the game it came from, it does not belong.
+
+Library rebuilt to version 54.

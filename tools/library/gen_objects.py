@@ -1163,6 +1163,23 @@ def holidays():
 
 # ── VIDEOGAME ────────────────────────────────────────────────────────────────
 
+# COPYRIGHT NOTE - read before adding anything here.
+#
+# This category is the one that invites trouble, because "video game" reads as
+# an invitation to draw other people's characters. Four were removed after an
+# audit: a creeper head, a red-and-white mushroom with eyes, a magenta ghost
+# with a wavy skirt, and a green invader with antennae. Each was a recognisable
+# character belonging to Mojang, Nintendo, Bandai Namco and Taito respectively,
+# and all four rights holders are known to enforce.
+#
+# The tetromino shapes were kept but renamed and recoloured. Polyominoes are
+# mathematics and belong to nobody, but the named set in its familiar
+# colour-to-shape mapping is the part that starts to look like trade dress.
+#
+# The rule for anything added here: draw the GENERIC OBJECT a game might
+# contain - a sword, a key, a potion, a chest - never a specific character or
+# sprite from a specific game. If a player could name the game it came from,
+# it does not belong.
 VG_ITEMS = [
     ("Controller", ("dark_gray", "black", "red", "silver"), [
         ("e", -6, 1, 5.0, 5.4, 0), ("e", 6, 1, 5.0, 5.4, 0), ("r", -6, -3, 6, 5, 0),
@@ -1190,15 +1207,6 @@ VG_ITEMS = [
         ("p", [(0, -10), (2.4, -3.2), (9.6, -3.2), (3.8, 1.2), (5.9, 8.2),
                (0, 4), (-5.9, 8.2), (-3.8, 1.2), (-9.6, -3.2), (-2.4, -3.2)], 0),
         ("d", -2.2, -1.4, 1.2, 2), ("d", 2.2, -1.4, 1.2, 2)]),
-    ("Power Mushroom", ("red", "white", "caramel", "black"), [
-        ("d", 0, -2, 8.6, 0), ("r", -8.6, -2, 8.6, 0, 0),
-        ("d", -4, -4.4, 2.4, 1), ("d", 4, -4.4, 2.4, 1), ("d", 0, -7, 2.0, 1),
-        ("r", -4.4, 0, 4.4, 7.4, 1), ("d", -2.2, 3, 1.0, 3), ("d", 2.2, 3, 1.0, 3)]),
-    # The blade used to be a rectangle with a FLAT top and a point at y=5 -
-    # which is inside the crossguard. So it was blunt at the tip and pointed
-    # into its own handle: that is the "sad and limp" sword. Point at the top
-    # now, with a fuller down the middle, a chunky guard and a square pommel,
-    # which is the blocky look the rest of these items are going for.
     ("Sword", ("silver", "banana", "dark_gray", "caramel"), [
         ("p", [(0, -11.4), (2.8, -7.6), (2.8, 3), (-2.8, 3), (-2.8, -7.6)], 0),
         ("r", -1.0, -7.0, 1.0, 2.4, 2),
@@ -1244,17 +1252,6 @@ VG_ITEMS = [
         ("d", 0, 2, 8.0, 0), ("r", -2, -7, 2, -5, 3),
         ("l", 0, -7, 4.4, -10.4, 1.0, 2), ("d", 5, -10.6, 2.0, 1),
         ("d", -3.4, -1.4, 1.8, 3)]),
-    ("Ghost Sprite", ("magenta", "white", "blue", "light_pink"), [
-        ("d", 0, -2, 7.4, 0), ("r", -7.4, -2, 7.4, 5, 0),
-        ("p", [(-7.4, 5), (-5, 9), (-2.4, 5), (0, 9), (2.4, 5), (5, 9), (7.4, 5)], 0),
-        ("d", -3.4, -3, 2.4, 1), ("d", 3.4, -3, 2.4, 1),
-        ("d", -3.0, -3, 1.2, 2), ("d", 3.8, -3, 1.2, 2)]),
-    ("Alien Sprite", ("neon_green", "black", "green", "white"), [
-        ("r", -7.4, -3, 7.4, 3, 0), ("r", -4.4, -6, 4.4, 6, 0),
-        ("r", -9.4, 0, -7.4, 6, 0), ("r", 7.4, 0, 9.4, 6, 0),
-        ("r", -6.4, -8.4, -4.4, -6, 0), ("r", 4.4, -8.4, 6.4, -6, 0),
-        ("r", -6.4, 6, -3.4, 8.4, 0), ("r", 3.4, 6, 6.4, 8.4, 0),
-        ("d", -2.4, -1.4, 1.4, 1), ("d", 2.4, -1.4, 1.4, 1)]),
     ("Block", ("caramel", "banana", "dark_brown", "cheddar"), [
         ("r", -9, -9, 9, 9, 0), ("r", -9, -9, 9, -6.6, 2), ("r", -9, 6.6, 9, 9, 2),
         ("r", -9, -9, -6.6, 9, 2), ("r", 6.6, -9, 9, 9, 2),
@@ -1271,17 +1268,17 @@ VG_ITEMS = [
         ("p", [(-4.4, -8), (4.4, -8), (6, -2.4), (-6, -2.4)], 1),
         ("l", -9, -2.4, 9, -2.4, 0.7, 2), ("l", -6, -2.4, 0, 9.4, 0.7, 2),
         ("l", 6, -2.4, 0, 9.4, 0.7, 2)]),
-    ("Tetromino T", ("purple", "lavender", "dark_purple", "white"), [
+    ("Block Tee", ("teal", "light_teal", "navy", "white"), [
         ("r", -9, -6, 9, -1, 0), ("r", -3, -1, 3, 4.4, 0),
         ("l", -3, -6, -3, -1, 0.5, 2), ("l", 3, -6, 3, -1, 0.5, 2)]),
-    ("Tetromino L", ("orange", "cheddar", "dark_red", "banana"), [
+    ("Block Ell", ("plum", "light_pink", "dark_purple", "blush"), [
         ("r", -6, -9, -1, 6, 0), ("r", -1, 1, 8, 6, 0),
         ("l", -6, -4, -1, -4, 0.5, 2), ("l", -6, 1, -1, 1, 0.5, 2),
         ("l", 3, 1, 3, 6, 0.5, 2)]),
-    ("Tetromino S", ("neon_green", "light_green", "dark_green", "white"), [
+    ("Block Zigzag", ("sky_blue", "light_blue", "dark_blue", "white"), [
         ("r", -8, 0, 3, 5, 0), ("r", -3, -5, 8, 0, 0),
         ("l", -3, 0, -3, 5, 0.5, 2), ("l", 3, -5, 3, 0, 0.5, 2)]),
-    ("Tetromino O", ("banana", "cream", "cheddar", "white"), [
+    ("Block Square", ("rust", "peach", "dark_brown", "cream"), [
         ("r", -6, -6, 6, 6, 0), ("l", 0, -6, 0, 6, 0.5, 2), ("l", -6, 0, 6, 0, 0.5, 2)]),
 ]
 

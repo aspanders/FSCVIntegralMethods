@@ -238,7 +238,7 @@ class RemoteLibraryService private constructor(context: Context) {
     companion object {
         // Version of library.json shipped in the app's assets. Keep in sync with
         // the "version" field of the bundled asset when you refresh it.
-        const val BUNDLED_LIBRARY_VERSION = 53
+        const val BUNDLED_LIBRARY_VERSION = 54
 
         /** How long to wait before re-downloading after a failed cache write. */
         private const val SAVE_RETRY_COOLDOWN_MS = 24L * 60 * 60 * 1000
