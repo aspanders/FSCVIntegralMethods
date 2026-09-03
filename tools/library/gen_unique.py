@@ -659,9 +659,16 @@ def _heart_cells(s, size, cx=None, cy=None):
     return {(x, y) for x, y, _ in m.cells()}
 
 
+# The heart's own width as a fraction of the board. 0.94 put the widest row on
+# the second peg in from each side, so every heart in the library sat one bead
+# from the edge and its reduced versions - which scale the margin down with
+# everything else - ran straight into it.
+HEART_SPAN = 0.86
+
+
 def hearts():
     S = 27
-    mask = _heart_cells(S, S * 0.94)
+    mask = _heart_cells(S, S * HEART_SPAN)
     xs = [x for x, _ in mask]; ys = [y for _, y in mask]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
     W = x1 - x0 + 1; H = y1 - y0 + 1
@@ -696,7 +703,7 @@ def hearts():
         build(f"Dot Heart s{sp}", lambda x, y, sp=sp: B if (x % sp == sp // 2 and y % sp == sp // 2) else A, ["dots"])
     # concentric heart rings
     for n in range(2, 8):
-        rings = [_heart_cells(S, S * 0.94 * (1 - i / (n + 0.5))) for i in range(n)]
+        rings = [_heart_cells(S, S * HEART_SPAN * (1 - i / (n + 0.5))) for i in range(n)]
 
         def fn(x, y, rings=rings):
             ax, ay = x + x0, y + y0
@@ -707,11 +714,11 @@ def hearts():
         build(f"Concentric Heart n{n}", fn, ["concentric"])
     # outline thickness
     for t in range(1, 5):
-        inner = _heart_cells(S, S * 0.94 * (1 - 0.14 * t))
+        inner = _heart_cells(S, S * HEART_SPAN * (1 - 0.14 * t))
         build(f"Outline Heart t{t}", lambda x, y, inner=inner: B if (x + x0, y + y0) in inner else A, ["outline"])
     # bordered (2-color frame + solid)
     for t in range(1, 4):
-        inner = _heart_cells(S, S * 0.94 * (1 - 0.16 * t))
+        inner = _heart_cells(S, S * HEART_SPAN * (1 - 0.16 * t))
         build(f"Bordered Heart t{t}", lambda x, y, inner=inner: A if (x + x0, y + y0) in inner else B, ["border"])
     # half splits
     for d in ("v", "h", "d", "a"):
@@ -831,12 +838,16 @@ def hearts():
     # and "Heart Trio Row" as a single wavy bar. Giving them a board to sit on
     # is what lets them stay separate - the connectivity rule applies to
     # backgroundless patterns, and with a background they are not one.
-    build_full("Two Hearts", lambda g: (g.poly(heart_points(S * 0.28, S * 0.36, S * 0.46), "red"),
-                                        g.poly(heart_points(S * 0.72, S * 0.62, S * 0.46), "hot_pink")), ["pair"], bg="cream")
-    build_full("Three Hearts", lambda g: [g.poly(heart_points(S * fx, S * fy, S * 0.42), c)
-                                          for fx, fy, c in [(0.27, 0.30, "red"), (0.73, 0.30, "hot_pink"), (0.5, 0.72, "magenta")]], ["triple"], bg="cream")
-    build_full("Heart Trio Row", lambda g: [g.poly(heart_points(S * fx, S * 0.5, S * 0.34), c)
-                                            for fx, c in ((0.18, "red"), (0.5, "hot_pink"), (0.82, "magenta"))], ["row"], bg="cream")
+    # These three sit on a board, so the reduction is not allowed to inset them
+    # (an inset would just ring the board with empty pegs). That means their
+    # clearance has to be built in HERE, with enough of it to survive being
+    # scaled to 0.52: one bead of margin at full size is none at small.
+    build_full("Two Hearts", lambda g: (g.poly(heart_points(S * 0.30, S * 0.37, S * 0.42), "red"),
+                                        g.poly(heart_points(S * 0.70, S * 0.61, S * 0.42), "hot_pink")), ["pair"], bg="cream")
+    build_full("Three Hearts", lambda g: [g.poly(heart_points(S * fx, S * fy, S * 0.38), c)
+                                          for fx, fy, c in [(0.29, 0.32, "red"), (0.71, 0.32, "hot_pink"), (0.5, 0.70, "magenta")]], ["triple"], bg="cream")
+    build_full("Heart Trio Row", lambda g: [g.poly(heart_points(S * fx, S * 0.5, S * 0.30), c)
+                                            for fx, c in ((0.21, "red"), (0.5, "hot_pink"), (0.79, "magenta"))], ["row"], bg="cream")
     def winged(g):
         g.poly(heart_points(S * 0.5, S * 0.48, S * 0.5), "red")
         for sgn in (-1, 1):
@@ -844,7 +855,7 @@ def hearts():
                 # White feathers on a backgroundless board are invisible: what
                 # shipped was a plain heart. sky_blue is the lightest colour in
                 # the palette that still reads as ink.
-                g.ellipse(S * 0.5 + sgn * S * (0.24 + k * 0.08), S * 0.45,
+                g.ellipse(S * 0.5 + sgn * S * (0.22 + k * 0.075), S * 0.45,
                           S * 0.055, S * 0.10, ("sky_blue", "light_blue", "blue")[k])
     build_full("Winged Heart", winged, ["winged"])
     def arrowed(g):
@@ -857,9 +868,9 @@ def hearts():
         g.poly(heart_points(S * 0.5, S * 0.42, S * 0.6), "red")
         # Same trap as Winged Heart: the banner was cream, which disappears on
         # a backgroundless board, so this shipped as a squat heart on nothing.
-        g.rect(S * 0.15, S * 0.6, S * 0.85, S * 0.74, "cheddar")
-        g.poly([(S * 0.15, S * 0.6), (S * 0.03, S * 0.67), (S * 0.15, S * 0.74)], "caramel")
-        g.poly([(S * 0.85, S * 0.6), (S * 0.97, S * 0.67), (S * 0.85, S * 0.74)], "caramel")
+        g.rect(S * 0.20, S * 0.6, S * 0.80, S * 0.74, "cheddar")
+        g.poly([(S * 0.20, S * 0.6), (S * 0.09, S * 0.67), (S * 0.20, S * 0.74)], "caramel")
+        g.poly([(S * 0.80, S * 0.6), (S * 0.91, S * 0.67), (S * 0.80, S * 0.74)], "caramel")
     build_full("Banner Heart", banner, ["banner"])
     return _emit("hearts", gens, 200)
 

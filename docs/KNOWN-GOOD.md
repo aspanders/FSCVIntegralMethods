@@ -550,3 +550,64 @@ stars all failed the same way, and all four are fixed by giving them a board
 rather than by redrawing them.
 
 Library v55, 2351 patterns, 100% distinct, 25 regression checks passing.
+
+---
+
+# Margins: nothing sits on the outermost peg — 2026-09-03
+
+*"Ensure that the letters and the hearts do not touch the edges."*
+
+Measured first. The letters were already clear at every size, minimum three
+pegs of margin at full size and one after reduction. The hearts were not:
+`Banner Heart` ran off both sides, 89 of the other 91 sat exactly **one** bead
+in, and **181 of the 184 reduced hearts touched all four edges**.
+
+The cause is in the reducer, not in the hearts. `scaling.reduce_grid` scales
+the whole board — margin included — so a design one bead in from the edge came
+out at 0.52 with 0.52 of a bead of margin, which rounds to none. It was not a
+hearts problem at all: **2062 of the library's 4674 reduced boards** ran into
+the edge.
+
+Three changes:
+
+* **`scaling.MARGIN = 1`.** A backgroundless subject is now resampled onto a
+  board one peg smaller on each side and centred on the real one. The inner
+  size comes from a single scale factor rather than per-axis, because shrinking
+  each axis independently stretches anything that is not square, and a squashed
+  heart is worse than a cramped one. A pattern *with* a background keeps its
+  full board: that design **is** the board, and an empty ring round it would
+  read as a mistake.
+* **`scaling.MIN_BEADS = 12`.** The inset costs a ring of pegs, and for the
+  thinnest subject in the library — `Number 1 Small`, a one-bead stem — that
+  ring was the difference between a glyph and eight beads. Those fall back to
+  the full board rather than lose the variant. Exactly one pattern takes the
+  fallback.
+* **`HEART_SPAN` 0.94 → 0.86**, so the heart itself has two pegs of clearance
+  at full size and still has one after reduction. `Banner Heart`'s banner and
+  `Winged Heart`'s outermost feather were pulled in to match, and the three
+  boxed arrangements — which are not allowed an inset — had their clearance
+  built into the drawing instead.
+
+Result, measured the same way:
+
+| | before | after |
+|---|---|---|
+| hearts touching, full size | 1 | 0 |
+| hearts touching, reduced | 181 of 184 | 0 |
+| letters touching, any size | 0 | 0 |
+| library reduced boards touching | 2062 of 4674 | 695 of 4666 |
+
+The 695 that remain are every one of them a pattern with a background, where a
+full board is the design. **No backgroundless board in the library touches an
+edge at any size.**
+
+Checks 21 and 21b hold both halves of that, so it cannot come back.
+
+## A measurement error worth recording
+
+The first pass at this reported that all 282 icon variants touched all four
+edges, which was wrong and would have sent the fix in the wrong direction. The
+compact row encoding uses `.` for an empty peg and `0` for the FIRST PALETTE
+COLOUR; the script treated `0` as empty. Every board whose first palette entry
+was its outline therefore measured as edge-to-edge ink. The letters were fine
+all along — it was only the hearts, and the reducer.

@@ -31,6 +31,24 @@ SIZES = {"small": 0.52, "medium": 0.76}
 # simply not offered at that size.
 MIN_SIDE = 11
 
+# Empty pegs kept between the subject and the edge of the reduced board.
+#
+# The reduction scales the WHOLE board, margin included, so a full-size design
+# sitting one bead in from the edge came out at 0.52 with 0.52 of a bead of
+# margin - which rounds to none. Every small and medium letter and heart in the
+# library ran into all four edges. That is not a cosmetic complaint: a bead on
+# the outermost peg has nothing to hold it on three sides while you iron it,
+# the design cannot be given a border, and on a board whose exact peg count
+# varies by brand it is the first thing to not fit.
+MARGIN = 1
+
+# Below this a reduced board is not the subject any more, it is a few beads.
+# The inset costs a ring of pegs, and for the very thinnest subjects - a "1" at
+# the Small style is a one-bead stem - that ring is the difference between a
+# readable glyph and eight beads. Those fall back to the full board rather than
+# lose the variant.
+MIN_BEADS = 12
+
 
 def resample(g, w, h, nw, nh):
     """Box-majority reduction of a bead grid onto an nw x nh board."""
@@ -58,23 +76,50 @@ def resample(g, w, h, nw, nh):
     return out
 
 
-def reduce_grid(g, w, h, frac, mirror=None, repair=True):
-    """A smaller, still-buildable copy of `g`. Returns (grid, nw, nh) or None."""
+def _pad(inner, iw, ih, nw, nh):
+    """Centre an iw x ih grid on an empty nw x nh board."""
+    ox, oy = (nw - iw) // 2, (nh - ih) // 2
+    out = [[None] * nw for _ in range(nh)]
+    for y in range(ih):
+        for x in range(iw):
+            out[y + oy][x + ox] = inner[y][x]
+    return out
+
+
+def reduce_grid(g, w, h, frac, mirror=None, repair=True, margin=MARGIN):
+    """A smaller, still-buildable copy of `g`. Returns (grid, nw, nh) or None.
+
+    The subject is resampled onto a board `margin` pegs smaller on every side
+    and then centred on the real one, so the reduction cannot push it into the
+    edge. The inner size is derived from ONE scale factor rather than by
+    shrinking each axis independently: doing it per-axis stretches anything
+    that is not square, and a squashed heart is worse than a cramped one.
+
+    `margin` is 0 for a board that is meant to be full - a design with a
+    background is not a subject sitting on a board, it IS the board, and
+    ringing it with empty pegs would just look like a mistake.
+    """
     nw, nh = max(1, round(w * frac)), max(1, round(h * frac))
     if nw < MIN_SIDE or nh < MIN_SIDE or (nw >= w and nh >= h):
         return None
-    small = resample(g, w, h, nw, nh)
+    if margin:
+        inner = min((nw - 2 * margin) / float(w), (nh - 2 * margin) / float(h))
+        iw, ih = max(1, round(w * inner)), max(1, round(h * inner))
+    else:
+        iw, ih = nw, nh
+    small = resample(g, w, h, iw, ih)
     if not any(c is not None for row in small for c in row):
         return None
-    if not repair:
-        return small, nw, nh
-    if mirror:
-        symmetrize(small, nw, nh)
-    make_buildable(small, nw, nh)
-    if mirror:
-        symmetrize(small, nw, nh)
-        make_buildable(small, nw, nh)
-    thicken_necks(small, nw, nh, mirror=bool(mirror))
+    if repair:
+        if mirror:
+            symmetrize(small, iw, ih)
+        make_buildable(small, iw, ih)
+        if mirror:
+            symmetrize(small, iw, ih)
+            make_buildable(small, iw, ih)
+        thicken_necks(small, iw, ih, mirror=bool(mirror))
+    if (iw, ih) != (nw, nh):
+        small = _pad(small, iw, ih, nw, nh)
     return small, nw, nh
 
 
@@ -94,7 +139,14 @@ def variants(g, w, h, backgroundless=True):
     mirror = was_symmetric(g, w, h)
     out = {}
     for name, frac in SIZES.items():
-        got = reduce_grid(g, w, h, frac, mirror=mirror, repair=backgroundless)
-        if got:
-            out[name] = got
+        want = MARGIN if backgroundless else 0
+        for margin in range(want, -1, -1):
+            got = reduce_grid(g, w, h, frac, mirror=mirror,
+                              repair=backgroundless, margin=margin)
+            if not got:
+                break
+            beads = sum(1 for row in got[0] for c in row if c is not None)
+            if beads >= MIN_BEADS or margin == 0:
+                out[name] = got
+                break
     return out

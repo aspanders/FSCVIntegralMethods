@@ -361,6 +361,54 @@ def test_no_franchise_references():
           "; ".join(sorted(set(bad))[:5]))
 
 
+def test_subjects_clear_the_board_edge():
+    """No backgroundless board, at any size, puts a bead on the outermost peg.
+
+    Symptom: "ensure that the letters and the hearts do not touch the edges".
+    Every heart sat one bead from the edge at full size, and the reduction
+    scales the WHOLE board - margin included - so at 0.52 that one bead became
+    none: 181 of the 184 reduced hearts ran into all four sides, and 2062 of
+    the library's 4674 reduced boards did.
+
+    It matters beyond looks. A bead on the outermost peg has nothing holding it
+    on three sides while the design is ironed, the pattern cannot be given a
+    border, and pegboards vary by a peg or two between brands, so the edge row
+    is the first thing that does not fit.
+
+    A pattern WITH a background is exempt: a full board is what that design is,
+    and ringing it with empty pegs would read as a mistake rather than a
+    margin.
+    """
+    from connectivity import has_background
+    tight = []
+    for p in SHIPPED:
+        if has_background(p):
+            continue
+        boards = [(p["grid"]["width"], p["grid"]["height"],
+                   [(c["x"], c["y"]) for c in
+                    (p.get("cells") or from_rows(p["rows"], p["palette"]))],
+                   "full")]
+        for name, v in (p.get("sizes") or {}).items():
+            boards.append((v["width"], v["height"],
+                           [(x, y) for y, r in enumerate(v["rows"])
+                            for x, ch in enumerate(r) if ch != "."], name))
+        for w, h, pts, name in boards:
+            if not pts:
+                continue
+            xs = [x for x, _ in pts]; ys = [y for _, y in pts]
+            if min(min(xs), min(ys), w - 1 - max(xs), h - 1 - max(ys)) < 1:
+                tight.append(f"{p['category']}/{p['title']}/{name}")
+    # Full-size boards are allowed to fill their own board - "filling the board
+    # is most of what makes a 28x28 icon readable" - so this holds the line
+    # where it was asked for and everywhere the REDUCTION would have caused it.
+    reduced = [t for t in tight if not t.endswith("/full")]
+    named = [t for t in tight if t.split("/")[0] in ("icons", "hearts")]
+    check("21. no reduced backgroundless board touches the edge",
+          not reduced, f"{len(reduced)} touching: {reduced[:3]}")
+    check("21b. no letter or heart touches the edge at any size",
+          not named, f"{len(named)} touching: {named[:3]}")
+
+
 
 def main():
     print(f"regressions against {len(SHIPPED)} shipped patterns\n")
@@ -371,7 +419,8 @@ def main():
                test_shipped_library_has_no_lookalikes,
                test_patterns_are_buildable, test_size_variants,
                test_symmetric_subjects_are_symmetric,
-               test_no_franchise_references):
+               test_no_franchise_references,
+               test_subjects_clear_the_board_edge):
         fn()
     print()
     if FAILURES:
