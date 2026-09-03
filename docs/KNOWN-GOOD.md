@@ -140,9 +140,15 @@ Present on both: colour maths, image conversion, photo studio, AI service,
 pattern store, photo project store, remote library, tip jar, background
 removal, secure key storage, crop tab, My Creations.
 
+CORRECTION - onboarding. The line above originally read "Onboarding: no iOS
+equivalent at all". That was wrong. iOS has a full four-page onboarding with
+the same copy, the same Back/Skip/Next/Get Started controls and @AppStorage
+persistence; it is simply defined inside Views/Home/CameraView.swift, which is
+why a search for an Onboarding *file* found nothing. Checking for a file is not
+checking for a feature.
+
 Still Android-only:
 
-    Onboarding          no iOS equivalent at all
     Photos / Projects   PhotoProjectStore exists on iOS with NO UI to reach it
     BitmapLoader        no single EXIF-aware, size-bounded decode path; the
                         orientation handling is spread across CameraView,
@@ -151,3 +157,26 @@ Still Android-only:
 The Photos gap is the significant one: photo projects are created and stored on
 iOS and there is no screen that lists them, so re-deriving a pattern from a
 kept photo is impossible there.
+
+## The finding that matters most: five files were not in the iOS build
+
+Xcode referenced 28 Swift files; 32 were on disk. These five compiled nowhere
+and shipped nowhere, while sitting in the repo looking finished:
+
+    Services/ColorMath.swift          the entire colour science
+    Services/PhotoStudio.swift        the live photo studio
+    Services/PhotoProjectStore.swift  photo projects
+    Views/Create/PhotoTuneView.swift  the tune screen, including the crop tab
+    Views/Creations/MyCreationsView.swift
+
+So every piece of iOS work from this session was outside the build, and since
+ContentView now references MyCreationsView, the target could not compile at
+all. All five are added to the project and to the Sources build phase.
+
+parity.py gained check_ios_target, which walks the Swift files on disk and
+fails unless each one appears in the project AND in the Sources build phase.
+The existing paired-file check could never have caught this: it asks whether a
+file EXISTS, and existence is not membership. Verified by removing ColorMath
+from the Sources phase and watching the check fail.
+
+Nothing on the Android side is affected - versionCode 19 stands as recorded.

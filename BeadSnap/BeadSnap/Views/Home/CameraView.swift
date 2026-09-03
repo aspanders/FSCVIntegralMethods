@@ -75,8 +75,19 @@ struct OnboardingView: View {
         VStack {
             TabView(selection: $page) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { idx, p in
+                    // Scrolls, and stays centred while it fits.
+                    //
+                    // This was a VStack pinned between Spacers, which is exactly
+                    // the height of the page and never any taller. A 96pt badge,
+                    // a title and a paragraph do not fit that at a large Dynamic
+                    // Type setting, and the body text was cut off with nothing to
+                    // swipe. Same fault, same fix as CreateView and the Android
+                    // onboarding: minHeight tied to the geometry keeps the
+                    // centred look, and the ScrollView takes over when it must.
+                    GeometryReader { geo in
+                    ScrollView {
                     VStack(spacing: 0) {
-                        Spacer()
+                        Spacer(minLength: 16)
                         ZStack {
                             Circle()
                                 .fill(Color.purple.opacity(0.12))
@@ -95,7 +106,10 @@ struct OnboardingView: View {
                             .multilineTextAlignment(.center)
                             .padding(.top, 16)
                             .padding(.horizontal, 40)
-                        Spacer()
+                        Spacer(minLength: 16)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                    }
                     }
                     .tag(idx)
                 }

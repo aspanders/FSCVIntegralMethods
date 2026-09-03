@@ -118,6 +118,44 @@ PAIRED_SCROLL = [
 ]
 
 
+PBXPROJ = os.path.join(REPO, "BeadSnap", "BeadSnap.xcodeproj", "project.pbxproj")
+
+
+def check_ios_target() -> list:
+    """Every Swift file on disk must be IN the Xcode target.
+
+    A file Xcode does not know about does not compile and does not ship, and
+    nothing says so - it simply is not there at runtime. Five files had drifted
+    out of the target this way, including ColorMath, PhotoStudio and the whole
+    photo-tune screen, so the iOS colour science and photo studio were absent
+    from every build while the source sat in the repo looking finished.
+
+    Checking that a file EXISTS - which is all the paired-file check above does
+    - cannot catch this. Membership of the Sources build phase is the thing
+    that decides whether code runs.
+    """
+    if not os.path.exists(PBXPROJ):
+        return ["the Xcode project file is missing"]
+    pbx = open(PBXPROJ).read()
+    try:
+        sources = pbx[pbx.index("/* Begin PBXSourcesBuildPhase"):
+                      pbx.index("/* End PBXSourcesBuildPhase")]
+    except ValueError:
+        return ["the Xcode project has no Sources build phase"]
+
+    problems = []
+    for root, _, files in os.walk(IOS_ROOT):
+        for f in sorted(files):
+            if not f.endswith(".swift"):
+                continue
+            rel = os.path.relpath(os.path.join(root, f), IOS_ROOT)
+            if f not in pbx:
+                problems.append(f"iOS {rel} is not in the Xcode project at all")
+            elif f not in sources:
+                problems.append(f"iOS {rel} is in the project but not compiled")
+    return problems
+
+
 def check_paired_scroll() -> list:
     problems = []
     for kt, kt_needle, sw, sw_needle, what in PAIRED_SCROLL:
@@ -202,6 +240,7 @@ def main() -> int:
 
     problems += check_paired_files()
     problems += check_paired_scroll()
+    problems += check_ios_target()
     problems += check_ai()
 
     shared = sorted(set(kt_n) & set(sw_n))
@@ -210,6 +249,8 @@ def main() -> int:
     print(f"  {len(AI_MUST_MATCH)} AI request settings checked on both platforms")
     print(f"  {len(PAIRED_FILES)} services present on both platforms")
     print(f"  {len(PAIRED_SCROLL)} screens scroll on both platforms")
+    n_swift = sum(1 for _, _, fs in os.walk(IOS_ROOT) for f in fs if f.endswith(".swift"))
+    print(f"  {n_swift} Swift files, all of them in the iOS build")
 
     if problems:
         for p in problems:

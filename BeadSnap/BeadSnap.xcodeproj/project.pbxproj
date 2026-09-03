@@ -37,6 +37,11 @@
 		B1000200000000000000064 /* TipJarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000064 /* TipJarView.swift */; };
 		B1000200000000000000065 /* BackgroundRemover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000065 /* BackgroundRemover.swift */; };
 		B1000200000000000000066 /* RemoteLibraryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000066 /* RemoteLibraryService.swift */; };
+		B1000200000000000000090 /* ColorMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000090 /* ColorMath.swift */; };
+		B1000200000000000000091 /* PhotoStudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000091 /* PhotoStudio.swift */; };
+		B1000200000000000000092 /* PhotoProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000092 /* PhotoProjectStore.swift */; };
+		B1000200000000000000093 /* PhotoTuneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000093 /* PhotoTuneView.swift */; };
+		B1000200000000000000094 /* MyCreationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000100000000000000094 /* MyCreationsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -71,6 +76,11 @@
 		B1000100000000000000065 /* BackgroundRemover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRemover.swift; sourceTree = "<group>"; };
 		B1000100000000000000066 /* RemoteLibraryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteLibraryService.swift; sourceTree = "<group>"; };
 		B1000100000000000000099 /* BeadSnap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BeadSnap.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1000100000000000000090 /* ColorMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorMath.swift; sourceTree = "<group>"; };
+		B1000100000000000000091 /* PhotoStudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoStudio.swift; sourceTree = "<group>"; };
+		B1000100000000000000092 /* PhotoProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoProjectStore.swift; sourceTree = "<group>"; };
+		B1000100000000000000093 /* PhotoTuneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoTuneView.swift; sourceTree = "<group>"; };
+		B1000100000000000000094 /* MyCreationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyCreationsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,8 +145,17 @@
 				B1000400000000000000041 /* Studio */,
 				B1000400000000000000042 /* TipJar */,
 				B1000400000000000000036 /* Components */,
+				B1000400000000000000095 /* Creations */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		B1000400000000000000095 /* Creations */ = {
+			isa = PBXGroup;
+			children = (
+				B1000100000000000000094 /* MyCreationsView.swift */,
+			);
+			path = Creations;
 			sourceTree = "<group>";
 		};
 		B1000400000000000000031 /* Home */ = {
@@ -177,6 +196,8 @@
 		B1000400000000000000039 /* Create */ = {
 			isa = PBXGroup;
 			children = (
+				B1000100000000000000093 /* PhotoTuneView.swift */,
+
 				B1000100000000000000055 /* CreateView.swift */,
 			);
 			path = Create;
@@ -212,6 +233,10 @@
 		B1000400000000000000060 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				B1000100000000000000090 /* ColorMath.swift */,
+				B1000100000000000000091 /* PhotoStudio.swift */,
+				B1000100000000000000092 /* PhotoProjectStore.swift */,
+
 				B1000100000000000000042 /* PatternStore.swift */,
 				B1000100000000000000043 /* ImageConverter.swift */,
 				B1000100000000000000044 /* AIPatternService.swift */,
@@ -330,6 +355,11 @@
 				B1000200000000000000064 /* TipJarView.swift in Sources */,
 				B1000200000000000000065 /* BackgroundRemover.swift in Sources */,
 				B1000200000000000000066 /* RemoteLibraryService.swift in Sources */,
+				B1000200000000000000090 /* ColorMath.swift in Sources */,
+				B1000200000000000000091 /* PhotoStudio.swift in Sources */,
+				B1000200000000000000092 /* PhotoProjectStore.swift in Sources */,
+				B1000200000000000000093 /* PhotoTuneView.swift in Sources */,
+				B1000200000000000000094 /* MyCreationsView.swift in Sources */,
 				B1000200000000000000040 /* FusePattern.swift in Sources */,
 				B1000200000000000000041 /* BeadPalette.swift in Sources */,
 				B1000200000000000000042 /* PatternStore.swift in Sources */,
