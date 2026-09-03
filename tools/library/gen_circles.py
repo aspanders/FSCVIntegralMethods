@@ -87,18 +87,34 @@ def f_wedges(size, run, k):
     return cells, f"{run.title()} Pinwheel {n}", ["wedges", "pinwheel", run]
 
 
-def f_checker(size, run, bands):
-    """A true polar chessboard: tiles per ring grow with the radius.
+def f_checker(size, run, bands, chunk=1):
+    """A polar chessboard whose tiles are always at least two beads across.
 
-    A fixed wedge count is what a square checkerboard's logic gives you, and on
-    a disc it fails - the wedges converge to slivers at the hub, so the middle
-    of the board reads as confetti while the rim reads as slabs. Setting the
-    ring's tile count to 2*round(pi*(k+0.5)) makes every tile about as wide as
-    the ring is thick, and keeping it even makes the alternation close cleanly
-    where the ring wraps.
+    Two separate things have to hold or this family degenerates into a dither
+    field, and the first cut only got one of them:
+
+      * The RING has to be thick enough. size/2 pegs of radius split into
+        `bands` rings gives rings one peg thick past about band 7 on a 29-peg
+        board, so `bands` is clamped here rather than trusted from the caller.
+      * The TILE has to be wide enough. 2*round(pi*(k+0.5)/chunk) keeps a
+        tile roughly as wide as its ring is thick (chunk widens it further),
+        and keeping the count even makes the alternation close cleanly where
+        the ring wraps.
+
+    Without the first clamp the outer rings alternated colour every single
+    bead. Half of every run's pair is a pale colour, so what shipped was a
+    scatter of dark beads on white - Twilight Radial 7 had no disc left in it
+    at all. It is the same 35%-dither failure the audit flags elsewhere, and
+    it is invisible in a cell count: all 665 pegs were present and correct.
     """
     ids = _run(run)
-    a, b = ids[0], ids[-1]
+    # >= 2.4 pegs of ring thickness. Below that the alternation is a dither.
+    bands = max(2, min(bands, int((size / 2.0) // 2.4)))
+    # ids[1], not ids[0]. Seven of the ten runs open on white or cream, and a
+    # chessboard whose light squares are the same colour as the board is not a
+    # chessboard - it is the dark half of one, scattered. Both colours have to
+    # be ink for the disc to hold its shape.
+    a, b = ids[1], ids[-1]
     hub = ids[len(ids) // 2]
     cells = []
     for x, y, r, t in _polar(size):
@@ -106,10 +122,11 @@ def f_checker(size, run, bands):
         if k == 0:
             cells.append((x, y, hub))
             continue
-        n = 2 * max(2, round(math.pi * (k + 0.5)))
+        n = 2 * max(2, round(math.pi * (k + 0.5) / chunk))
         wedge = int(t / (2 * math.pi) * n)
         cells.append((x, y, a if (k + wedge) % 2 == 0 else b))
-    return cells, f"{run.title()} Radial {bands}", ["radial", "spokes", run]
+    return (cells, f"{run.title()} Checker {bands}x{chunk}",
+            ["checker", "chessboard", run])
 
 
 def f_spiral(size, run, arms):
@@ -233,7 +250,7 @@ def generate():
         specs = [
             f_rings(big, run, 3 + i),
             f_wedges(size, run, 1 + i % 4),
-            f_checker(big, run, 3 + i),
+            f_checker(big, run, 2 + i % 5, 1 + i // 5),
             f_spiral(big, run, 2 + i),
             f_rosette(big, run, 5 + i),
             f_star(size, run, 5 + i),

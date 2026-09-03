@@ -1363,20 +1363,42 @@ def _draw_bow(g, spec, cx, cy, scale):
                     (cx - 2 * u + (i + 1) * 3.2 * t * u, cy + 12 * u),
                     (cx - 2 * u + i * 3.2 * t * u, cy + 12 * u)], band(i))
     elif form == "spiral":
-        steps = bands * 26
-        for i in range(steps, 0, -1):
-            a = i * 0.13
-            r = (1.2 + i * 0.115) * u
-            g.disc(cx + math.cos(a) * r, cy + math.sin(a) * r, 2.4 * u,
-                   band(int(i / 26)))
+        # The arm has to fit the board and its turns have to sit next to each
+        # other, not on top of each other. The old sweep ran out to r = 16u on
+        # an 11u board, so the outer third was cropped into the corners, and it
+        # drew every turn with a 2.4u brush while advancing only 1.9u per turn,
+        # so each turn painted over the one before it. What survived was a
+        # muddy blob. Deriving the brush from the measured radial gain is what
+        # makes the arm read as a spiral.
+        turns = max(2, min(bands, 4))
+        per = 60                                # samples per full turn
+        r0, rmax = 1.6 * u, 10.5 * u
+        steps = turns * per
+        gain = (rmax - r0) / turns              # radius gained per turn
+        dot = max(1.1, gain / 2 + 0.35)         # turns just touch, never merge
+        for i in range(steps, -1, -1):
+            a = i / float(per) * 2 * math.pi
+            r = r0 + (rmax - r0) * i / steps
+            g.disc(cx + math.cos(a) * r, cy + math.sin(a) * r, dot,
+                   band(min(bands - 1, int(i / float(steps) * bands))))
     elif form == "fan":
-        n = bands * 2
+        # One wedge per colour. bands*2 wedges meant the spectrum repeated
+        # partway round the fan, which reads as a colour wheel with a mistake
+        # in it rather than as a rainbow. The radius is also pulled inside the
+        # board and the base is levelled, because the old 13u wedges ran off
+        # the edge and left the fan looking lopped off on one side.
+        n = len(cols)
+        base = cy + 6 * u
         for i in range(n):
             a0 = math.pi + i * math.pi / n
             a1 = math.pi + (i + 1) * math.pi / n
-            g.poly([(cx, cy + 6 * u),
-                    (cx + math.cos(a0) * 13 * u, cy + 6 * u + math.sin(a0) * 13 * u),
-                    (cx + math.cos(a1) * 13 * u, cy + 6 * u + math.sin(a1) * 13 * u)], band(i))
+            g.poly([(cx, base),
+                    (cx + math.cos(a0) * 11 * u, base + math.sin(a0) * 11 * u),
+                    (cx + math.cos((a0 + a1) / 2) * 11 * u,
+                     base + math.sin((a0 + a1) / 2) * 11 * u),
+                    (cx + math.cos(a1) * 11 * u, base + math.sin(a1) * 11 * u)],
+                   band(i))
+        _erase_below(g, base + 1)
     elif form == "target":
         for i in range(bands):
             g.disc(cx, cy, (11 - i * t) * u, band(i))
@@ -1482,17 +1504,101 @@ FONT = {
     "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
     "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
     "Heart": ["01010", "11111", "11111", "11111", "01110", "00100", "00000"],
-    "Star": ["00100", "00100", "11111", "01110", "01010", "01010", "00000"],
+    # ── Pictograms, 9x9 ──────────────────────────────────────────────────────
+    # At 5x7 these were all failures of the same kind: too few columns to hold
+    # the parts apart, so the star grew two parallel legs and read as a stick
+    # figure, the sun's corner pips read as beetle legs, and the smiley's eyes
+    # fused with its rim.
+    # Nine rows, not eleven: one font pixel is a whole number of beads, and an
+    # 11-row bitmap plus the knockout slab's border needs 26 of the 26 usable
+    # pegs. _frame gives up and returns a bare board when nothing fits, so the
+    # 11-row version shipped Star Knockout as a blank orange square.
+    "Star": ["....#....",
+             "...###...",
+             "#########",
+             "#########",
+             ".#######.",
+             "..#####..",
+             "..#####..",
+             ".##...##.",
+             "##.....##"],
     "Plus": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
-    "Cross": ["10001", "01010", "00100", "00100", "00100", "01010", "10001"],
+    "Cross": ["##.....##",
+              "###...###",
+              ".###.###.",
+              "..#####..",
+              "...###...",
+              "..#####..",
+              ".###.###.",
+              "###...###",
+              "##.....##"],
     "Check": ["00000", "00001", "00010", "10100", "01000", "00000", "00000"],
-    "Arrow": ["00100", "01110", "10101", "00100", "00100", "00100", "00100"],
+    "Arrow": ["....#....",
+              "...###...",
+              "..#####..",
+              ".#######.",
+              "#########",
+              "...###...",
+              "...###...",
+              "...###...",
+              "...###..."],
     "Note": ["00111", "00101", "00101", "01101", "11100", "11100", "01000"],
-    "Smile": ["01110", "10001", "10101", "10001", "11011", "10001", "01110"],
-    "Bang": ["00100", "00100", "00100", "00100", "00100", "00000", "00100"],
+    "Smile": ["..#####..",
+              ".#.....#.",
+              "#.#...#.#",
+              "#.#...#.#",
+              "#.......#",
+              "#.#...#.#",
+              "#..###..#",
+              ".#.....#.",
+              "..#####.."],
+    "Bang": ["..#####..",
+             "..#####..",
+             "..#####..",
+             "..#####..",
+             "...###...",
+             ".........",
+             ".........",
+             "..#####..",
+             "..#####.."],
     "Query": ["01110", "10001", "00001", "00110", "00100", "00000", "00100"],
     "Anchor": ["00100", "01110", "00100", "11111", "00100", "10101", "01110"],
-    "Sun": ["10101", "01110", "01110", "11111", "01110", "01110", "10101"],
+    "Moon": ["...####..",
+             "..####...",
+             ".####....",
+             ".####....",
+             ".####....",
+             ".####....",
+             ".####....",
+             "..####...",
+             "...####.."],
+    "Drop": ["....#....",
+             "....#....",
+             "...###...",
+             "..#####..",
+             ".#######.",
+             "#########",
+             "#########",
+             ".#######.",
+             "..#####.."],
+    "Cloud": [".........",
+              "...###...",
+              "..#####..",
+              ".########",
+              "#########",
+              "#########",
+              ".#######.",
+              ".........",
+              "........."],
+    "Sun": ["....#....",
+            "#...#...#",
+            ".#.###.#.",
+            "..#####..",
+            "#########",
+            "..#####..",
+            ".#.###.#.",
+            "#...#...#",
+            "....#...."],
 }
 
 ICON_COLOURS = [
@@ -1506,9 +1612,15 @@ ICON_COLOURS = [
 def _draw_glyph(g, spec, cx, cy, scale):
     rows, style = spec["parts"]
     ink, tile = spec["cols"]
-    px = max(2, int(round(3.4 * scale)))          # bead size of one font pixel
-    w = 5 * px
-    h = 7 * px
+    # The bitmap's own dimensions, not a hardcoded 5x7. The pictograms need
+    # more room than a letter does: five columns cannot hold a face rim plus
+    # two eyes that do not touch it, and _frame scales whatever ink it is
+    # given up to fill the board, so a cramped bitmap is not a small mistake -
+    # it is the whole design.
+    gw, gh = len(rows[0]), len(rows)
+    px = max(2, int(round(3.4 * scale * 7.0 / max(5, gh))))
+    w = gw * px
+    h = gh * px
     x0 = cx - w / 2
     y0 = cy - h / 2
 
@@ -1517,7 +1629,7 @@ def _draw_glyph(g, spec, cx, cy, scale):
                tile if style == "tile" else ink)
     for ry, row in enumerate(rows):
         for rx, ch in enumerate(row):
-            if ch != "1":
+            if ch not in "1#":
                 continue
             fill = ink
             if style == "knockout":
@@ -1527,26 +1639,56 @@ def _draw_glyph(g, spec, cx, cy, scale):
     if style == "shadow":
         for ry, row in enumerate(rows):
             for rx, ch in enumerate(row):
-                if ch == "1":
+                if ch in "1#":
                     g.rect(x0 + rx * px + px * 0.5, y0 + ry * px + px * 0.5,
                            x0 + (rx + 1) * px - 1 + px * 0.5,
                            y0 + (ry + 1) * px - 1 + px * 0.5, tile)
         for ry, row in enumerate(rows):
             for rx, ch in enumerate(row):
-                if ch == "1":
+                if ch in "1#":
                     g.rect(x0 + rx * px, y0 + ry * px,
                            x0 + (rx + 1) * px - 1, y0 + (ry + 1) * px - 1, ink)
 
 
+# Glyphs whose meaning lives in their HOLES. A solid rendering has to weld
+# those holes shut to stay one connected piece, which destroys the icon.
+KNOCKOUT_ONLY = {"Smile", "Bang"}
+
+# A letter can be any colour. A picture of a thing cannot: the rotating list
+# handed out a brown cloud and a navy raindrop, and colour is half of what
+# makes a small icon readable.
+ICON_INK = {
+    "Sun": ("orange", "banana"), "Moon": ("banana", "navy"),
+    "Cloud": ("sky_blue", "white"), "Drop": ("blue", "aqua"),
+    "Heart": ("red", "cream"), "Star": ("cheddar", "banana"),
+}
+
+
 def icons():
+    # Three styles, not four. The sweep is style-major and _emit stops at the
+    # target, so a fourth tier only ever got truncated away: not one " Shadow"
+    # pattern has ever shipped, and the cut landed mid-tier, which is why the
+    # library had a Star but no Star Small and a Smile Knockout but no Star
+    # Knockout. Sizing the pool to the target instead means every glyph gets
+    # every variant.
     styles = [("", "solid", 0.96), (" Small", "solid", 0.72),
-              (" Knockout", "knockout", 0.96), (" Shadow", "shadow", 0.86)]
+              (" Knockout", "knockout", 0.96)]
     specs = []
     for vi, (suffix, style, fill) in enumerate(styles):
         for si, (name, rows) in enumerate(FONT.items()):
+            if name in KNOCKOUT_ONLY and style != "knockout":
+                continue
+            # One font pixel is a whole number of beads, so a 9- or 11-row
+            # pictogram has exactly one size that fits a 28-peg board: 2 beads
+            # per pixel. Asking for a "Small" one produces the same board
+            # again, and the duplicate filter then dropped whichever came
+            # second - which is how the library ended up with Star Small but
+            # no Star Knockout. Tall bitmaps get solid and knockout only.
+            if suffix == " Small" and len(rows) > 7:
+                continue
             title = name if len(name) > 1 else f"Letter {name}" if name.isalpha() \
                 else f"Number {name}"
-            cols = ICON_COLOURS[(si + vi * 3) % len(ICON_COLOURS)]
+            cols = ICON_INK.get(name) or ICON_COLOURS[(si + vi * 3) % len(ICON_COLOURS)]
             specs.append(dict(
                 name=f"{title}{suffix}", parts=(rows, style), cols=cols,
                 bg=_pick_bg(cols[0], PALE, si + vi), fill=fill,
@@ -1555,7 +1697,7 @@ def icons():
     # look like each other - the category's job is to have all of them.
     return _emit("icons", specs,
                  lambda sp: _frame(lambda g, s, x, y, k: _draw_glyph(g, s, x, y, k),
-                                   sp, sp["bg"], fill=sp["fill"]), 140, near=1.0)
+                                   sp, sp["bg"], fill=sp["fill"]), 160, near=1.0)
 
 
 GENERATORS["icons"] = icons

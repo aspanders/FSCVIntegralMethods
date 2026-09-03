@@ -358,3 +358,149 @@ game might contain - a sword, a key, a potion, a chest - never a specific
 character. If a player could name the game it came from, it does not belong.
 
 Library rebuilt to version 54.
+
+---
+
+# The last ten categories — 2026-09-03
+
+The ten categories nothing had ever looked at: circles, gems, hearts, icons,
+mandalas, rainbows, snowflakes, sports, stars, sweets. Every pattern in each
+was rendered at thumbnail size with its name under it and judged on one
+question — *can you tell what it is, and is it good to look at?*
+
+Six categories needed work. The fixes are in this commit; the rest is recorded
+here because it is real and not yet done.
+
+## Fixed: circles — the whole `Radial` family was a dither field
+
+All ten `* Radial *` boards were a polar chessboard whose tiles shrank to one
+bead in the outer rings. Half of every colour run is a pale colour, so what
+shipped was a scatter of dark beads on white. `Twilight Radial 7` had no disc
+left in it at all.
+
+Two things were wrong and both had to be fixed:
+
+* rings thinner than ~2.4 pegs alternate colour every bead. `bands` is now
+  clamped from the board size instead of trusted from the caller;
+* the pair was `ids[0]`/`ids[-1]`, and seven of the ten runs open on white or
+  cream. A chessboard whose light squares are the colour of the board is not a
+  chessboard. It now takes `ids[1]`.
+
+Renamed `Checker`, which is what it draws. Category speckle went from a family
+of unusable boards to 1.0% overall.
+
+Still weak, not fixed: `Mint Target 13` reads as a broken X rather than a
+target, and `Sunset Star 5` reads as an X rather than a star.
+
+## Fixed: icons — five pictograms did not depict their subject
+
+At 5x7 there are not enough columns to hold the parts of a picture apart, and
+`_frame` scales whatever ink it gets up to fill the board, so a cramped bitmap
+is not a small problem.
+
+| icon | shipped as | now |
+|---|---|---|
+| Smile | a box with two dots | a face (knockout only) |
+| Star | a stick figure | a five-point star |
+| Sun | a beetle | a disc with eight rays |
+| Bang | a plain bar | an exclamation mark (knockout only) |
+| Arrow | a dagger | an arrow |
+| Cross | an hourglass | an X |
+
+The pictograms are 9x9 now. Two of them — Smile and Bang — carry their meaning
+in their *holes*, and a solid board has to be one connected piece, so the
+pipeline welded those holes shut. They are emitted knocked out of a slab only,
+where they are the clearest icons in the set. Added Moon, Drop and Cloud, which
+are single blobs and survive every style.
+
+Two structural bugs surfaced while doing it:
+
+* the sweep was style-major and `_emit` stops at the target, so the fourth
+  style tier was always truncated away. **Not one " Shadow" pattern has ever
+  shipped**, and the cut landed mid-tier, which is why the library had a Star
+  but no Star Small and a Smile Knockout but no Star Knockout. Three styles
+  now, with the pool sized to the target.
+* one font pixel is a whole number of beads, so a 9-row pictogram has exactly
+  one size that fits a 28-peg board. Asking for a "Small" one produced the same
+  board again and the duplicate filter dropped whichever came second. Tall
+  bitmaps get solid and knockout only.
+* an 11-row bitmap plus the knockout border needs 26 of the 26 usable pegs, and
+  when nothing fits `_frame` returns a **bare board**. That is how Star
+  Knockout came out as a blank orange square, and it counted as a pattern.
+
+Colour is now pinned for the pictograms. The rotating list had handed out a
+brown cloud and a navy raindrop.
+
+## Fixed: hearts — four designs whose subject was invisible
+
+* `Banner Heart` — the banner was cream on a backgroundless board. Invisible.
+  Now cheddar with caramel tails.
+* `Winged Heart` — same trap, white feathers. Now three shades of blue.
+* `Two Hearts`, `Three Hearts`, `Heart Trio Row` — the only designs in the
+  category made of separate pieces, and a backgroundless board must be one
+  connected piece, so the pipeline welded them: Two Hearts shipped as one heart
+  with a pink stripe down it, Heart Trio Row as a single wavy bar. They now sit
+  on a cream board, which is what lets them stay separate.
+* `Monogram Heart 2/3/4` — the heart's top notch bit the digit's top row, and a
+  bitten "2" reads as a smiley face. Monograms are letters now, placed only
+  where the glyph clears the mask completely.
+
+## Fixed: rainbows — Fan and Spiral
+
+`Spiral` ran its arm out to r=16 on an 11-unit board, so the outer third was
+cropped into the corners, and it drew with a 2.4-unit brush while advancing
+1.9 units per turn, so each turn painted over the one before. The brush is
+derived from the measured radial gain now and the arm fits the board.
+
+`Fan` drew `bands*2` wedges over a spectrum of 6 or 7, so the colours repeated
+partway round — a colour wheel with a mistake in it. One wedge per colour now,
+pulled inside the board, base levelled.
+
+Still muddy, not fixed: `Arc 8 Fine`, `Chevron 6 Fine`, `Double 5 Wide`,
+`Ring 3 Bold` and `Target 8 Fine` draw their bands from brown and maroon. They
+are clean, they just do not say "rainbow".
+
+## Fixed: snowflakes — 197 patterns named after a build artifact
+
+Every flake was titled `Snowflake <n>`: 1, 10, 938, 1002. The candidate pool is
+~15,000 boards and ~200 survive the distinctness filter, so the shipped numbers
+were the *candidate* indices. They are named from what each flake is made of
+now — `Fern Hex Flake 12`, `Plate Star Flake 3` — twelve families, renamed
+after the filter runs so **every id is unchanged**.
+
+The ice colour came from a 7-cycle and the sky from a 5-cycle, which landed on
+pairs like sky_blue-on-teal at 2.5:1. A snowflake is a tracery, not a slab, so
+the pair now has to clear 4.5:1.
+
+## Passed, no changes needed
+
+* **gems** (118) — clean and genuinely attractive. The caveat stands from the
+  earlier pass: about seven in ten share one inverted-triangle brilliant-cut
+  silhouette, which is most of the 259 same-silhouette collisions.
+* **mandalas** (181) — the strongest category in the library. Radially
+  symmetric, colourful, unambiguous.
+* **circles** apart from the two named above, **hearts** apart from the four,
+  **rainbows** apart from the muddy five.
+
+## Failed, and still failing
+
+Named here so they are not lost. None is fixed in this commit.
+
+* **stars** — `Star Grid s5` and `5pt V Star w2` read as **barcodes**.
+  `Star Wreath 5` is unidentifiable. `Starburst 8` (14% bbox density) and the
+  `n/2 Star Polygon` family read as rings, not stars.
+* **sports** — the `Tennis Racket` strings are the 51%-dither crosshatch;
+  `Ice Skate` and `Ski` are unidentifiable.
+* **sweets** — `Pretzel` is 46% dither and reads as wire; `Marshmallow` and
+  `Truffle Outline` are shapeless.
+* **icons**, remaining — the Knockout variants of glyphs with enclosed counters
+  (0, 2, 3, 6, 8, 9, W, O, U) read as generic rectangles. Inherent to knocking
+  a counter out of a slab; the solid and Small variants of those glyphs are
+  fine, so nothing is lost.
+
+## Coverage after this pass
+
+All 24 categories have now been looked at pattern by pattern. What is still
+open is carried in the earlier sections of this file: flowers (task 17), the
+17 dither patterns, `fish/Angelfish`, `bugs/Snail`, the 7 near-blank space
+boards, threeD, and the same-silhouette count.

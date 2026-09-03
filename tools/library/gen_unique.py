@@ -6,7 +6,7 @@ shipped patterns share a color-agnostic signature.
 """
 import math
 
-from beadlib import make_pattern, stable_id
+from beadlib import PALETTE, make_pattern, stable_id
 from canvas import Grid, star_points, reg_polygon, heart_points
 from uniqueness import cell_map, signature
 
@@ -513,6 +513,35 @@ def mandalas():
 SPAL = ["white", "sky_blue", "toothpaste", "aqua", "light_blue", "periwinkle", "turquoise"]
 SBG = ["navy", "dark_blue", "blue", "dark_purple", "teal"]
 
+# A snowflake is a thin tracery, so the flake/background pair carries the whole
+# design. Taking the ice colour from a 7-cycle and the sky from a 5-cycle lets
+# them land on pairs like sky_blue-on-teal (contrast 2.5:1) where the crystal
+# is barely there. 4.5:1 is the WCAG threshold for ordinary text and it is the
+# right one here for the same reason: the pattern is fine detail, not a slab.
+MIN_FLAKE_CONTRAST = 4.5
+
+
+def _relative_luminance(hex_colour):
+    h = hex_colour.lstrip("#")
+    ch = [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in ch]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def _contrast(a, b):
+    hexes = {c["id"]: c["hex"] for c in PALETTE}
+    la, lb = _relative_luminance(hexes[a]), _relative_luminance(hexes[b])
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
+def _readable_bg(col, i):
+    """First background in the cycle from i that the flake shows up against."""
+    for k in range(len(SBG)):
+        bg = SBG[(i + k) % len(SBG)]
+        if _contrast(col, bg) >= MIN_FLAKE_CONTRAST:
+            return bg
+    return max(SBG, key=lambda b: _contrast(col, b))
+
 
 def _hexplate(g, cx, cy, r, col):
     g.poly(reg_polygon(cx, cy, r, 6, rot=0), col)
@@ -572,6 +601,7 @@ def _snowflake(spec, s, col, bg):
 
 def snowflakes():
     gens = []
+    shape = {}          # candidate title -> (tip, center), for naming below
     # richer, denser branch position sets first so the set skews ornate
     posn = [[0.3, 0.45, 0.6, 0.75, 0.9], [0.35, 0.55, 0.72, 0.88],
             [0.3, 0.5, 0.7, 0.85], [0.4, 0.6, 0.78, 0.92], [0.32, 0.52, 0.72, 0.9],
@@ -593,12 +623,30 @@ def snowflakes():
                                 # pegboard; 32 does not fit one.
                                 s = (25, 27, 29)[i % 3]
                                 col = SPAL[i % len(SPAL)]
-                                bg = SBG[i % len(SBG)]
+                                bg = _readable_bg(col, i)
                                 spec = (pos, ln, ang, sub, pl, tip, center)
-                                gens.append((f"Snowflake {i+1}", _snowflake(spec, s, col, bg),
+                                key = f"Snowflake {i+1}"
+                                shape[key] = (tip, center)
+                                gens.append((key, _snowflake(spec, s, col, bg),
                                              ["snowflake", "crystal", "6fold"]))
                                 i += 1
-    return _emit("snowflakes", gens, 200)
+    out = _emit("snowflakes", gens, 200)
+    # The candidate pool is ~15000 boards and only ~200 survive the distinctness
+    # filter, so numbering the candidates left the shipped set titled "Snowflake
+    # 1", "Snowflake 1002", "Snowflake 938" - visibly a build artifact rather
+    # than a name. Renaming AFTER the filter, from what each flake is actually
+    # made of, gives twelve honest families numbered 1..n. It is done here and
+    # not at build time on purpose: the id is derived from the candidate title,
+    # so renaming afterwards leaves every id exactly as it was.
+    TIP = {"fern": "Fern", "plate": "Plate", "split": "Forked", "dot": "Beaded"}
+    CORE = {"hex": "Hex", "star": "Star", "dot": "Round"}
+    seen = {}
+    for pat in out:
+        tip, center = shape[pat["title"]]
+        family = f"{TIP[tip]} {CORE[center]} Flake"
+        seen[family] = seen.get(family, 0) + 1
+        pat["title"] = f"{family} {seen[family]}"
+    return out
 
 
 # ── HEARTS ───────────────────────────────────────────────────────────────────
@@ -735,9 +783,9 @@ def hearts():
     from gen_icons import FONT
     cxg, cyg = (S - 1) / 2, (S - 1) / 2 - 2
 
-    def glyph_cells(rows, scale=2):
+    def glyph_cells(rows, scale=2, oy_shift=0):
         gw, gh = 5 * scale, 7 * scale
-        ox, oy = int(cxg - gw / 2), int(cyg - gh / 2)
+        ox, oy = int(cxg - gw / 2), int(cyg - gh / 2) + oy_shift
         cells = set()
         for r, row in enumerate(rows):
             for cc, ch in enumerate(row):
@@ -746,27 +794,58 @@ def hearts():
                         for dx in range(scale):
                             cells.add((ox + cc * scale + dx, oy + r * scale + dy))
         return cells
+    # The heart's top notch and bottom point eat whatever is drawn into them.
+    # Nudge each glyph down until it clears the notch, and drop the ones that
+    # still lose part of themselves: a "2" with its top row bitten off reads as
+    # a smiley face, not as a monogram, which is exactly what shipped.
     for ch, rows in FONT.items():
-        gc = glyph_cells(rows)
+        if not ch.isalpha():
+            continue                      # a monogram is an initial, not a digit
+        placed = None
+        for drop in (0, 1, 2, 3, 4):
+            gc = glyph_cells(rows, oy_shift=drop)
+            if len(gc - mask) == 0:
+                placed = gc
+                break
+        if placed is None:
+            continue
+        gc = placed
         build(f"Monogram Heart {ch}", lambda x, y, gc=gc: B if (x + x0, y + y0) in gc else A, ["monogram", ch.lower()])
     # arrangements: use whole board, not the mask
-    def build_full(title, drawer, tags):
+    def build_full(title, drawer, tags, bg=None):
         g = Grid(S, S)
+        if bg:
+            g.fill(bg)
         drawer(g)
         gens.append((title, g, ["heart"] + tags))
     for i, (px, py, sz) in enumerate([(0.32, 0.44, 0.5), (0.5, 0.5, 0.55)]):
         pass
     # double / triple / row / winged / arrow
-    build_full("Two Hearts", lambda g: (g.poly(heart_points(S * 0.34, S * 0.42, S * 0.5), "red"),
-                                        g.poly(heart_points(S * 0.66, S * 0.56, S * 0.5), "hot_pink")), ["pair"])
-    build_full("Three Hearts", lambda g: [g.poly(heart_points(S * fx, S * fy, S * 0.4), c)
-                                          for fx, fy, c in [(0.3, 0.4, "red"), (0.7, 0.4, "hot_pink"), (0.5, 0.66, "magenta")]], ["triple"])
-    build_full("Heart Trio Row", lambda g: [g.poly(heart_points(S * fx, S * 0.5, S * 0.34), "red") for fx in (0.25, 0.5, 0.75)], ["row"])
+    # Spacing has to exceed the heart's own width or the group fuses into one
+    # shape. At S=27 a 0.5-size heart is ~13 beads across and the old pair sat
+    # 8.6 apart, so "Two Hearts" shipped as one heart with a pink stripe down
+    # it and "Heart Trio Row" as a single wavy bar.
+    # These three are the only designs in the category made of SEPARATE pieces,
+    # and a backgroundless board has to be one connected piece, so the pipeline
+    # welded them: "Two Hearts" shipped as one heart with a pink stripe down it
+    # and "Heart Trio Row" as a single wavy bar. Giving them a board to sit on
+    # is what lets them stay separate - the connectivity rule applies to
+    # backgroundless patterns, and with a background they are not one.
+    build_full("Two Hearts", lambda g: (g.poly(heart_points(S * 0.28, S * 0.36, S * 0.46), "red"),
+                                        g.poly(heart_points(S * 0.72, S * 0.62, S * 0.46), "hot_pink")), ["pair"], bg="cream")
+    build_full("Three Hearts", lambda g: [g.poly(heart_points(S * fx, S * fy, S * 0.42), c)
+                                          for fx, fy, c in [(0.27, 0.30, "red"), (0.73, 0.30, "hot_pink"), (0.5, 0.72, "magenta")]], ["triple"], bg="cream")
+    build_full("Heart Trio Row", lambda g: [g.poly(heart_points(S * fx, S * 0.5, S * 0.34), c)
+                                            for fx, c in ((0.18, "red"), (0.5, "hot_pink"), (0.82, "magenta"))], ["row"], bg="cream")
     def winged(g):
         g.poly(heart_points(S * 0.5, S * 0.48, S * 0.5), "red")
         for sgn in (-1, 1):
             for k in range(3):
-                g.ellipse(S * 0.5 + sgn * S * (0.22 + k * 0.07), S * 0.45, S * 0.05, S * 0.09, "white")
+                # White feathers on a backgroundless board are invisible: what
+                # shipped was a plain heart. sky_blue is the lightest colour in
+                # the palette that still reads as ink.
+                g.ellipse(S * 0.5 + sgn * S * (0.24 + k * 0.08), S * 0.45,
+                          S * 0.055, S * 0.10, ("sky_blue", "light_blue", "blue")[k])
     build_full("Winged Heart", winged, ["winged"])
     def arrowed(g):
         g.poly(heart_points(S * 0.5, S * 0.48, S * 0.56), "red")
@@ -776,9 +855,11 @@ def hearts():
     build_full("Cupid Heart", arrowed, ["arrow"])
     def banner(g):
         g.poly(heart_points(S * 0.5, S * 0.42, S * 0.6), "red")
-        g.rect(S * 0.15, S * 0.6, S * 0.85, S * 0.72, "cream")
-        g.poly([(S * 0.15, S * 0.6), (S * 0.05, S * 0.66), (S * 0.15, S * 0.72)], "cream")
-        g.poly([(S * 0.85, S * 0.6), (S * 0.95, S * 0.66), (S * 0.85, S * 0.72)], "cream")
+        # Same trap as Winged Heart: the banner was cream, which disappears on
+        # a backgroundless board, so this shipped as a squat heart on nothing.
+        g.rect(S * 0.15, S * 0.6, S * 0.85, S * 0.74, "cheddar")
+        g.poly([(S * 0.15, S * 0.6), (S * 0.03, S * 0.67), (S * 0.15, S * 0.74)], "caramel")
+        g.poly([(S * 0.85, S * 0.6), (S * 0.97, S * 0.67), (S * 0.85, S * 0.74)], "caramel")
     build_full("Banner Heart", banner, ["banner"])
     return _emit("hearts", gens, 200)
 
