@@ -318,10 +318,43 @@ MAX_OUTLINE_SHARE = 0.45
 
 
 def _ink_for(g, bg, prefer="black"):
-    """A dark outline colour that does not collide with the drawing."""
-    used = {g.g[y][x] for y in range(g.h) for x in range(g.w)} - {None, bg}
+    """A dark outline colour that will not swallow the subject.
+
+    The test is whether the preferred ink is the subject's DOMINANT colour, not
+    whether it appears in the drawing at all. Those are very different things
+    and getting them confused cost a whole category:
+
+      * ink merely present - a ladybug's spots, a bee's stripes, an ant's legs
+        are black, and so is the outline. They merge, which is correct: a black
+        edge meeting a black leg is one black shape, the way it is in life.
+      * ink dominant - the body itself is black. Outline that in black and the
+        silhouette disappears, so a different dark is needed.
+
+    Refusing any ink the drawing already touched sounds safer and is much
+    worse. The outline then runs alongside the subject's own black in a second,
+    nearly identical dark, and the two alternate bead by bead: "Beetle Long"
+    came out a 53% black-and-dark_gray checkerboard, and 84 bugs and fish went
+    the same way. Two darks side by side read as noise; one dark reads as a
+    line.
+    """
+    counts = {}
+    for y in range(g.h):
+        for x in range(g.w):
+            c = g.g[y][x]
+            if c is not None and c != bg:
+                counts[c] = counts.get(c, 0) + 1
+    if not counts:
+        return prefer
+    dominant = max(counts, key=counts.get)
+    if dominant in INKS:
+        # The subject is already mostly dark. Edging it in a SECOND dark does
+        # not describe the shape, it just lays a near-identical tone beside the
+        # first, and the two alternate bead by bead: "Beetle Long" - a
+        # dark_green body whose black legs outnumber it - came back a 54%
+        # black-and-dark_gray checkerboard. A dark subject needs no outline.
+        return None
     for cid in (prefer,) + INKS:
-        if cid and cid not in used:
+        if cid and cid != dominant:
             return cid
     return None
 
@@ -397,10 +430,18 @@ def _outline(g, cid, bg):
                     j += 1
                 run = line[i:j]
                 if len(run) >= 2 and all(is_ink(pt) for pt in run):
-                    # Give one bead back, from the middle, where the fill shows.
+                    # Give the WHOLE run back, not one bead from the middle.
+                    # Freeing a single bead leaves it stranded in a field of
+                    # ink - an isolated bead, which is what the audit counts as
+                    # speckle, and 84 bugs and fish crossed the threshold that
+                    # way. A strand too thin to hold a border keeps its own
+                    # colour along its whole length, which is the same rule the
+                    # erosion test applies and reads as a line rather than as
+                    # a dotted one.
                     spare = [pt for pt in run if pt in edge]
                     if spare:
-                        edge.discard(spare[len(spare) // 2])
+                        for pt in spare:
+                            edge.discard(pt)
                         freed = True
                 i = j
         if not freed:
@@ -810,11 +851,18 @@ def _draw_bug(g, spec, cx, cy, scale):
         # per plan is what collapsed twenty species into six shapes.
         bl = body[0] * u
         bw = body[1] * u
+        # Legs take the BODY colour, not the marking colour. Six legs and a head
+        # drawn in the accent is more bead than the body they hang off: a
+        # ladybug came out 170 black to 96 red, which is a black bug with red
+        # patches, not a ladybug. The accent still draws the head and the
+        # spots, bands and stripes - the parts that actually identify the
+        # species - and _outline gives the legs their dark edge, so they still
+        # read as legs rather than melting into the body.
         for i in range(legs // 2):
             ly = cy - bl * 0.4 + i * bl * 0.55
             for sgn in (-1, 1):
                 g.limb(cx + sgn * bw * 0.6, ly, cx + sgn * (bw + 4 * u),
-                       ly + (2.4 * u if plan != "walker" else 3.6 * u), accent)
+                       ly + (2.4 * u if plan != "walker" else 3.6 * u), main)
         if wings:
             if extra in ("wingdot", "furry"):
                 # A butterfly is mostly wing. Drawn at the same scale as a

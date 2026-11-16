@@ -686,3 +686,69 @@ mostly its own outline, with the bar set where a genuinely black bat passes and
 a swallowed fish cannot.
 
 Library v55, 2379 patterns, 100% distinct, 31 regression checks passing.
+
+---
+
+# A regression of my own: two darks side by side — 2026-11-16
+
+The outline fix in `57f5350` more than doubled the library's speckle, from 98
+boards to 222, almost all of it new: **bugs went from 0 speckled patterns to
+56, fish from 0 to 28**. I introduced it and did not measure it, because the
+metric I checked at the time was the ink *share*, which the fix did improve.
+
+Three distinct mistakes, each found by rendering the worst offender and reading
+the bead grid rather than the summary:
+
+**`_ink_for` refused any ink the drawing already touched.** That sounds safer
+and is much worse. A ladybug's spots, a bee's stripes and an ant's legs are
+black, and so is the outline - they are *meant* to merge, the way they do in
+life. Refusing black there made the outline `dark_gray`, so it ran alongside
+the subject's own black in a second, nearly identical tone and the two
+alternated bead by bead. `Beetle Long` came back a 54% black-and-dark_gray
+checkerboard. The test is now whether the preferred ink is the subject's
+**dominant** colour, not whether it appears at all.
+
+**An already-dark subject was still being edged in a second dark.** When the
+dominant colour is itself an ink, an outline adds nothing but a near-identical
+tone beside the first. A dark subject now gets no outline. This is also what
+makes the black bat, the black bomb and Steamboat Willie come out clean.
+
+**The "give a bead back" rule stranded that bead.** When outlining would leave
+a run with nothing but border in it, the previous pass freed the *middle* bead,
+which left a single coloured bead in a field of ink - an isolated bead, which
+is exactly what the audit counts as speckle. The whole run is freed now: a
+strand too thin to hold a border keeps its colour along its whole length.
+
+**And bug legs were drawn in the marking colour.** Six legs and a head in the
+accent is more bead than the body they hang off: a ladybug shipped 170 black to
+96 red, which is a black bug with red patches. Legs take the body colour now
+and the accent keeps the head, spots, bands and stripes - the parts that
+actually say which species it is. Ladybug is 186 red to 80 black.
+
+| | before the outline fix | after it | now |
+|---|---|---|---|
+| speckled boards | 98 | 222 | **96** |
+| bugs | 0 | 56 | 9 |
+| fish | 0 | 28 | 10 |
+
+Nothing was lost to get there: the outline fix's own gains hold, and the bugs
+and fish are the coloured, identifiable versions, not the black scribbles that
+scored 0 speckle by being a solid mass.
+
+Check 22c was asserting the old rule and is rewritten; 22d is new. Check 23 now
+carries a short, named list of subjects that are genuinely dark, because no
+threshold can separate a bat that is 98% black with two red eyes from an
+Angelfish that was 99% black with one cream bead - what differs is that a bat
+is meant to be black. Adding to that list should take an argument.
+
+## A methodology note
+
+I rebuilt the library four times while a 24-agent survey was reading it, so
+**14 of the 24 categories changed under the survey's feet** (emoji, gems,
+trees, fish, bugs, animals, birds, vehicles, food, sports, sweets, holidays,
+videogame, space). Findings for those are provisional and are being re-run
+against the settled library; the ten untouched categories - flowers, threeD,
+circles, geometric, hearts, icons, mandalas, rainbows, snowflakes, stars - are
+sound as surveyed.
+
+Library v55, 2374 patterns, 100% distinct, 32 regression checks passing.

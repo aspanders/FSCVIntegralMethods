@@ -477,12 +477,24 @@ def test_a_border_always_has_colour_inside_it():
     check("22b. an outline never grows past its share of the subject",
           not over, f"over {MAX_OUTLINE_SHARE:.0%}: {over}")
 
-    # And it is never drawn in a colour the subject already uses.
+    # The ink may MATCH a colour the subject already uses - a ladybug's spots
+    # and its outline are both black, and they are meant to merge. What it must
+    # never do is match the dominant colour, which would erase the silhouette,
+    # or lay a second dark beside an already-dark subject, which alternates
+    # bead by bead and reads as noise rather than as a line.
     g = blob(6, 6)
-    g.set(3, 3, "black")
-    check("22c. the outline colour never collides with the drawing",
-          _ink_for(g, None, "black") != "black",
-          f"picked {_ink_for(g, None, 'black')!r} when the drawing already uses it")
+    g.set(3, 3, "black")                       # a detail, not the body
+    same = _ink_for(g, None, "black")
+    check("22c. an ink shared with a detail is kept, so the two merge",
+          same == "black", f"picked {same!r} instead of merging with the detail")
+
+    g = blob(6, 6)
+    for y in range(2, 8):
+        for x in range(2, 8):
+            g.set(x, y, "black")               # the body itself is black
+    dark = _ink_for(g, None, "black")
+    check("22d. an already-dark subject is not edged in a second dark",
+          dark is None, f"picked {dark!r} to outline a black subject")
 
 
 def test_no_subject_is_mostly_its_own_outline():
@@ -494,10 +506,24 @@ def test_no_subject_is_mostly_its_own_outline():
     were in the same state: the outline colour was also the species' marking
     colour, so fins, legs and edge were one mass.
 
-    The bar is set where genuinely dark subjects still pass - a bat, a bomb,
-    Steamboat Willie, an ant whose legs really are black - and the failure this
-    is guarding against, an outline eating four fifths of a fish, cannot.
+    No threshold can separate the two cases on its own. A bat that is 98% black
+    with two red beads for eyes and an Angelfish that is 99% black with one
+    cream bead for an eye are the same measurement; what differs is that a bat
+    is MEANT to be black. So the bar is set low enough to catch a swallowed
+    subject, and the handful of subjects that are genuinely dark are named
+    here. Adding to that list should take an argument, which is the point: a
+    new fish that comes out black fails this test until somebody decides it is
+    supposed to be.
     """
+    # Subjects whose own colour is dark. Each was rendered and looked at.
+    INTENTIONALLY_DARK = {
+        "Bat", "Bat Outline",             # a black bat with red eyes
+        "Bomb",                           # a black bomb with a red fuse
+        "Ore Block",                      # grey stone around cyan ore
+        "Scooter", "Scooter Long", "Scooter Big Wheels",   # dark tyres + frame
+        "Tarantula Antennaed",            # a black spider on a brown abdomen
+        "Steamboat Willie",               # black-and-white by design
+    }
     from collections import Counter
     from connectivity import has_background
     INK = ("black", "dark_gray")
@@ -507,6 +533,8 @@ def test_no_subject_is_mostly_its_own_outline():
     worst = []
     for p in SHIPPED:
         if p["category"] not in OUTLINED or has_background(p):
+            continue
+        if p["title"] in INTENTIONALLY_DARK:
             continue
         cells = p.get("cells") or from_rows(p["rows"], p["palette"])
         counts = Counter(c["colorId"] for c in cells)
